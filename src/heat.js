@@ -18,12 +18,12 @@ export function heatFromCheck({ despair = 0, triumph = 0, surveilled = false, sk
     const amount = evasion ? 2 : 1;
     delta += amount;
     reasons.push(evasion
-      ? `Despair on an evasion check: Personal Heat +${amount} (§17.1)`
-      : `Despair in a surveilled context: Personal Heat +${amount} (§17.1)`);
+      ? `Despair on an evasion check: Personal Heat +${amount}`
+      : `Despair in a surveilled context: Personal Heat +${amount}`);
   }
   if (triumph > 0 && spendTriumphOnHeat) {
     delta -= 1;
-    reasons.push('Triumph spent to reduce Personal Heat by 1 (§17.1)');
+    reasons.push('Triumph spent to reduce Personal Heat by 1');
   }
   return { personalHeat: delta, reasons };
 }
@@ -60,7 +60,7 @@ export function escalateCell(personalHeat) {
   cell.cellHeat = clamp(before + 1, HEAT.min, HEAT.max);
   cell.safehouseStatus = safehouseFor(cell.cellHeat);
   saveCell(cell);
-  return { before, after: cell.cellHeat, reason: 'A member reached Personal Heat 3 or more (§17.2)' };
+  return { before, after: cell.cellHeat, reason: 'A member reached Personal Heat 3 or more' };
 }
 
 export function safehouseFor(cellHeat) {
@@ -84,7 +84,7 @@ export function resolveMaxHeat(character, choice) {
   if (choice === 'underground') {
     character.state.personalHeat = 2;
     saveCharacter(character);
-    return { outcome: 'underground', personalHeat: 2, note: 'Relocated and disappeared; Heat resets to 2 (§24).' };
+    return { outcome: 'underground', personalHeat: 2, note: 'Relocated and disappeared; Heat resets to 2.' };
   }
-  return { outcome: 'captured', note: 'Captured — the Oracle or GM decides whether they escape, turn, or leave play (§24).' };
+  return { outcome: 'captured', note: 'Captured — the Oracle or GM decides whether they escape, turn, or leave play.' };
 }

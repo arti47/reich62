@@ -189,7 +189,7 @@ export function renderSafety(mount) {
   clear(mount);
   mount.append(el('div', { class: 'card' }, [
     el('h2', { text: 'Session zero and safety tools' }),
-    el('p', { class: 'small muted', text: 'Paraphrased from §20A. This is a summary of the rulebook\'s own guidance, not setting or adventure content.' }),
+    el('p', { class: 'small muted', text: 'A summary of the rulebook\'s own guidance, not setting or adventure content.' }),
     el('h3', { text: 'Before the first session' }),
     el('ul', { class: 'small' }, [
       el('li', { text: 'Agree as a group on content boundaries. This setting has a real-world atrocity backdrop, so decide explicitly how far depictions of violence go.' }),
@@ -200,7 +200,7 @@ export function renderSafety(mount) {
     ]),
     el('h3', { text: 'Rule zero' }),
     el('p', { class: 'small', text: 'The GM may override, skip or reinterpret any rule — including everything this app automates — when it serves the table better. Use it sparingly and say so out loud rather than reinterpreting silently, so trust in the system holds.' }),
-    el('p', { class: 'small' }, [el('span', { class: 'badge', text: '§20A' })])
+    el('p', { class: 'small muted', text: 'Revisit this conversation whenever the campaign\'s tone shifts.' })
   ]));
 }
 
@@ -320,6 +320,6 @@ export function renderSettings(mount) {
   mount.append(el('div', { class: 'card' }, [
     el('h2', { text: 'About' }),
     el('p', { class: 'small', text: 'A personal play aid built from the owner\'s own books. Mechanics and numbers are extracted; all effect text is paraphrased. No setting prose, art or insignia.' }),
-    el('p', { class: 'small muted', text: 'Sources: the REICH \'62 manual (§) and the Bestiary & Adversary Compendium (B§).' })
+    el('p', { class: 'small muted', text: 'Sources: the REICH \'62 manual and the Bestiary & Adversary Compendium.' })
   ]));
 }

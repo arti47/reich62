@@ -92,14 +92,14 @@ export function assemblePool(character = activeCharacter()) {
     const built = buildPool(rank, characteristic);
     pool.ability = built.ability;
     pool.proficiency = built.proficiency;
-    notes.push(`${skillDef.name} ${rank} with ${titleCase(skillDef.characteristic)} ${characteristic} (§2)`);
+    notes.push(`${skillDef.name} ${rank} with ${titleCase(skillDef.characteristic)} ${characteristic}`);
   }
 
   if (state.opposed) {
     const opp = buildOpposedDifficulty(state.opponent.skill, state.opponent.characteristic);
     pool.difficulty = opp.difficulty;
     pool.challenge = opp.challenge;
-    notes.push('Difficulty side built from the opponent\'s rating; only the active character rolls (§3A)');
+    notes.push('Difficulty side built from the opponent\'s rating; only the active character rolls');
   } else {
     pool.difficulty = difficultyDice(state.difficultyId);
   }
@@ -110,26 +110,26 @@ export function assemblePool(character = activeCharacter()) {
     const die = state.concealmentRole === 'hiding' ? 'boost' : 'setback';
     modifications.push({ stage: 'add', die, count: state.concealment });
     notes.push(state.concealmentRole === 'hiding'
-      ? `Concealment adds ${state.concealment} Boost to Stealth (§5E)`
-      : `Concealment adds ${state.concealment} Setback against a concealed target (§5E)`);
+      ? `Concealment adds ${state.concealment} Boost to Stealth`
+      : `Concealment adds ${state.concealment} Setback against a concealed target`);
   }
   if (state.cover) {
     modifications.push({ stage: 'add', die: 'boost', count: 1 });
-    notes.push('Cover adds 1 Boost on checks made from behind it, and grants ranged defence 1 (§5E)');
+    notes.push('Cover adds 1 Boost on checks made from behind it, and grants ranged defence 1');
   }
   // The Adversary talent upgrades the difficulty of every combat check against that NPC,
   // once per rank (§12C).
   if (state.targetAdversary > 0) {
     modifications.push({ stage: 'upgrade', die: 'difficulty', count: state.targetAdversary });
-    notes.push(`Target has Adversary ${state.targetAdversary}: the difficulty is upgraded ${state.targetAdversary} time(s) (§12C)`);
+    notes.push(`Target has Adversary ${state.targetAdversary}: the difficulty is upgraded ${state.targetAdversary} time(s)`);
   }
   // Silhouette (§5J): two or more larger is one step easier, two or more smaller one harder.
   if (state.silhouetteDelta >= 2) {
     modifications.push({ stage: 'remove', die: 'difficulty', count: 1 });
-    notes.push('Target is 2 or more silhouettes larger: one difficulty less (§5J)');
+    notes.push('Target is 2 or more silhouettes larger: one difficulty less');
   } else if (state.silhouetteDelta <= -2) {
     modifications.push({ stage: 'add', die: 'difficulty', count: 1 });
-    notes.push('Target is 2 or more silhouettes smaller: one difficulty more (§5J)');
+    notes.push('Target is 2 or more silhouettes smaller: one difficulty more');
   }
 
   if (character) {
@@ -143,7 +143,7 @@ export function assemblePool(character = activeCharacter()) {
     const enc = encumbranceState(character);
     if (state.autoDice.encumbrance && enc.setbackDice && skillDef && ['brawn', 'agility'].includes(skillDef.characteristic)) {
       modifications.push({ stage: 'add', die: 'setback', count: enc.setbackDice });
-      notes.push(`Encumbered by ${enc.over}: ${enc.setbackDice} Setback on Brawn and Agility checks (§5F)`);
+      notes.push(`Encumbered by ${enc.over}: ${enc.setbackDice} Setback on Brawn and Agility checks`);
     }
     // Heat thresholds (§17.3).
     const cell = getCell();
@@ -152,15 +152,15 @@ export function assemblePool(character = activeCharacter()) {
       : 0;
     if (heatDice) {
       modifications.push({ stage: 'add', die: 'setback', count: heatDice });
-      notes.push(`Heat adds ${heatDice} Setback on public checks (§17.3)`);
+      notes.push(`Heat adds ${heatDice} Setback on public checks`);
     }
   }
 
   // Upgrades and downgrades resolve after every addition, per the modification order (§2.4).
-  if (state.upgradeAbility) { modifications.push({ stage: 'upgrade', die: 'ability', count: state.upgradeAbility }); notes.push(`${state.upgradeAbility} Ability upgraded to Proficiency (§2.4, §8)`); }
-  if (state.upgradeDifficulty) { modifications.push({ stage: 'upgrade', die: 'difficulty', count: state.upgradeDifficulty }); notes.push(`${state.upgradeDifficulty} Difficulty upgraded to Challenge (§2.4, §8)`); }
-  if (state.downgradeAbility) { modifications.push({ stage: 'downgrade', die: 'proficiency', count: state.downgradeAbility }); notes.push(`${state.downgradeAbility} Proficiency downgraded to Ability (§2.4, §8)`); }
-  if (state.downgradeDifficulty) { modifications.push({ stage: 'downgrade', die: 'challenge', count: state.downgradeDifficulty }); notes.push(`${state.downgradeDifficulty} Challenge downgraded to Difficulty (§2.4, §8)`); }
+  if (state.upgradeAbility) { modifications.push({ stage: 'upgrade', die: 'ability', count: state.upgradeAbility }); notes.push(`${state.upgradeAbility} Ability upgraded to Proficiency`); }
+  if (state.upgradeDifficulty) { modifications.push({ stage: 'upgrade', die: 'difficulty', count: state.upgradeDifficulty }); notes.push(`${state.upgradeDifficulty} Difficulty upgraded to Challenge`); }
+  if (state.downgradeAbility) { modifications.push({ stage: 'downgrade', die: 'proficiency', count: state.downgradeAbility }); notes.push(`${state.downgradeAbility} Proficiency downgraded to Ability`); }
+  if (state.downgradeDifficulty) { modifications.push({ stage: 'downgrade', die: 'challenge', count: state.downgradeDifficulty }); notes.push(`${state.downgradeDifficulty} Challenge downgraded to Difficulty`); }
 
   return { pool: modifyPool(pool, modifications), notes, modifications };
 }
@@ -265,7 +265,7 @@ export function spendStoryPoint(side, spendId) {
   const cell = getCell();
   const from = side === 'player' ? 'storyPointsPlayer' : 'storyPointsGM';
   const to = side === 'player' ? 'storyPointsGM' : 'storyPointsPlayer';
-  if (cell.pools[from] < 1) return { ok: false, reason: `The ${side} pool is empty (§8).` };
+  if (cell.pools[from] < 1) return { ok: false, reason: `The ${side} pool is empty.` };
   cell.pools[from] -= 1;
   cell.pools[to] += 1;
   saveCell(cell);
@@ -298,15 +298,15 @@ export function applySpend(character, row, effectIndex = 0) {
 
   if (/recover 1 strain/i.test(effect)) {
     character.state.strain = Math.max(0, character.state.strain - 1);
-    applied.push('Recovered 1 strain (§5C).');
+    applied.push('Recovered 1 strain.');
   } else if (/suffers 1 strain/i.test(effect)) {
     character.state.strain += 1;
-    applied.push('Suffered 1 strain (§5C).');
+    applied.push('Suffered 1 strain.');
   } else if (/falls prone/i.test(effect)) {
     character.state.conditions.prone = true;
-    applied.push('Knocked prone (§5C).');
+    applied.push('Knocked prone.');
   } else if (/free maneuver/i.test(effect)) {
-    applied.push('Take the free maneuver now — still capped at two per turn (§5A).');
+    applied.push('Take the free maneuver now — still capped at two per turn.');
   } else {
     applied.push('Narrative effect — logged rather than applied automatically.');
   }
@@ -346,14 +346,14 @@ export function renderRoller(mount) {
   DIFFICULTIES.forEach((d) => diffSelect.append(el('option', { value: d.id, text: `${d.name} (${d.dice})`, selected: state.difficultyId === d.id })));
   setup.append(el('label', { class: 'small', for: 'roller-difficulty', text: 'Difficulty' }), diffSelect);
 
-  setup.append(toggle('roller-opposed', 'Opposed check (§3A)', state.opposed, (v) => { state.opposed = v; rerender(); }));
+  setup.append(toggle('roller-opposed', 'Opposed check', state.opposed, (v) => { state.opposed = v; rerender(); }));
   if (state.opposed) {
     setup.append(el('p', { class: 'small muted', text: 'Only you roll. The difficulty side is built from the opponent\'s rating: the higher value sets Difficulty dice, the lower upgrades that many to Challenge.' }));
-    setup.append(numberField('opp-skill', 'Opponent skill rank', state.opponent.skill, (v) => { state.opponent.skill = v; rerender(); }));
-    setup.append(numberField('opp-char', 'Opponent characteristic', state.opponent.characteristic, (v) => { state.opponent.characteristic = v; rerender(); }));
+    setup.append(numberField('opp-skill', 'Their skill rank', state.opponent.skill, (v) => { state.opponent.skill = v; rerender(); }));
+    setup.append(numberField('opp-char', 'Their characteristic', state.opponent.characteristic, (v) => { state.opponent.characteristic = v; rerender(); }));
   }
-  setup.append(toggle('roller-surveilled', 'Surveilled context (§17.1)', state.surveilled, (v) => { state.surveilled = v; rerender(); }));
-  setup.append(toggle('roller-triumph-heat', 'Spend a Triumph to reduce Personal Heat by 1 (§17.1)', state.spendTriumphOnHeat, (v) => { state.spendTriumphOnHeat = v; rerender(); }));
+  setup.append(toggle('roller-surveilled', 'Surveilled context', state.surveilled, (v) => { state.surveilled = v; rerender(); }));
+  setup.append(toggle('roller-triumph-heat', 'Spend a Triumph to reduce Personal Heat by 1', state.spendTriumphOnHeat, (v) => { state.spendTriumphOnHeat = v; rerender(); }));
   setup.append(toggle('roller-public', 'Public check (Heat Setbacks apply)', state.publicCheck, (v) => { state.publicCheck = v; rerender(); }));
   mount.append(setup);
 
@@ -362,9 +362,9 @@ export function renderRoller(mount) {
   const situational = panel('The situation', PANELS.rollSituation, [situationBody]);
   if (!Settings.advancedAutomation()) {
     situationBody.append(el('p', { class: 'small muted', text: 'Automatic dice are listed for confirmation. Switch on advanced automation in Settings to apply them without asking.' }));
-    situationBody.append(toggle('auto-conditions', 'Apply condition dice (§3.9)', state.autoDice.conditions, (v) => { state.autoDice.conditions = v; rerender(); }));
-    situationBody.append(toggle('auto-encumbrance', 'Apply encumbrance dice (§5F)', state.autoDice.encumbrance, (v) => { state.autoDice.encumbrance = v; rerender(); }));
-    situationBody.append(toggle('auto-heat', 'Apply Heat threshold dice (§17.3)', state.autoDice.heat, (v) => { state.autoDice.heat = v; rerender(); }));
+    situationBody.append(toggle('auto-conditions', 'Apply condition dice', state.autoDice.conditions, (v) => { state.autoDice.conditions = v; rerender(); }));
+    situationBody.append(toggle('auto-encumbrance', 'Apply encumbrance dice', state.autoDice.encumbrance, (v) => { state.autoDice.encumbrance = v; rerender(); }));
+    situationBody.append(toggle('auto-heat', 'Apply Heat threshold dice', state.autoDice.heat, (v) => { state.autoDice.heat = v; rerender(); }));
   } else {
     state.autoDice = { conditions: true, encumbrance: true, heat: true };
     situationBody.append(el('p', { class: 'small muted', text: 'Advanced automation is on: condition, encumbrance and Heat dice are applied without prompting.' }));
@@ -372,26 +372,29 @@ export function renderRoller(mount) {
   const concealSelect = el('select', { id: 'roller-concealment-role', 'aria-label': 'Concealment role', onchange: (e) => { state.concealmentRole = e.target.value; rerender(); } });
   [['none', 'No concealment'], ['hiding', 'I am the concealed one'], ['observing', 'My target is concealed']]
     .forEach(([value, label]) => concealSelect.append(el('option', { value, text: label, selected: state.concealmentRole === value })));
-  situationBody.append(el('label', { class: 'small', for: 'roller-concealment-role', text: 'Concealment (§5E)' }), concealSelect);
-  situationBody.append(numberField('roller-concealment', 'Concealment dice (1 mist · 2 fog or dusk · 3 night or smoke)', state.concealment, (v) => { state.concealment = v; rerender(); }));
-  situationBody.append(toggle('roller-cover', 'Behind cover (§5E)', state.cover, (v) => { state.cover = v; rerender(); }));
-  situationBody.append(numberField('roller-silhouette', 'Target silhouette minus mine (§5J)', state.silhouetteDelta, (v) => { state.silhouetteDelta = v; rerender(); }));
-  situationBody.append(numberField('roller-adversary', 'Target\'s Adversary rank (§12C)', state.targetAdversary, (v) => { state.targetAdversary = v; rerender(); }));
+  situationBody.append(el('label', { class: 'small', for: 'roller-concealment-role', text: 'Concealment' }), concealSelect);
+  situationBody.append(numberField('roller-concealment', 'How thick is it?', state.concealment, (v) => { state.concealment = v; rerender(); },
+    { max: 3, hint: '1 mist or shadow · 2 fog, dusk or tall grass · 3 night, smoke or heavy fog' }));
+  situationBody.append(toggle('roller-cover', 'Behind cover', state.cover, (v) => { state.cover = v; rerender(); }));
+  situationBody.append(numberField('roller-silhouette', 'Size difference', state.silhouetteDelta, (v) => { state.silhouetteDelta = v; rerender(); },
+    { min: -4, max: 4, hint: 'Target size minus your own. Two or more either way shifts the difficulty a step.' }));
+  situationBody.append(numberField('roller-adversary', 'How hard is the target to hit?', state.targetAdversary, (v) => { state.targetAdversary = v; rerender(); },
+    { max: 3, hint: 'Their Adversary rating, if they have one. Each rank makes this check one step harder.' }));
 
   const modBody = el('div', {});
   situationBody.append(accordion('Change the dice by hand', [modBody], { key: 'roll-mods', summary: 'upgrade, downgrade, spend a story point' }));
-  modBody.append(numberField('roller-upgrade-ability', 'Upgrade Ability → Proficiency', state.upgradeAbility, (v) => { state.upgradeAbility = v; rerender(); }));
-  modBody.append(numberField('roller-downgrade-ability', 'Downgrade Proficiency → Ability', state.downgradeAbility, (v) => { state.downgradeAbility = v; rerender(); }));
-  modBody.append(numberField('roller-upgrade-difficulty', 'Upgrade Difficulty → Challenge', state.upgradeDifficulty, (v) => { state.upgradeDifficulty = v; rerender(); }));
-  modBody.append(numberField('roller-downgrade-difficulty', 'Downgrade Challenge → Difficulty', state.downgradeDifficulty, (v) => { state.downgradeDifficulty = v; rerender(); }));
+  modBody.append(numberField('roller-upgrade-ability', 'Upgrade your dice', state.upgradeAbility, (v) => { state.upgradeAbility = v; rerender(); }));
+  modBody.append(numberField('roller-downgrade-ability', 'Downgrade your dice', state.downgradeAbility, (v) => { state.downgradeAbility = v; rerender(); }));
+  modBody.append(numberField('roller-upgrade-difficulty', 'Upgrade the difficulty', state.upgradeDifficulty, (v) => { state.upgradeDifficulty = v; rerender(); }));
+  modBody.append(numberField('roller-downgrade-difficulty', 'Downgrade the difficulty', state.downgradeDifficulty, (v) => { state.downgradeDifficulty = v; rerender(); }));
   modBody.append(el('button', {
     type: 'button', class: 'secondary', id: 'spend-story-point-upgrade',
-    text: 'Spend a Story Point to upgrade (§8)',
+    text: 'Spend a story point to upgrade a die',
     onclick: () => {
       const result = spendStoryPoint('player', 'upgradeDowngrade');
       if (!result.ok) { showToast(result.reason); return; }
       state.upgradeAbility += 1;
-      showToast(`Story Point spent — it moves to the GM pool (§8). Pools now ${result.pools.storyPointsPlayer}/${result.pools.storyPointsGM}`);
+      showToast(`Story Point spent — it moves to the GM pool. Pools now ${result.pools.storyPointsPlayer}/${result.pools.storyPointsGM}`);
       document.dispatchEvent(new CustomEvent('resource:refresh'));
       rerender();
     }
@@ -399,7 +402,8 @@ export function renderRoller(mount) {
   mount.append(situational);
 
   const { pool, notes } = assemblePool(character);
-  const poolCard = panel('Your dice', PANELS.rollPool, [
+  const poolCard = panel('Your dice', PANELS.rollPool, [], { id: 'roll-pool' });
+  poolCard.append(...[
     el('p', { class: 'dice-glyph', text: describePool(pool) }),
     el('ul', { class: 'small muted' }, notes.map((n) => el('li', { text: n })))
   ]);
@@ -411,8 +415,8 @@ export function renderRoller(mount) {
       DIE_FACES === null
         ? 'The manual never prints die face distributions, so the app cannot roll these dice for you. Roll them physically and tap what came up — everything after that is automatic.'
         : Settings.digitalRoller()
-          ? 'Face distributions are loaded (D§), so the app can roll the pool for you. Entering symbols by hand still works and stays the default.'
-          : 'Face distributions are loaded (D§) — switch on the simulated roller in Settings to have the app roll the pool for you.'
+          ? 'The app can roll the pool for you. Entering symbols by hand still works and stays the default.'
+          : 'Switch on the simulated roller in Settings to have the app roll the pool for you.'
     ])
   ]);
   if (Settings.digitalRoller()) {
@@ -563,9 +567,14 @@ function toggle(id, label, value, onChange) {
   ]);
 }
 
-function numberField(id, label, value, onChange) {
-  return el('div', { class: 'toggle-row' }, [
-    el('label', { for: id }, [el('span', { text: label })]),
-    el('input', { type: 'number', id, min: '0', max: '5', value: String(value), onchange: (e) => onChange(Number(e.target.value)) })
+/** Label above, narrow input below: a long label never squeezes the field into a column. */
+function numberField(id, label, value, onChange, { min = 0, max = 5, hint = '' } = {}) {
+  return el('div', { class: 'field' }, [
+    el('label', { class: 'field-label', for: id, text: label }),
+    hint ? el('span', { class: 'toggle-desc', text: hint }) : null,
+    el('input', {
+      class: 'field-input', type: 'number', id, min: String(min), max: String(max), inputmode: 'numeric',
+      value: String(value), onchange: (e) => onChange(Number(e.target.value))
+    })
   ]);
 }

@@ -214,7 +214,7 @@ async function main() {
     await go('#/roll');
     await page.waitForSelector('#roller-skill');
     await page.selectOption('#roller-skill', 'deception');
-    const poolText = await page.locator('#screen section.card', { hasText: 'Your dice' }).first().innerText();
+    const poolText = await page.locator('#roll-pool').innerText();
     check('pool is built from the skill and its characteristic',
       /Proficiency|Ability/.test(poolText) && /Deception 1 with Cunning 1/.test(poolText), poolText);
     check('difficulty dice come from the difficulty ladder', /2 Difficulty/.test(poolText), poolText);
@@ -379,9 +379,9 @@ async function main() {
     check('Oracle Despair in a surveilled context raises Heat (§17.1)',
       (await page.locator('#resource-header').innerText()) !== heatBeforeOracle);
 
-    await page.getByRole('button', { name: 'Meaning (§15A)' }).click();
+    await page.getByRole('button', { name: 'Meaning', exact: true }).click();
     check('the meaning table produces a phrase', (await page.locator('#solo-output').innerText()).length > 8);
-    await page.getByRole('button', { name: 'Random encounter (B§7)' }).click();
+    await page.getByRole('button', { name: 'Random encounter', exact: true }).click();
     check('the random encounter table rolls', /\(\d+\)/.test(await page.locator('#solo-output').innerText()));
 
     // --- UX pass: seat modes, checklist, suggested spread, confirmations, help ---
@@ -458,12 +458,20 @@ async function main() {
     await go('#/rules');
     await page.waitForSelector('#rules-search');
     check('rules entries carry no repeated section links', (await page.locator('#rules-results a.cite').count()) === 0);
+
     await page.fill('#rules-search', '§5E');
     await page.waitForTimeout(90);
     check('a section number typed into the search still finds its rules',
       (await page.locator('#rules-results .rule-entry').count()) >= 5);
     await page.fill('#rules-search', '');
     await page.waitForTimeout(90);
+
+    // Section numbers are gone from the interface copy too, not only from the links.
+    for (const hash of ['#/roll', '#/sheet', '#/combat', '#/']) {
+      await go(hash);
+      const markers = await page.evaluate(() => (document.querySelector('#screen').innerText.match(/§[0-9A-Za-z.]+/g) || []));
+      check(`${hash} shows no section numbers in its copy`, markers.length === 0, markers.join(', '));
+    }
 
     // --- item damage ladder and attachments (§14B, §14C) ---
     await go('#/sheet');
@@ -488,7 +496,7 @@ async function main() {
     await go('#/settings');
     await page.getByRole('link', { name: 'Open the safety-tools note' }).click();
     await page.waitForSelector('#screen .card');
-    check('the safety-tools note paraphrases session zero and rule zero (§20A)',
+    check('the safety-tools note covers session zero and rule zero',
       /Rule zero/.test(await page.locator('#screen').innerText()));
 
     // 390px as well as 360px.

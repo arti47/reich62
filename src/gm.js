@@ -22,7 +22,7 @@ const filters = { tier: 'all', heatOnly: false, challengingOnly: false, query: '
  *  when the guards are not on the combat tracker (B§2). */
 function applyCellHeatless(character) {
   const applied = applyPersonalHeat(character, 1);
-  return { applied, note: `Papers-Check Reflex: Personal Heat ${applied.before} → ${applied.after} (B§2, §17.1).` };
+  return { applied, note: `Papers-Check Reflex: Personal Heat ${applied.before} → ${applied.after}.` };
 }
 
 const GM_TABS = [
@@ -75,7 +75,7 @@ function gmBestiary(mount, rerender) {
   const challengeToggle = el('input', { type: 'checkbox', id: 'bestiary-challenging', checked: filters.challengingOnly, onchange: (e) => { filters.challengingOnly = e.target.checked; drawList(); } });
   browser.append(search, tierSelect);
   browser.append(el('div', { class: 'toggle-row' }, [heatToggle, el('label', { for: 'bestiary-heat' }, [el('span', { text: 'Heat-relevant only' })])]));
-  browser.append(el('div', { class: 'toggle-row' }, [challengeToggle, el('label', { for: 'bestiary-challenging' }, [el('span', { text: 'Very challenging only (§12C)' })])]));
+  browser.append(el('div', { class: 'toggle-row' }, [challengeToggle, el('label', { for: 'bestiary-challenging' }, [el('span', { text: 'Very challenging only' })])]));
 
   const list = el('div', { id: 'bestiary-list' });
   browser.append(list);
@@ -94,7 +94,7 @@ function gmBestiary(mount, rerender) {
     list.append(el('p', { class: 'small muted', text: `${entries.length} of ${BESTIARY.length} entries` }));
     entries.forEach((entry) => {
       const stats = entry.abstract
-        ? 'Abstract — no combat stats; resolved as an Oracle roll (B§2).'
+        ? 'Abstract — no combat stats; resolved as an Oracle roll.'
         : `Soak ${entry.soak ?? '—'} · Def ${(entry.defense || {}).melee ?? 0}/${(entry.defense || {}).ranged ?? 0} · WT ${entry.woundThreshold ?? `${entry.woundThresholdPerMember} per member`}${entry.strainThreshold ? ` · ST ${entry.strainThreshold}` : ''}${entry.adversary ? ` · Adversary ${entry.adversary}` : ''}`;
       const card = el('div', { class: 'result' }, [
         el('div', { class: 'result-head' }, [
@@ -135,7 +135,7 @@ function gmEncounters(mount, rerender) {
     if (block.extended) {
       card.append(el('button', {
         type: 'button', class: 'secondary', text: 'Start the dragnet tracker',
-        onclick: () => { createTask({ name: block.name, kind: 'dragnet', target: 4 }); showToast('Dragnet started on the progress tracker (B§6)'); }
+        onclick: () => { createTask({ name: block.name, kind: 'dragnet', target: 4 }); showToast('Dragnet started on the progress tracker'); }
       }));
     }
     blocks.append(card);
@@ -147,17 +147,17 @@ function gmTables(mount, rerender) {
   // --- rollable reference tables (§3.21) ---
   const tables = panel('Roll on a table', PANELS.gmTables, []);
   tables.append(el('button', {
-    type: 'button', class: 'secondary', text: 'Random encounter (B§7)',
+    type: 'button', class: 'secondary', text: 'Random encounter',
     onclick: () => {
       const roll = rollDie(10); // R-10
       const row = RANDOM_ENCOUNTERS.table.find((r) => r.roll === roll);
       const cellNow = getCell();
-      const extra = roll === 10 && cellNow.cellHeat >= 4 ? ' Cell Heat is 4 or more — escalate toward a nemesis (B§7).' : '';
+      const extra = roll === 10 && cellNow.cellHeat >= 4 ? ' Cell Heat is 4 or more — escalate toward a nemesis.' : '';
       modal({ title: `Random encounter — ${roll}`, body: `${row.entry}.${extra}`, actions: [{ label: 'Close', primary: true }] });
     }
   }));
   tables.append(el('button', {
-    type: 'button', class: 'secondary', text: 'Critical Injury (§9)',
+    type: 'button', class: 'secondary', text: 'Critical Injury',
     onclick: () => {
       const roll = rollDie(100);
       const row = CRITICAL_INJURIES.find((r) => roll >= r.min && roll <= r.max);
@@ -165,7 +165,7 @@ function gmTables(mount, rerender) {
     }
   }));
   tables.append(el('button', {
-    type: 'button', class: 'secondary', text: 'NPC quick-gen (§20)',
+    type: 'button', class: 'secondary', text: 'NPC quick-gen',
     onclick: () => {
       const archetypeRoll = rollDie(10);
       const dispositionRoll = rollDie(10);
@@ -261,7 +261,7 @@ function gmBuild(mount, rerender) {
   // --- Papers-Check Reflex (B§2), driven from the GM screen ---
   const reflexCard = el('div', { class: 'card' }, [
     el('h3', { text: 'Papers-Check Reflex' }),
-    el('p', { class: 'small muted', text: 'A PC who fails a Deception or Cool check against a group with this ability takes a Personal Heat check automatically (B§2, §17.1).' }),
+    el('p', { class: 'small muted', text: 'A PC who fails a Deception or Cool check against a group with this ability takes a Personal Heat check automatically.' }),
     el('button', {
       type: 'button', class: 'secondary', id: 'papers-check-failed', text: 'The check failed',
       onclick: () => {

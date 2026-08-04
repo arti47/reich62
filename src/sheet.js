@@ -96,7 +96,7 @@ function pane_vitals(mount, character, derived, rerender) {
     saveCharacter(character); rerender();
   }, 'Suspicion'));
   if (character.state.incapacitated) {
-    vitals.append(outcomeBox(['Out of the fight: injury or stress has reached the limit. Heal below it to act again (§6).'], { tone: 'warn', title: 'Down' }));
+    vitals.append(outcomeBox(['Out of the fight: injury or stress has reached the limit. Heal below it to act again.'], { tone: 'warn', title: 'Down' }));
   }
   mount.append(vitals);
 
@@ -181,7 +181,7 @@ function pane_gear(mount, character, derived, rerender) {
   if (enc.over) {
     invCard.append(el('p', { class: 'small' }, [
       el('span', { class: 'badge', text: 'enforced' }), ' ',
-      `${enc.setbackDice} Setback on ${enc.scope}${enc.losesFreeManeuver ? '; the free maneuver is lost, so each maneuver costs 2 strain' : ''} (§5F).`
+      `${enc.setbackDice} Setback on ${enc.scope}${enc.losesFreeManeuver ? '; the free maneuver is lost, so each maneuver costs 2 strain' : ''}.`
     ]));
   }
   (character.inventory.items || []).forEach((item, index) => {
@@ -221,7 +221,7 @@ function pane_gear(mount, character, derived, rerender) {
           const at = order.indexOf(item.damageLevel);
           character.inventory.items[index].damageLevel = order[Math.max(0, at - 1)];
           saveCharacter(character);
-          showToast(`Repaired one step — ${ITEM_DAMAGE.repair.time} at ${level.repairDifficulty} (§14B)`);
+          showToast(`Repaired one step — ${ITEM_DAMAGE.repair.time} at ${level.repairDifficulty}`);
           rerender();
         }
       }));
@@ -234,10 +234,10 @@ function pane_gear(mount, character, derived, rerender) {
         type: 'button', class: 'secondary', text: 'Install',
         onclick: () => {
           const attachment = ATTACHMENTS.examples.find((a) => a.id === select.value);
-          if (used + attachment.hardPoints > points) { showToast(`Only ${points - used} hard point(s) free (§14C).`); return; }
+          if (used + attachment.hardPoints > points) { showToast(`Only ${points - used} hard point(s) free.`); return; }
           character.inventory.items[index].attachments = [...(item.attachments || []), { ...attachment }];
           saveCharacter(character);
-          showToast(`${attachment.name} installed — about an hour plus an Average Mechanics check (§14C)`);
+          showToast(`${attachment.name} installed — about an hour plus an Average Mechanics check`);
           rerender();
         }
       }));
@@ -290,7 +290,7 @@ function pane_talents(mount, character, derived, rerender) {
   // Critical Injuries with the cumulative modifier
   const mod = criticalModifier(character);
   const critCard = panel(termLabel('criticalInjury'), PANELS.sheetCriticals, [
-    el('p', { class: 'small muted', text: `${mod.untreated} untreated, so the next roll on the injury table takes +${mod.plus} (§5G).` })
+    el('p', { class: 'small muted', text: `${mod.untreated} untreated, so the next roll on the injury table takes +${mod.plus}.` })
   ]);
   (character.state.criticalInjuries || []).forEach((injury, index) => {
     critCard.append(el('div', { class: 'result' }, [
@@ -330,7 +330,7 @@ function pane_talents(mount, character, derived, rerender) {
       }));
     }
   } else {
-    deathCard.append(el('p', { class: 'small muted', text: 'No death state running. Bleeding Out, The End Is Nigh and suffocation start themselves from the Critical Injury table (§9) and the suffocation rules (§5I).' }));
+    deathCard.append(el('p', { class: 'small muted', text: 'No death state running. Bleeding Out, The End Is Nigh and suffocation start themselves from the Critical Injury table and the suffocation rules.' }));
     ['bleedingOut', 'endIsNigh', 'suffocating'].forEach((kind) => {
       deathCard.append(el('button', {
         type: 'button', class: 'secondary', text: `Start ${DEATH_STATES[kind].name}`,
@@ -497,29 +497,29 @@ export function tickDeathState(character) {
   if (state.kind === 'bleedingOut') {
     character.state.wounds += 1;
     character.state.strain += 1;
-    events.push('Bleeding Out: 1 wound and 1 strain (§9).');
+    events.push('Bleeding Out: 1 wound and 1 strain.');
     if (character.state.wounds >= wt + 5) {
       const roll = rollCriticalInjury(character, {});
-      events.push(`Five wounds past the threshold: another Critical Injury — ${roll.injury.name} (§9).`);
+      events.push(`Five wounds past the threshold: another Critical Injury — ${roll.injury.name}.`);
     }
   }
 
   if (state.kind === 'endIsNigh') {
     if (state.roundsRemaining > 0) {
       state.roundsRemaining -= 1;
-      events.push(`The End Is Nigh: ${state.roundsRemaining} round(s) left before death unless healed (§9).`);
+      events.push(`The End Is Nigh: ${state.roundsRemaining} round(s) left before death unless healed.`);
     } else {
       character.state.deathState = { kind: 'dead' };
-      events.push('The End Is Nigh ran out — the character dies (§9).');
+      events.push('The End Is Nigh ran out — the character dies.');
     }
   }
 
   if (state.kind === 'suffocating') {
     character.state.strain += SUFFOCATION.strainPerRound;
-    events.push(`Suffocating: ${SUFFOCATION.strainPerRound} strain (§5I).`);
+    events.push(`Suffocating: ${SUFFOCATION.strainPerRound} strain.`);
     if (character.state.strain > st) {
       const roll = rollCriticalInjury(character, {});
-      events.push(`Past the strain threshold while suffocating: another Critical Injury — ${roll.injury.name} (§5I).`);
+      events.push(`Past the strain threshold while suffocating: another Critical Injury — ${roll.injury.name}.`);
     }
   }
 
@@ -532,10 +532,10 @@ export function tickDeathState(character) {
  *  until the end of the next turn; drop below the threshold in time and it is cancelled. */
 export function useIndomitable(character) {
   const held = character.talents.find((t) => t.id === 'indomitable');
-  if (!held) return { ok: false, reason: 'Indomitable is not on this sheet (§12A T5).' };
-  if (character.state.perEncounterFlags.indomitable) return { ok: false, reason: 'Indomitable is once per encounter (§12A).' };
+  if (!held) return { ok: false, reason: 'Indomitable is not on this sheet.' };
+  if (character.state.perEncounterFlags.indomitable) return { ok: false, reason: 'Indomitable is once per encounter.' };
   const cell = getCellPools();
-  if (cell.pools.storyPointsPlayer < 1) return { ok: false, reason: 'No Story Point in the player pool (§8).' };
+  if (cell.pools.storyPointsPlayer < 1) return { ok: false, reason: 'No Story Point in the player pool.' };
   cell.pools.storyPointsPlayer -= 1;
   cell.pools.storyPointsGM += 1;
   saveCellPools(cell);
@@ -543,7 +543,7 @@ export function useIndomitable(character) {
   character.state.incapacitationDelayedUntil = 'endOfNextTurn';
   character.state.incapacitated = false;
   saveCharacter(character);
-  return { ok: true, note: 'Incapacitation delayed until the end of the next turn; drop back below the threshold in time and it is cancelled entirely (§12A).' };
+  return { ok: true, note: 'Incapacitation delayed until the end of the next turn; drop back below the threshold in time and it is cancelled entirely.' };
 }
 
 export function clearDeathState(character) {
@@ -570,7 +570,7 @@ export function recoveryAvailable(character, methodId) {
   const bucket = LIMIT_BUCKET[method.limitKey];
   if (!bucket) return { ok: true, method };
   if (character.state[bucket] && character.state[bucket][methodId]) {
-    return { ok: false, reason: `Already used: ${method.limit} (§5G).`, method };
+    return { ok: false, reason: `Already used: ${method.limit}.`, method };
   }
   return { ok: true, method };
 }
@@ -586,21 +586,21 @@ export function applyRecovery(character, methodId, { successes = 0, advantages =
     let strain = successes;
     if (talentRank('desperateRecovery') && character.state.strain > strainThreshold(character) / 2) {
       strain += 2;
-      events.push('Desperate Recovery: 2 extra strain healed (§12A).');
+      events.push('Desperate Recovery: 2 extra strain healed.');
     }
     character.state.strain = Math.max(0, character.state.strain - strain);
-    events.push(`Healed ${strain} strain (§5G).`);
+    events.push(`Healed ${strain} strain.`);
   }
   if (methodId === 'nightRest') {
     character.state.wounds = Math.max(0, character.state.wounds - 1);
     character.state.strain = 0;
-    events.push('Healed 1 wound and all strain (§5G).');
+    events.push('Healed 1 wound and all strain.');
   }
   if (methodId === 'medicineWounds') {
     const wounds = successes + talentRank('surgeon');
     character.state.wounds = Math.max(0, character.state.wounds - wounds);
     character.state.strain = Math.max(0, character.state.strain - advantages);
-    events.push(`Healed ${wounds} wounds and ${advantages} strain${talentRank('surgeon') ? ', including Surgeon' : ''} (§5G).`);
+    events.push(`Healed ${wounds} wounds and ${advantages} strain${talentRank('surgeon') ? ', including Surgeon' : ''}.`);
   }
   if (methodId === 'painkillers') {
     const used = character.state.perDayFlags.painkillers || 0;
@@ -608,13 +608,13 @@ export function applyRecovery(character, methodId, { successes = 0, advantages =
     const bonus = base > 0 ? talentRank('painkillerSpecialization') : 0; // the sixth and later still do nothing
     character.state.wounds = Math.max(0, character.state.wounds - (base + bonus));
     character.state.perDayFlags.painkillers = used + 1;
-    events.push(`Painkiller ${used + 1} of the day: healed ${base + bonus} wounds (§5G).`);
+    events.push(`Painkiller ${used + 1} of the day: healed ${base + bonus} wounds.`);
   }
   if (methodId === 'weekRest' || methodId === 'medicineCritical') {
     const untreated = (character.state.criticalInjuries || []).filter((c) => !c.healed);
     if (!untreated.length) return { ok: false, reason: 'No untreated Critical Injury to heal.' };
     untreated[0].healed = true;
-    events.push(`${untreated[0].name} treated (§5G).`);
+    events.push(`${untreated[0].name} treated.`);
     if (methodId === 'weekRest' && triumph > 0) {
       // R-9 — the manual prints Despair here; read as Triumph.
       if (untreated[1]) { untreated[1].healed = true; events.push(`Triumph healed a second Critical Injury: ${untreated[1].name} (R-9).`); }
@@ -667,8 +667,8 @@ export function advanceTalent(character, talentId) {
 
 export function applyDedication(character, characteristicId) {
   const used = (character.state.dedicationUsed || []);
-  if (used.includes(characteristicId)) return { ok: false, reason: 'Dedication cannot raise the same characteristic twice (§12A).' };
-  if (character.attributes[characteristicId] >= 5) return { ok: false, reason: 'Dedication cannot take a characteristic above 5 (§12A).' };
+  if (used.includes(characteristicId)) return { ok: false, reason: 'Dedication cannot raise the same characteristic twice.' };
+  if (character.attributes[characteristicId] >= 5) return { ok: false, reason: 'Dedication cannot take a characteristic above 5.' };
   character.attributes[characteristicId] += 1;
   character.state.dedicationUsed = [...used, characteristicId];
   saveCharacter(character);
@@ -687,20 +687,20 @@ export function useTalent(character, talentId) {
   if (!def || !held) return { ok: false, reason: 'That talent is not on this sheet.' };
   const bucket = def.limit ? LIMIT_FLAG[def.limit] : null;
   if (bucket && character.state[bucket] && character.state[bucket][talentId]) {
-    return { ok: false, reason: `${def.name} is ${def.limit.replace('per', 'once per ').toLowerCase()} (§12A).` };
+    return { ok: false, reason: `${def.name} is ${def.limit.replace('per', 'once per ').toLowerCase()}.` };
   }
 
   const cost = def.cost || {};
   const strainCost = cost.strain || (cost.strainPerRank ? held.ranks : 0);
   if (strainCost) {
     if (character.state.strain + strainCost >= strainThreshold(character)) {
-      return { ok: false, reason: `${strainCost} strain would incapacitate this character (§6).` };
+      return { ok: false, reason: `${strainCost} strain would incapacitate this character.` };
     }
     character.state.strain += strainCost;
   }
   if (cost.storyPoint) {
     const cell = getCellPools();
-    if (cell.pools.storyPointsPlayer < cost.storyPoint) return { ok: false, reason: 'No Story Point in the player pool (§8).' };
+    if (cell.pools.storyPointsPlayer < cost.storyPoint) return { ok: false, reason: 'No Story Point in the player pool.' };
     cell.pools.storyPointsPlayer -= cost.storyPoint;
     cell.pools.storyPointsGM += cost.storyPoint; // the point moves to the other pool (§8)
     saveCellPools(cell);
@@ -710,10 +710,10 @@ export function useTalent(character, talentId) {
   if (talentId === 'secondWind') {
     const healed = held.ranks;
     character.state.strain = Math.max(0, character.state.strain - healed);
-    effects.push(`Healed ${healed} strain (§12A).`);
+    effects.push(`Healed ${healed} strain.`);
   }
-  if (talentId === 'knowSomebody') effects.push(`Reduce the item's rarity by ${held.ranks} for this purchase (§12A, §14A).`);
-  if (talentId === 'natural') effects.push('Reroll one check with either chosen skill (§12A).');
+  if (talentId === 'knowSomebody') effects.push(`Reduce the item's rarity by ${held.ranks} for this purchase.`);
+  if (talentId === 'natural') effects.push('Reroll one check with either chosen skill.');
   if (def.derived) effects.push('Passive: already folded into the derived stats.');
   if (!effects.length) effects.push(def.summary);
 

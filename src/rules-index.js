@@ -19,7 +19,7 @@ export const SECTIONS = [
   { id: 'vehicles',   label: 'Vehicles',             test: (c) => /^§12\b/.test(c) },
   { id: 'careers',    label: 'Careers',              test: (c) => /^§14$/.test(c) },
   { id: 'heat',       label: 'Suspicion',            test: (c) => /^§17/.test(c) },
-  { id: 'opponents',  label: 'Opponents',            test: (c) => /^(§12C|§12D|§20|B§)/.test(c) },
+  { id: 'opponents',  label: 'Opponents',            test: (c) => /^/.test(c) },
   { id: 'running',    label: 'Running the game',     test: (c) => /^§(18|19|21|22|23|24|26|29|30)/.test(c) },
   { id: 'other',      label: 'Everything else',      test: () => true }
 ];

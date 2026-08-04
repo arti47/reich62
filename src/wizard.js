@@ -29,11 +29,11 @@ let skillFilter = '';
 let talentFilter = '';
 
 const STEP_HELP = {
-  career: { lede: 'Your background. It decides which skills stay cheap for you, for good.', detail: 'Pick a career, then choose four of its eight skills to start at rank 1. All eight stay cheaper to raise for the rest of this character\'s life, so the four you pick now are a head start rather than a limit (§13, §14).' },
+  career: { lede: 'Your background. It decides which skills stay cheap for you, for good.', detail: 'Pick a career, then choose four of its eight skills to start at rank 1. All eight stay cheaper to raise for the rest of this character\'s life, so the four you pick now are a head start rather than a limit.' },
   skills: { lede: 'Choose four of your career\'s eight skills. Each starts at rank 1.', detail: 'There is no wrong answer: the other four are still cheap to buy later.' },
-  xp: { lede: 'Every character gets the same 70 experience. Spend it here.', detail: 'Characteristics can only be raised now, at ten times the new rating per step. Skills cost five times the new rank, plus five if they are not career skills, and stop at rank 2 during creation. Talents cost five times their tier and follow the pyramid rule (§7).' },
-  derived: { lede: 'The numbers that fall out of your choices.', detail: 'Injury and stress limits are fixed when creation ends; only talents raise them afterwards. Damage resisted keeps pace with Brawn (§6).' },
-  motivation: { lede: 'What drives your character, and what trips them up.', detail: 'One of each: a desire, a fear, a strength and a flaw. They are the levers other people use on you socially, and playing to them earns extra experience at the end of a session (§12B, §27).' },
+  xp: { lede: 'Every character gets the same 70 experience. Spend it here.', detail: 'Characteristics can only be raised now, at ten times the new rating per step. Skills cost five times the new rank, plus five if they are not career skills, and stop at rank 2 during creation. Talents cost five times their tier and follow the pyramid rule.' },
+  derived: { lede: 'The numbers that fall out of your choices.', detail: 'Injury and stress limits are fixed when creation ends; only talents raise them afterwards. Damage resisted keeps pace with Brawn.' },
+  motivation: { lede: 'What drives your character, and what trips them up.', detail: 'One of each: a desire, a fear, a strength and a flaw. They are the levers other people use on you socially, and playing to them earns extra experience at the end of a session.' },
   gear: { lede: 'Spend the starting money on equipment.', detail: 'The book prints prices but never names the currency or the starting budget, so both are house aids you can change in Settings.' },
   review: { lede: 'A last look before the character is saved.', detail: 'Only characteristics lock at this point; skills, talents and gear all keep growing through play.' }
 };
@@ -100,23 +100,23 @@ function applyPregen(id) {
 export function validateStep(index = step) {
   const name = STEPS[index];
   if (name === 'career') {
-    if (!draft.identity.career) return 'Choose a career first (§14).';
+    if (!draft.identity.career) return 'Choose a career first.';
   }
   if (name === 'skills') {
     if (draft.identity.careerSkills.length !== CREATION_RULES.careerSkillPicks) {
-      return `Pick exactly ${CREATION_RULES.careerSkillPicks} career skills (§14).`;
+      return `Pick exactly ${CREATION_RULES.careerSkillPicks} career skills.`;
     }
   }
   if (name === 'xp') {
     if (draft.xp.available < 0) return 'You have spent more XP than you have.';
     const overRank = Object.entries(draft.skills).find(([, s]) => s.rank > SKILL_RANK_MAX_AT_CREATION);
-    if (overRank) return `Skill ranks cannot pass ${SKILL_RANK_MAX_AT_CREATION} during creation (§7).`;
+    if (overRank) return `Skill ranks cannot pass ${SKILL_RANK_MAX_AT_CREATION} during creation.`;
     const overChar = Object.entries(draft.attributes).find(([, v]) => v > CHARACTERISTIC_MAX);
-    if (overChar) return `Characteristics cannot pass ${CHARACTERISTIC_MAX} (§7).`;
+    if (overChar) return `Characteristics cannot pass ${CHARACTERISTIC_MAX}.`;
   }
   if (name === 'motivation') {
     const m = draft.identity.motivation;
-    if (!m.desire || !m.fear || !m.strength || !m.flaw) return 'Choose one of each Motivation facet (§12B).';
+    if (!m.desire || !m.fear || !m.strength || !m.flaw) return 'Choose one of each Motivation facet.';
   }
   if (name === 'gear') {
     if (gearSpent() > Settings.startingBudget()) return `Over the starting budget of ${Settings.startingBudget()} ${Settings.currencyLabel()}.`;
@@ -143,7 +143,7 @@ function refundXp(entry) {
 
 export function raiseCharacteristic(id) {
   const current = draft.attributes[id];
-  if (current >= CHARACTERISTIC_MAX) return `Maximum ${CHARACTERISTIC_MAX} at creation (§7).`;
+  if (current >= CHARACTERISTIC_MAX) return `Maximum ${CHARACTERISTIC_MAX} at creation.`;
   const cost = xpCost('characteristic', { newRating: current + 1 });
   if (cost > draft.xp.available) return `Costs ${cost} XP; only ${draft.xp.available} left.`;
   draft.attributes[id] = current + 1;
@@ -163,7 +163,7 @@ export function lowerCharacteristic(id) {
 
 export function raiseSkill(id) {
   const skill = draft.skills[id];
-  if (skill.rank >= SKILL_RANK_MAX_AT_CREATION) return `Capped at rank ${SKILL_RANK_MAX_AT_CREATION} during creation (§7).`;
+  if (skill.rank >= SKILL_RANK_MAX_AT_CREATION) return `Capped at rank ${SKILL_RANK_MAX_AT_CREATION} during creation.`;
   const cost = xpCost('skill', { newRank: skill.rank + 1, career: skill.career });
   if (cost > draft.xp.available) return `Costs ${cost} XP; only ${draft.xp.available} left.`;
   skill.rank += 1;
@@ -219,7 +219,7 @@ export function toggleCareerSkill(id) {
   const picks = draft.identity.careerSkills;
   const at = picks.indexOf(id);
   if (at >= 0) { picks.splice(at, 1); draft.skills[id].rank = Math.max(0, draft.skills[id].rank - 1); return null; }
-  if (picks.length >= CREATION_RULES.careerSkillPicks) return `Only ${CREATION_RULES.careerSkillPicks} picks (§14).`;
+  if (picks.length >= CREATION_RULES.careerSkillPicks) return `Only ${CREATION_RULES.careerSkillPicks} picks.`;
   picks.push(id);
   draft.skills[id].rank += 1;
   return null;
@@ -296,7 +296,7 @@ function renderCareerStep(node) {
     type: 'text', id: 'char-name', value: draft.identity.name,
     oninput: (e) => { draft.identity.name = e.target.value; }
   }));
-  node.append(el('h3', { text: 'Career (§14)' }));
+  node.append(el('h3', { text: 'Career' }));
   CAREERS.forEach((c) => {
     node.append(el('div', { class: 'toggle-row' }, [
       el('input', {
@@ -310,7 +310,7 @@ function renderCareerStep(node) {
     ]));
   });
 
-  node.append(el('h3', { text: 'Or start from a pregen (§16)' }));
+  node.append(el('h3', { text: 'Or start from a pregen' }));
   PREGENS.forEach((p) => {
     node.append(el('button', {
       type: 'button', class: 'secondary', text: `${p.name}`,
@@ -351,7 +351,7 @@ function renderXpStep(node) {
   node.append(subTabs(XP_TABS, xpTab, (id) => { xpTab = id; rerender(); }));
 
   if (xpTab === 'characteristics') {
-    node.append(el('p', { class: 'lede', text: 'Raise these now or never — after creation only the Dedication talent can (§7).' }));
+    node.append(el('p', { class: 'lede', text: 'Raise these now or never — after creation only the Dedication talent can.' }));
     const grid = el('div', { class: 'stat-grid' });
     CHARACTERISTICS.forEach((c) => {
       const value = draft.attributes[c.id];
@@ -440,7 +440,7 @@ function renderDerivedStep(node) {
   const derived = derivedFor(draft);
   node.append(el('p', { class: 'small' }, [
     el('span', { class: 'badge badge-inferred', text: 'R-1 inferred' }), ' ',
-    `The manual never prints the human base thresholds (§6). This app uses Wound ${BASE_WOUND_THRESHOLD} + Brawn and Strain ${BASE_STRAIN_THRESHOLD} + Willpower, taken from the pregens that agree.`
+    `The manual never prints the human base thresholds. This app uses Wound ${BASE_WOUND_THRESHOLD} + Brawn and Strain ${BASE_STRAIN_THRESHOLD} + Willpower, taken from the pregens that agree.`
   ]));
   node.append(el('div', { class: 'stat-grid' }, [
     stat('Wound Threshold', derived.woundThreshold),
@@ -465,7 +465,7 @@ function stat(label, value) {
 }
 
 function renderMotivationStep(node) {
-  node.append(el('p', { class: 'small muted', text: 'One of each facet, rolled on a d10 or chosen (§12B). Motivations are social-encounter targets and earn bonus XP when played to.' }));
+  node.append(el('p', { class: 'small muted', text: 'One of each facet, rolled on a d10 or chosen. Motivations are social-encounter targets and earn bonus XP when played to.' }));
   ['desire', 'fear', 'strength', 'flaw'].forEach((facet) => {
     const select = el('select', {
       id: `motivation-${facet}`, 'aria-label': titleCase(facet),

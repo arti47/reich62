@@ -77,7 +77,7 @@ export function renderSolo(mount) {
   oracleCard.append(el('label', { class: 'small', for: 'oracle-likelihood', text: 'Likelihood' }), likelihood);
   oracleCard.append(el('div', { class: 'toggle-row' }, [
     el('input', { type: 'checkbox', id: 'oracle-surveilled', checked: state.surveilled, onchange: (e) => { state.surveilled = e.target.checked; } }),
-    el('label', { for: 'oracle-surveilled' }, [el('span', { text: 'The question concerns a surveilled context (Despair feeds Heat, §17.1)' })])
+    el('label', { for: 'oracle-surveilled' }, [el('span', { text: 'The question concerns somewhere the regime is watching, so a despair draws attention' })])
   ]));
 
   const entered = newTally();
@@ -110,19 +110,19 @@ export function renderSolo(mount) {
 
       if (state.surveilled && verdict.result.despair > 0 && character) {
         const applied = applyPersonalHeat(character, 1);
-        answerNode.append(el('p', { class: 'small', text: `Despair in a surveilled context: Personal Heat ${applied.before} → ${applied.after} (§17.1).` }));
+        answerNode.append(el('p', { class: 'small', text: `Despair in a surveilled context: Personal Heat ${applied.before} → ${applied.after}.` }));
         document.dispatchEvent(new CustomEvent('resource:refresh'));
       }
       if (verdict.event) {
         const event = rollRandomEvent();
-        answerNode.append(el('p', { class: 'small', text: `Random Event (§19): ${event.category} (${event.categoryRoll}) concerning ${event.subject.toLowerCase()} (${event.subjectRoll}).${event.complication ? ` Complication: ${event.complication}.` : ''} ${RANDOM_EVENT.skew}` }));
+        answerNode.append(el('p', { class: 'small', text: `Random Event: ${event.category} (${event.categoryRoll}) concerning ${event.subject.toLowerCase()} (${event.subjectRoll}).${event.complication ? ` Complication: ${event.complication}.` : ''} ${RANDOM_EVENT.skew}` }));
       }
       writeLog({
         ts: Date.now(), by: character ? character.id : null,
         characterName: character ? character.identity.name : 'Solo',
         skill: 'oracle', difficulty: state.likelihood, poolInputs: {}, symbols: { ...entered },
         net: verdict.result.net, outcome: verdict.answer, surveilled: state.surveilled,
-        heatDelta: state.surveilled && verdict.result.despair > 0 ? 1 : 0, notes: ['Oracle (§18)']
+        heatDelta: state.surveilled && verdict.result.despair > 0 ? 1 : 0, notes: ['Oracle']
       });
       Object.keys(entered).forEach((k) => { entered[k] = 0; });
       drawTally();
@@ -135,16 +135,16 @@ export function renderSolo(mount) {
   const output = el('div', { id: 'solo-output', 'aria-live': 'polite' });
   const show = (title, text) => { clear(output); output.append(el('h3', { text: title }), el('p', { class: 'small', text })); };
 
-  tables.append(el('button', { type: 'button', class: 'secondary', text: 'Meaning (§15A)', onclick: () => { const r = rollMeaning(); show('Meaning', `${r.phrase} (${r.actionRoll}, ${r.subjectRoll})`); } }));
+  tables.append(el('button', { type: 'button', class: 'secondary', text: 'Meaning', onclick: () => { const r = rollMeaning(); show('Meaning', `${r.phrase} (${r.actionRoll}, ${r.subjectRoll})`); } }));
   ['location', 'faction', 'complication'].forEach((kind) => {
     tables.append(el('button', {
-      type: 'button', class: 'secondary', text: `${titleCase(kind)} (§15B)`,
+      type: 'button', class: 'secondary', text: `${titleCase(kind)}`,
       onclick: () => { const r = rollElement(kind); show(titleCase(kind), `${r.entry} (${r.roll})`); }
     }));
   });
-  tables.append(el('button', { type: 'button', class: 'secondary', text: 'Random Event (§19)', onclick: () => { const e = rollRandomEvent(); show('Random Event', `${e.category} (${e.categoryRoll}) concerning ${e.subject.toLowerCase()} (${e.subjectRoll}).${e.complication ? ` Complication: ${e.complication}.` : ''}`); } }));
+  tables.append(el('button', { type: 'button', class: 'secondary', text: 'Random Event', onclick: () => { const e = rollRandomEvent(); show('Random Event', `${e.category} (${e.categoryRoll}) concerning ${e.subject.toLowerCase()} (${e.subjectRoll}).${e.complication ? ` Complication: ${e.complication}.` : ''}`); } }));
   tables.append(el('button', {
-    type: 'button', class: 'secondary', text: 'NPC quick-gen (§20)',
+    type: 'button', class: 'secondary', text: 'NPC quick-gen',
     onclick: () => {
       const a = rollDie(10), d = rollDie(10);
       const archetype = NPC_QUICKGEN.archetype.find((r) => a >= r.min && a <= r.max);
@@ -153,11 +153,11 @@ export function renderSolo(mount) {
     }
   }));
   tables.append(el('button', {
-    type: 'button', class: 'secondary', text: 'Random encounter (B§7)',
+    type: 'button', class: 'secondary', text: 'Random encounter',
     onclick: () => {
       const roll = rollDie(10);
       const row = RANDOM_ENCOUNTERS.table.find((r) => r.roll === roll);
-      const escalate = roll === 10 && cell.cellHeat >= 4 ? ' Cell Heat is 4 or more — escalate toward a nemesis (B§7).' : '';
+      const escalate = roll === 10 && cell.cellHeat >= 4 ? ' Cell Heat is 4 or more — escalate toward a nemesis.' : '';
       show('Random encounter', `${row.entry} (${roll}).${escalate}`);
     }
   }));
@@ -170,7 +170,7 @@ export function renderSolo(mount) {
   mount.append(el('div', { class: 'card' }, [
     el('h2', { text: 'Scene start' }),
     el('p', { class: 'small muted', text: `${network.name}: ${network.hook}` }),
-    el('p', { class: 'small', text: `Passive Watch is an Oracle roll at ${ORACLE.likelihoods.find((l) => l.id === watchLikelihood).name} given the current Heat (B§2, §18).` })
+    el('p', { class: 'small', text: `Passive Watch is an Oracle roll at ${ORACLE.likelihoods.find((l) => l.id === watchLikelihood).name} given the current Heat.` })
   ]));
 
   // --- Heat 4+ raid timing (§23) ---
@@ -184,7 +184,7 @@ export function renderSolo(mount) {
 
   // --- the loop itself ---
   mount.append(el('div', { class: 'card' }, [
-    el('h2', { text: 'Solo loop (§23)' }),
+    el('h2', { text: 'Solo loop' }),
     el('ol', { class: 'small' }, SOLO_LOOP.steps.map((s) => el('li', { text: s })))
   ]));
 }
