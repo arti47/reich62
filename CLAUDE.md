@@ -1,9 +1,11 @@
 # REICH '62 Player — Project Spec (canonical)
 
 > Instantiated from `source/BUILD_TEMPLATE_v2.md` (RPG Player-Character App — Autonomous
-> Build Instructions v2). Source of record for all rules data:
-> `source/reich62_manual.md` (1116 lines, self-contained Genesys-derivative manual).
-> **Citations in this file and in all `data*.js` comments use the manual's § numbers.**
+> Build Instructions v2). Two sources of record, both self-contained:
+> `source/reich62_manual.md` (1116 lines — core rules) and
+> `source/reich62_bestiary.md` (303 lines — Bestiary & Adversary Compendium).
+> **Citations use `§x` for the manual and `B§x` for the bestiary**, in this file and in every
+> `data*.js` comment.
 >
 > This file is the project's living spec. Per §10, **every code change updates this file in
 > the same change** — features, data model, file tables, roadmap checkboxes, ledger ticks,
@@ -19,7 +21,7 @@
 | | |
 |---|---|
 | **Game** | REICH '62 — Genesys narrative-dice system, alt-history 1962 occupied Europe |
-| **Source** | `source/reich62_manual.md` — single supplied book, core rules + setting |
+| **Source** | `source/reich62_manual.md` (core rules + setting) · `source/reich62_bestiary.md` (adversary compendium — companion volume, same framework) |
 | **Audience** | Players; opt-in GM screen; official solo rules present → solo tab enabled |
 | **Platforms** | Phone / browser / desktop — one installable PWA |
 | **Core job** | Creation wizard + in-play tracker + native narrative-dice engine + Heat engine |
@@ -45,7 +47,7 @@ instantiated to match.
 | 1 | Usage mode | Local-first, sync later (Phase 5 gated on First Session Playable) | confirmed |
 | 2 | User's seat | Rotates — solo + GM + player all supported; solo loop is first-class because the manual publishes official solo rules (§18–§20, §23) | confirmed |
 | 3 | Dice input | **Manual symbol entry, primary and built first** (R-B1). The manual never prints die face distributions, so a faithful digital roller is not buildable from the source; the digital roller ships behind `digitalRoller`, blocked until face data is supplied | confirmed |
-| 4 | Expansion commitment | None — one book supplied. No `data-<expansion>.js`, no expansion toggles | fixed |
+| 4 | Book commitment | **Both supplied books committed.** The bestiary is a companion volume filling the template's mandatory bestiary slot, not an optional expansion — its stat blocks populate `data-monsters.js` and ship **untoggled**. No `data-<expansion>.js`, no content toggles | confirmed |
 | 5 | Table device | Mixed; phone-first baseline, 360px zero-overflow requirement holds | confirmed |
 | 6 | Theme default | Follow system (`prefers-color-scheme`), in-app override | confirmed |
 
@@ -69,9 +71,16 @@ copied — **no Reich iconography, no historical insignia, no period propaganda 
 
 ## 2. Extraction status
 
-Single-source, fully readable Markdown. Read cover-to-cover; every §3 slot below is
-populated from it. **No value in this file comes from training-data memory of Genesys.**
-Where the manual is silent, the slot says so and the gap is logged in §4.
+Two fully readable Markdown sources, both read cover-to-cover; every §3 slot below is
+populated from them. **No value in this file comes from training-data memory of Genesys.**
+Where both books are silent, the slot says so and the gap is logged in §4.
+
+The bestiary is a **companion volume, not an errata or a rules revision**: it adds stat
+blocks, NPC abilities, encounter templates, and one random table, and it cites the manual
+for every mechanic it reuses. Where the two disagree on a *rule*, the manual wins; where the
+bestiary prints a *stat*, the printed stat wins (R-15). One §3 slot moved as a result:
+§3.18 went from "no stat blocks published" to a full compendium, so `data-monsters.js` is
+reinstated.
 
 ---
 
@@ -315,17 +324,26 @@ end-of-encounter check in wilderness).
 Each boundary presents a **confirmation summary** listing every delta, and supports
 **one-step undo**.
 
-### 3.13 Extended / progress tasks — *near-empty slot; recorded as a finding*
+### 3.13 Extended / progress tasks — *one published extended check (bestiary), plus tracked ladders*
 
-The manual defines **no extended-test or progress-clock subsystem**. Multi-roll structures
-that exist and reuse one generic tracker component:
-- **Heat tracks** (Personal 0–5, Cell 0–5) — the primary progress mechanic.
+The manual defines **no** extended-test or progress-clock subsystem. The **bestiary supplies
+the only published one**: the Manhunt/Dragnet encounter block (B§6).
+
+- **Manhunt / Dragnet (B§6)** — a **multi-round extended opposed check**: the fugitive rolls
+  Stealth or Streetwise each round against a Perception pool that **starts at 2 Ability dice
+  and gains +1 per in-game hour the dragnet runs, capped at 4**. **Every failed round
+  advances Personal *and* Cell Heat by 1.** It ends when the PC leaves the search zone. This
+  is a real progress task with an escalating opposition track and a Heat coupling — the
+  generic tracker component must support both.
+- **Heat tracks** (Personal 0–5, Cell 0–5) — the campaign-level progress mechanic.
 - **Item damage ladder** (undamaged → minor → moderate → major → destroyed, §10 Sunder /
   §14B) with per-level repair difficulty, time, and cost.
-- **Ad-hoc adventure clocks** (the sample adventure uses "3 in-game days"; §20B pacing) —
-  provided as a **labelled house aid**, not presented as an official rule.
 - **Repair jobs** (§14B): 1–2 hours per difficulty level, halved time = +1 difficulty,
   no tools = +1, cumulative.
+- **Ad-hoc adventure clocks** (the sample adventure uses "3 in-game days"; §20B pacing) —
+  provided as a **labelled house aid**, not presented as an official rule.
+- **Reinforcements (B§2, Roadblock Soldiers)** — a round counter: at 3+ rounds the GM may add
+  a minion to the group. Modelled as a round-triggered encounter flag, not a clock.
 
 ### 3.14 Powers / magic — **ABSENT**
 
@@ -410,24 +428,52 @@ social-encounter attack surfaces (§11).
 - **Four distinct spend tables** must be selectable by context: combat (§5C), generic
   non-combat (§5C'), social (§11), vehicle (§12).
 
-### 3.18 Bestiary & NPCs — *no stat blocks published; recipes only*
+### 3.18 Bestiary & NPCs — **PRESENT: 32 published entries + build recipes**
 
-**Finding: the manual contains zero monster/NPC stat blocks.** `data-monsters.js` is
-therefore **omitted by design** (recorded here per template §6). What exists:
+The **manual** publishes zero stat blocks; the **bestiary companion supplies all of them**,
+built on the manual's own §12C/§12D framework. The app therefore ships **both** a bestiary
+browser and an NPC builder.
+
+**From the manual — the framework (`data-npcs.js`):**
 - **Adversary tiers (§12C):** Minion (no strain track, group-shared WT, group skill ranks =
   members−1, any Critical kills one), Rival (no strain track, Criticals normal, may die at
   WT), Nemesis (full PC-equivalent, has a strain track).
 - **Adversary talent** (ranked, passive): upgrade difficulty of all combat checks targeting
-  them once per rank.
-- **7 Reich '62 adversary special abilities (§12D).**
-- **NPC quick-gen (§20):** archetype table (5 bands), disposition table (4 bands), tier
-  mapping, motivation assignment.
-- **Encounter sizing table (§20B)** for a 4-PC party (6 rows).
+  them once per rank. Every published Rival has Adversary 1; every Nemesis has Adversary 2.
+- **7 adversary special abilities (§12D)**, of which the bestiary uses 6 (Fear X,
+  Interrogator's Eye, Chain of Command, Hardened, Web of Informants, Ruthless) and reflavours
+  the 7th (Environmental Affinity — Urban → Wilderness, on the Hound Handler).
+- **NPC quick-gen (§20)** and **encounter sizing (§20B)**.
 - **Threat guidance:** 2–3 minions ≈ one starting PC; 3–4 ≈ a 100-XP PC; 1 rival ≈ one PC;
-  soak 5+ / WT 14+ / 3+ skill ranks / 9+ damage pushes a rival to "very challenging".
+  soak 5+ / WT 14+ / 3+ skill ranks / 9+ damage pushes a rival to "very challenging". Four
+  published Rivals cross that line — the browser flags them.
 
-`data-npcs.js` therefore holds **build recipes + the special-ability catalog + quick-gen
-tables**, and the app ships an **NPC builder**, not a bestiary browser.
+**From the bestiary — the compendium (`data-monsters.js`):**
+- **10 minion groups** (B§2), each with characteristics, group skill list, **per-member Wound
+  Threshold** (3–5), equipment, and one **unique ability**. One is abstract: the Informant
+  Network has no combat stats and resolves as an Oracle roll.
+- **12 rivals** (B§3) with characteristics, Soak, Defense (melee/ranged), Wound Threshold,
+  skills at ranks 1–3, abilities, equipment.
+- **4 nemeses** (B§4) with the above **plus Strain Thresholds**, 5–6 skills, 2–3 abilities,
+  Adversary 2, and narrative-use notes.
+- **2 animals** (B§5) — Guard Dog, Patrol Horse — with their own abilities and attack profiles.
+- **4 abstract encounter blocks** (B§6): Checkpoint, Search Detail, Manhunt/Dragnet,
+  Interrogation. These are **resolution templates, not creatures** — each names the opposed
+  skills, the opposition pool size, and the Heat consequence, so the app deploys them as
+  pre-built opposed checks rather than combatants.
+- **Random encounter table** (B§7, d10, 10 rows) — feeds the GM screen and solo mode.
+- **14 abilities defined only in the bestiary**, not in §12D: Papers-Check Reflex, Beat
+  Familiarity, Disciplined, Manifest Cross-Check, Quota Pressure, Terrain-Wise, Everywhere,
+  Shoot on Sight, Reinforcements, Passive Watch, Environmental Affinity — Wilderness, Keen
+  Senses, Bite, Mount. These extend the §12D catalog and are stored alongside it.
+
+**Printed NPC stats are authoritative and are never recomputed from PC formulas (R-15)** —
+several published blocks (Nemesis thresholds, the Patrol Horse's Soak) do not match the PC
+derivations, which is expected for NPCs built to a threat budget.
+
+Six abilities carry direct **Heat hooks** (Papers-Check Reflex, Passive Watch, the Checkpoint
+and Dragnet blocks, Hartmann Voss's Cell-Heat-4 escalation, the random table's Cell-Heat-4
+row), so `heat.js` and the bestiary are wired together, not independent.
 
 ### 3.19 Pre-generated characters — **PRESENT (3, partial)**
 
@@ -458,16 +504,20 @@ Critical Injury d100 (§9) · Random Event (§19) · NPC quick-gen (§20) · Mea
 Element ×3 (§15B) · encounter sizing (§20B) · difficulty ladder + per-skill guidance (§3) ·
 four spend tables (§5C, §5C', §11, §12) · Heat thresholds (§17.3) · dread-check severity
 ladder (§29) · rarity ladder + modifiers (§14A) · item damage/repair (§14B) · falling (§5I) ·
-silhouette (§5J) · GM one-page quick reference (§30).
+silhouette (§5J) · GM one-page quick reference (§30) · **random encounter table (B§7, d10)** ·
+**the 4 encounter blocks (B§6) as one-tap deployable opposed checks** · **the bestiary browser
+itself** (filter by tier / Heat relevance / threat flag, drop straight into the combat
+tracker).
 
 ---
 
 ## 4. Rulings — **ALL CONFIRMED 2026-08-04**
 
-Every gap the manual left is resolved. Nothing below is open; **no ruling may be silently
+Every gap either source left is resolved. Nothing below is open; **no ruling may be silently
 re-litigated during the build** — cite the ruling ID in a `// R-x` code comment wherever it
 is implemented, and surface an in-app badge wherever it is a *substitution* for a printed
-rule (R-B1, R-1, R-6, R-7, R-8, R-9 — see "Badge" column).
+rule (R-B1, R-1, R-6, R-7, R-8, R-9 — see "Badge" column). R-15…R-19 arrived with the
+bestiary and were confirmed 2026-08-04 alongside the rest.
 
 Every ruling is also a **regression assertion** (§13.5): the harness pins the value so a
 later edit cannot drift away from it.
@@ -489,6 +539,11 @@ later edit cannot drift away from it.
 | **R-12** | §5C lists "🔺🔺 **or** ☀️" rows — ambiguous whether one ☀️ substitutes for 2–3 🔺 | Plain reading: **one ☀️ purchases any listed effect at any cost tier**; 🔺 costs are literal. ☀️ is never consumed by cancellation and each ☀️ buys one effect | no | `roller.js` spend tables |
 | **R-13** | TOC advertises "18 items" in §15; the section lists **17** | Ship **17**; the count is recorded as 17 in §5 and in the T40 ledger row | no | `data.js` T40 |
 | **R-14** | Critical Injury table runs to **151+** but the stated roll is a d100 (§9) | Correct as written: the app sums **roll + modifiers** (+10 per untreated injury, Vicious 10×X, falls +50/+75, Durable −10/rank floored at 01) and indexes the summed value, which is how results past 100 are reached | no | `roller.js`, `derived.js` |
+| **R-15** | Several published NPC stats do not match the PC derivations — nemesis Wound/Strain Thresholds far exceed base + characteristic, and the Patrol Horse's Soak 3 is below its Brawn 4 (B§3–B§5) | **Printed NPC/animal stats are authoritative as printed and are never recomputed.** `derived.js` computes for PCs only; bestiary entries load their stats verbatim. NPCs built in the NPC builder from §12C recipes *do* derive, and are stored with `derivedFrom: "recipe"` to keep the two paths distinguishable | no | `derived.js`, `data-monsters.js` |
+| **R-16** | The Guard Dog is printed as "Wound Threshold 4 (Minion-equivalent single unit, or run as a lone Rival-lite …)" (B§5) — two tiers offered, none chosen | Default **minion tier, group size 1**; the combatant card offers a one-tap "promote to Rival" that grants Criticals-resolve-normally and keeps WT 4. Stored as `tier: "minion"`, `promotable: true` | no | `data-monsters.js`, `combat.js` |
+| **R-17** | The bestiary writes Defense as `X/Y` (e.g. "Defense: 0/1") without naming the order (B§3–B§5) | Read as **melee/ranged**, matching the §16A character-sheet field order (Melee Defense then Ranged Defense) | no | `data-monsters.js` |
+| **R-18** | Minion groups print a **per-member** Wound Threshold ("4 per member"), while §12C defines the group threshold as the sum of members' thresholds | Consistent, not contradictory: store the printed **per-member** value and let `combat.js` compute group WT = per-member × group size, so resizing a group recomputes correctly and the "one minion drops per member's share" rule stays exact | no | `data-monsters.js`, `combat.js` |
+| **R-19** | The bestiary's minion abilities `Disciplined` (immune to Disorient) and §12D's `Hardened` (immune to Disorient **and** Stagger) overlap but differ (B§2 vs §12D) | Keep both as distinct entries; `Disciplined` is the narrower one. Neither is a rename of the other | no | `data-npcs.js` |
 
 ---
 
@@ -531,7 +586,15 @@ later edit cannot drift away from it.
 | Encounter sizing rows | 6 | §20B |
 | Dread severity rows | 4 | §29 |
 | Skill usage examples | 14 | §26 |
-| **Monster stat blocks** | **0 — none published (§3.18 finding)** | — |
+| **— bestiary companion —** | | |
+| **Minion groups** | **10** (1 abstract, no combat stats) | B§2 |
+| **Rivals** | **12** | B§3 |
+| **Nemeses** | **4** | B§4 |
+| **Animals** | **2** | B§5 |
+| **Abstract encounter blocks** | **4** (Checkpoint, Search, Dragnet, Interrogation) | B§6 |
+| Random encounter table | 1 (d10, 10 rows) | B§7 |
+| **Bestiary-only NPC abilities** | **14** (extend the 7 in §12D) | B§2–B§5 |
+| **Total published stat blocks** | **28** (+ 4 encounter templates) | B§2–B§6 |
 
 ---
 
@@ -553,18 +616,19 @@ day one; fantasy-phrase join codes; themed `modal()`/`showToast`/`confirmModal`/
 | `index.html` | App shell: header, bottom nav, screen mount, module entry | planned |
 | `styles.css` | Theme (§1.2) light + dark + components | planned |
 | `data.js` | Core rules library — every §3 list/table/formula | planned |
-| `data-npcs.js` | Adversary recipes, 7 special abilities, quick-gen tables, encounter sizing | planned |
+| `data-npcs.js` | Adversary recipes, the 7 §12D abilities + 14 bestiary abilities, quick-gen tables, encounter sizing | planned |
+| `data-monsters.js` | **Bestiary compendium** — 10 minion groups, 12 rivals, 4 nemeses, 2 animals, 4 encounter blocks, random encounter table | planned |
 | `data-pregens.js` | 3 published pregens | planned |
 | `data-solo.js` | Oracle, Random Event, Meaning, Element tables | planned |
-| ~~`data-monsters.js`~~ | **Omitted — the manual publishes no stat blocks (§3.18)** | n/a |
-| ~~`data-<expansion>.js`~~ | **Omitted — single book supplied** | n/a |
+| ~~`data-<expansion>.js`~~ | **Omitted — no expansion books; the bestiary is committed core content, untoggled** | n/a |
 | `firebase-config.js` | Placeholder config + `FIREBASE_ENABLED` | planned |
 | `database.rules.json` | RTDB rules (player/GM roles; Cell write rules) | planned |
 | `manifest.json`, `service-worker.js`, `icon.svg` | PWA | planned |
 | `tests/`, `package.json` | Headless regression harness (`npm test`), dev-only `playwright-core` | planned |
 | `README.md` | Setup + Firebase steps + personal-use licensing note | planned |
 | `CLAUDE.md` | This file | **live** |
-| `source/reich62_manual.md` | Source of record | present |
+| `source/reich62_manual.md` | Source of record — core rules (`§x` citations) | present |
+| `source/reich62_bestiary.md` | Source of record — adversary compendium (`B§x` citations) | present |
 | `source/BUILD_TEMPLATE_v2.md` | The build template this spec instantiates | present |
 
 ### 7.1 `src/` module map — LOCKED
@@ -573,7 +637,7 @@ day one; fantasy-phrase join codes; themed `modal()`/`showToast`/`confirmModal`/
 |---|---|---|
 | `core.js` | Constants, DOM/util helpers, raw dice primitives. No imports | symbol enum, cancellation primitive |
 | `ui.js` | Themed modals/toasts/confirm/prompt | dice-symbol glyph renderer |
-| `rules.js` | Pure lookups over data files | talent lookup, pyramid legality, rarity resolution, difficulty ladder |
+| `rules.js` | Pure lookups over data files | talent lookup, pyramid legality, rarity resolution, difficulty ladder, bestiary lookup + threat-flag evaluation |
 | `derived.js` | Derived calculations + data normalisation/migration | WT/ST/Soak/Defense/encumbrance, cumulative Critical-Injury modifier |
 | `settings.js` | Feature toggles | solo · GM screen · digital roller (R-B1 gated) · non-setting talents (R-11) · currency label + starting budget (R-8) · GM discretionary dice (§5C'') |
 | `store.js` | Local/cloud persistence, Cell entity, combat mirroring, JSON export/import | Cell + Heat persistence |
@@ -581,10 +645,10 @@ day one; fantasy-phrase join codes; themed `modal()`/`showToast`/`confirmModal`/
 | `wizard.js` | Creation wizard + pregens | career → 4 skills → 70 XP → derived → Motivation → gear |
 | `roller.js` | **Dice engine**: pool build, modification order, symbol entry, cancellation, opposed sequence (§3.2), Story Point spends, spend-table application, damage applier, Critical Injury roller, **roll-log writes** | four context-specific spend tables |
 | `sheet.js` | Character sheet, in-play tracking, **persistent resource header** | header = wounds · strain · Story Points · **Personal Heat** · encumbrance |
-| `combat.js` | Combat tracker: **initiative slots (§5A')**, turn/maneuver budget with strain cost, combatant cards, generic progress tracker (§3.13), lifecycle events (§3.12) | slot-filling model, vehicle scale |
+| `combat.js` | Combat tracker: **initiative slots (§5A')**, turn/maneuver budget with strain cost, combatant cards, generic progress tracker (§3.13), lifecycle events (§3.12) | slot-filling model, vehicle scale, bestiary drop-in, minion-group WT from per-member value (R-18), Dragnet extended check |
 | `heat.js` | **New module (game-specific):** Heat generation (§17.1), Personal/Cell thresholds and their auto-applied effects, decay, surveilled-context flag | — |
 | `solo.js` | Oracle, Random Event, Meaning/Element tables, solo loop | enabled (official rules) |
-| `gm.js` | GM dashboard + rollable §3.21 reference tables | — |
+| `gm.js` | GM dashboard + rollable §3.21 reference tables | bestiary browser, random encounter roll (B§7), one-tap encounter blocks (B§6) |
 | `screens.js` | Home/rules/about renderers, party banner, roll-log view | rules library with §-anchored search |
 | `router.js` | Bottom-nav routing, conditional tab gating | — |
 | `main.js` | Entry / boot | — |
@@ -606,10 +670,15 @@ campaigns/{campaignId}
              combatants: { id: { name, wounds, woundThreshold, strain,
                                  strainThreshold, soak, meleeDef, rangedDef,
                                  silhouette, tier: "minion"|"rival"|"nemesis",
-                                 minionCount, actedThisRound, conditions{},
+                                 minionCount, woundThresholdPerMember,      // R-18
+                                 sourceId, sourceBook: "manual"|"bestiary", // provenance
+                                 derivedFrom: "printed"|"recipe",           // R-15
+                                 abilities[], actedThisRound, conditions{},
                                  maneuversUsed, actionUsed, criticalInjuries[] } },
              vehicles: { id: { speed, handling, hullTrauma, systemStrain, ... } } }
-  tasks/{taskId}: { name, kind: "heat"|"repair"|"clock", progress, target, contributors[] }
+  tasks/{taskId}: { name, kind: "heat"|"repair"|"clock"|"dragnet",     // dragnet = B§6
+                    progress, target, contributors[],
+                    oppositionDice, elapsedHours }                     // dragnet only
   rollLog/{pushId}: { by, characterName, poolInputs{ability,proficiency,difficulty,
                       challenge,boost,setback}, symbols{}, net{}, outcome,
                       spends[], storyPointDeltas, heatDelta, ts }               // cap ~100
@@ -659,9 +728,10 @@ description, every related UI checks the flag, router hides gated tabs.
 ## 10. Data Extraction Ledger (T-numbered) — **all boxes unticked**
 
 **How to continue (for any AI resuming this project):** work **top to bottom within the
-current phase**. For each row: read the cited manual § in `source/reich62_manual.md`, write
-the table into the target data file **paraphrased with a `// §x` citation comment**, tick the
-box **in the same change**, and append a changelog row (§12). Estimated counts yield to real
+current phase**. For each row: read the cited section in `source/reich62_manual.md` (`§x`) or
+`source/reich62_bestiary.md` (`B§x`), write the table into the target data file
+**paraphrased with a `// §x` or `// B§x` citation comment**, tick the box **in the same
+change**, and append a changelog row (§12). Estimated counts yield to real
 counts — record the real number. **An unticked box = data not extracted; never build UI
 against an unticked table.** If a row's source turns out to be silent or contradictory, do
 not guess: add it to §4 as a new ruling and mark the row blocked.
@@ -723,6 +793,18 @@ not guess: add it to §4 as a new ruling and mark the row blocked.
 - [ ] **T52** Adversary talent — §12C
 - [ ] **T53** Adversary special abilities (7) — §12D
 - [ ] **T54** NPC quick-gen archetype + disposition tables + tier mapping — §20
+- [ ] **T54a** **14 bestiary-only NPC abilities** (Papers-Check Reflex, Beat Familiarity, Disciplined, Manifest Cross-Check, Quota Pressure, Terrain-Wise, Everywhere, Shoot on Sight, Reinforcements, Passive Watch, Environmental Affinity — Wilderness, Keen Senses, Bite, Mount) — B§2–B§5 *(R-19: `Disciplined` ≠ `Hardened`)*
+
+### `data-monsters.js` — bestiary compendium (Phase 0)
+*(numbered T61+ because it was added after the original ledger; it is a **Phase 0** file and
+is worked in this position, immediately after `data-npcs.js`.)*
+- [ ] **T61** **Minion groups (10)** — characteristics, group skills, **per-member Wound Threshold** (R-18), equipment, unique ability; Informant Network flagged `abstract: true` — B§2
+- [ ] **T62** **Rivals (12)** — characteristics, Soak, Defense melee/ranged (R-17), WT, skills, abilities, equipment, `veryChallenging` flag per §12C threat guidance — B§3
+- [ ] **T63** **Nemeses (4)** — as rivals plus Strain Threshold, Adversary 2, narrative-use note; Hartmann Voss's Cell-Heat-4 escalation hook — B§4
+- [ ] **T64** **Animals (2)** — Guard Dog (R-16 minion default, promotable), Patrol Horse; attack profiles — B§5
+- [ ] **T65** **Encounter blocks (4)** — opposed skills, opposition pool size, Heat consequence; Dragnet's escalating 2→4 dice + per-round Heat (§3.13) — B§6
+- [ ] **T66** **Random encounter table (d10, 10 rows)** incl. the Cell-Heat-4 escalation row — B§7
+- [ ] **T67** Bestiary usage conventions: stat-block field order, minion/rival/nemesis mapping, printed-stats-are-authoritative note (R-15) — B§1
 
 ### `data-pregens.js` (Phase 1)
 - [ ] **T55** 3 pregens (characteristics, skills, thresholds, gear; 70 XP unspent, no talents/motivation) — §16
@@ -741,8 +823,9 @@ not guess: add it to §4 as a new ruling and mark the row blocked.
 - [ ] Theme §1.2 (light + dark, system default, in-app toggle); dice-symbol SVG set
 - [ ] PWA: manifest, service worker (network-first, versioned `CACHE_VERSION`), icon, update toast
 - [ ] **Ledger T1–T50 (`data.js`) — complete and verified**
-- [ ] **Ledger T51–T54 (`data-npcs.js`)**
-- [ ] Rules library screen with §-anchored search over all extracted data
+- [ ] **Ledger T51–T54a (`data-npcs.js`)**
+- [ ] **Ledger T61–T67 (`data-monsters.js`) — the full bestiary compendium**
+- [ ] Rules library screen with §/B§-anchored search over all extracted data
 - [ ] `npm test` harness scaffold: boot smoke, zero console errors, 360px overflow check
 
 ### Phase 1 — Creation Wizard
@@ -791,8 +874,11 @@ not guess: add it to §4 as a new ruling and mark the row blocked.
 - [ ] **Lifecycle engine** (§3.12): End Encounter / Scene / Session / Day / Week / Adventure with confirmation summary + one-step undo
 - [ ] **Generic progress tracker** (§3.13) reused by Heat, repairs, ad-hoc clocks
 - [ ] Advancement loop (§3.15) with pyramid + creation-only gates, advancement log
-- [ ] Local combat helper: **initiative slot model (§5A')**, turn/maneuver budget with strain cost, combatant cards, minion-group wound pooling, vehicle scale
+- [ ] Local combat helper: **initiative slot model (§5A')**, turn/maneuver budget with strain cost, combatant cards, minion-group wound pooling from the per-member value (R-18), vehicle scale
 - [ ] NPC builder from the §12C recipes + 7 special abilities + quick-gen tables
+- [ ] **Bestiary browser** (T61–T67): filter by tier / Heat relevance / `veryChallenging`, one-tap drop-in to the combat tracker, printed stats loaded verbatim (R-15), Guard Dog promote-to-Rival control (R-16)
+- [ ] **Encounter blocks (B§6)** deployable as pre-built opposed checks, incl. the **Manhunt/Dragnet extended check** on the generic progress tracker (escalating 2→4 opposition dice, +1 Personal *and* Cell Heat per failed round)
+- [ ] Bestiary Heat hooks wired to `heat.js`: Papers-Check Reflex, Passive Watch, Checkpoint/Dragnet blocks, Hartmann Voss Cell-Heat-4 escalation
 
 ### Phase 5 — Multiplayer & Sync *(gated on the milestone)*
 - [ ] Firebase init, anonymous auth, optional Google linking
@@ -804,8 +890,8 @@ not guess: add it to §4 as a new ruling and mark the row blocked.
 - [ ] PWA update toast
 
 ### Phase 6 — Conditional surfaces
-- [ ] **Solo mode** (`data-solo.js` T56–T60): Oracle, Random Event chaining, Meaning/Element tables, solo loop, Heat-4/5 raid resolution via Oracle
-- [ ] **GM screen**: party panel, peek sheets, drop-in combatants, hand out damage/conditions/Heat, all §3.21 rollable reference tables, broadcast feed
+- [ ] **Solo mode** (`data-solo.js` T56–T60): Oracle, Random Event chaining, Meaning/Element tables, solo loop, Heat-4/5 raid resolution via Oracle, random encounter table (B§7), Informant Network Passive Watch as a scene-start Oracle roll (B§2)
+- [ ] **GM screen**: party panel, peek sheets, drop-in combatants from the bestiary, hand out damage/conditions/Heat, all §3.21 rollable reference tables incl. the **random encounter table (B§7)**, broadcast feed
 - [ ] Advanced automation toggle
 - [ ] Safety-tools note (§20A, paraphrased, one screen)
 
@@ -822,6 +908,7 @@ verification).
 
 | Date | Change | Why | Verification | Cache |
 |---|---|---|---|---|
+| 2026-08-04 | **Bestiary companion added as a second source of record.** §3.18 rewritten: `data-monsters.js` is reinstated (28 stat blocks + 4 encounter templates) and the app now ships a bestiary browser alongside the NPC builder. §3.13 gains its first published extended task (the Manhunt/Dragnet escalating opposed check). New rulings R-15…R-19 (printed NPC stats authoritative; Guard Dog tier; Defense notation; minion per-member WT; Disciplined ≠ Hardened). Ledger gains T54a + T61–T67; §5 gains 8 bestiary rows; data model gains combatant provenance and the dragnet task kind; book commitment decision updated. | Second book supplied by the user | Bestiary read in full (303 lines); all 28 blocks and 14 new abilities tallied against their sections; every mechanic it reuses traced back to the manual § it cites | n/a |
 | 2026-08-04 | **All 15 rulings confirmed (§4 rewritten as a closed ruling table).** Blockers B-1…B-4 retired: R-B1 makes manual symbol entry the primary dice input with the digital roller force-disabled until `DIE_FACES` exists; R-1 fixes base WT 8 / ST 10 as named constants and records Anna Voss's Wound 11 as an erratum; R-8 sets the "credits" label and a 500-credit house-aid budget; R-6/R-7 define staggered and disoriented. Product decisions marked confirmed; dependent §3/§7/§9/§10/§11 references updated; every ruling added to the §13.5 harness as a pinned assertion. | Stage B sign-off — unblocks Phase 0 | Every ruling traced to its manual § and to the file/module that implements it; substitutions carry an in-app badge so no inferred value can pass as printed | n/a |
 | 2026-08-04 | Instantiated project spec from template v2: completed System Profile (§3), blockers/rulings (§4), content inventory (§5), file + module tables (§7), data model (§8), toggles (§9), 60-row Data Extraction Ledger (§10), 7-phase roadmap (§11). Source manual and template committed under `source/`. | Stage B deliverable — plan before any code | Manual read in full (1116 lines); all §3 slots populated from source only; talent count 71 verified by tier tally (24+15+16+11+5) | n/a |
 
@@ -854,10 +941,15 @@ verification).
    (R-10); exactly 12 talents carry `settingApplicable: false` and are hidden by default out
    of 71 total (R-11); one ☀️ satisfies any spend-table row (R-12); the gear list has 17
    entries (R-13); Critical Injury lookup indexes roll + modifiers and resolves past 100
-   (R-14).
+   (R-14); bestiary stat blocks load their printed values unchanged and are never passed
+   through `derived.js` (R-15); the Guard Dog defaults to minion tier and is promotable
+   (R-16); Defense parses as melee/ranged (R-17); a resized minion group recomputes group
+   WT as per-member × count (R-18); `Disciplined` and `Hardened` remain distinct abilities
+   (R-19); the compendium holds exactly 10 minion groups, 12 rivals, 4 nemeses, 2 animals,
+   4 encounter blocks and a 10-row random encounter table.
 6. **Cache discipline.** Any shipped-file change bumps `CACHE_VERSION`.
 7. **Root-cause fixes.** No symptom-patching; record cause + fix.
-8. **Scope guard.** Rules only (§1). Nothing invented is presented as official; house aids
+8. **Scope guard.** Rules only (§1), across both supplied books. Nothing invented is presented as official; house aids
    (starting budget, currency label, adventure clocks) are explicitly labelled as such.
 9. **Module discipline.** Respect §7.1 responsibilities; explicit imports/exports.
 10. **Rules-accuracy audit before "done"** (template §11): spot-check every data category,
