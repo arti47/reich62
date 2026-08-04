@@ -136,10 +136,10 @@ export const CHECK_PROCEDURES = {
   opposed: {
     name: 'Opposed check',
     steps: [
-      'The active character assembles their pool as normal (§2).',
+      'The active character assembles their pool as normal.',
       'The difficulty side is built from the opposing character\'s relevant skill and characteristic, using the same algorithm: the higher value sets the number of Difficulty dice, the lower value upgrades that many to Challenge.',
       'Only the active character rolls. The opponent never rolls and banks nothing.',
-      'Resolve normally (§1).'
+      'Resolve the roll in the usual way.'
     ],
     notation: 'opposed Skill vs. Skill'
   },
@@ -315,7 +315,7 @@ export const SPEND_TABLES = {
     negative: [
       { cost: 1, despair: true, effects: ['A minor complication: it takes longer, draws slight attention, costs something small'] },
       { cost: 2, despair: true, effects: ['A meaningful complication: equipment wear, an ally inconvenienced, a witness notices'] },
-      { cost: 3, despair: true, effects: ['A real setback — in a surveilled context this is a common Heat trigger (§17.1)'], heatTrigger: true }
+      { cost: 3, despair: true, effects: ['A real setback — in a surveilled context this is a common Heat trigger'], heatTrigger: true }
     ]
   },
   social: { // T30 — §11
@@ -660,7 +660,7 @@ export const SOCIAL_ENCOUNTERS = {
     { audience: '16–50', difficulty: 'daunting' },
     { audience: '51+',  difficulty: 'formidable' }
   ],
-  note: 'This subsystem underlies checkpoint interrogations, informant handling and Gestapo interviews (§17).'
+  note: 'This subsystem underlies checkpoint interrogations, informant handling and Gestapo interviews.'
 };
 
 // T31 — Vehicles and chases — §12
@@ -853,7 +853,7 @@ export const TALENTS = [
 // T34 — Motivation tables — §12B. Rolled on d10 (R-10) or chosen.
 export const MOTIVATIONS = {
   cite: '§12B',
-  note: 'Motivation facets are social-encounter targets (§11) and earn bonus XP at session end when played to (§27).',
+  note: 'Motivation facets are social-encounter targets and earn bonus XP at session end when played to.',
   desire: [
     { roll: 1, name: 'Ambition', detail: 'Power or status' },
     { roll: 2, name: 'Belonging', detail: 'Acceptance by a community' },
@@ -998,7 +998,7 @@ export const RARITY = {
 // T38 — Item damage and repair — §14B
 export const ITEM_DAMAGE = {
   cite: '§14B',
-  trigger: 'Three uncancelled Threat, or a Despair, on a check using a weapon or tool may break, jam or damage it — the GM decides (§5C).',
+  trigger: 'Three uncancelled Threat, or a Despair, on a check using a weapon or tool may break, jam or damage it — the GM decides.',
   levels: [
     { id: 'undamaged', name: 'Undamaged', repairDifficulty: null,      penalty: 'None',                 repairCostFraction: 0 },
     { id: 'minor',     name: 'Minor',     repairDifficulty: 'easy',    penalty: 'One Setback on use',   repairCostFraction: 0.25 },
@@ -1083,7 +1083,7 @@ export const WEAPONS = [
   { id: 'improvised', name: 'Improvised weapon',        skill: 'melee',  damage: 1, damageType: 'plusBrawn', crit: 5, range: 'engaged', encumbrance: 1, price: null, rarity: null, qualities: ['Inferior'] }
 ];
 
-export const WEAPON_NOTE = 'Carrying a restricted weapon is itself grounds for a Personal Heat check if it is found during a papers check or search (§17.3).'; // §15C
+export const WEAPON_NOTE = 'Carrying a restricted weapon is itself grounds for a Personal Heat check if it is found during a papers check or search.'; // §15C
 
 // T42 — Armour — §15D
 export const ARMOUR = [
@@ -1183,7 +1183,7 @@ export const ENCOUNTER_SIZING = {
     { setup: '1 nemesis plus 2 minion groups',           difficulty: 'Difficult' },
     { setup: '1 nemesis, 1 rival and a minion group of 5', difficulty: 'Difficult' }
   ],
-  otherLevers: ['Environment: cover, concealment, terrain (§5E)', 'Bystanders: crowds, allies, potential reinforcements', 'Exits and entrances, and how easily they can be blocked'],
+  otherLevers: ['Environment: cover, concealment, terrain', 'Bystanders: crowds, allies, potential reinforcements', 'Exits and entrances, and how easily they can be blocked'],
   adventureSizing: 'A one-session adventure works well with 2 major encounters plus 2–3 quick ones; a longer one runs 6–9 encounters across 3–4 major scenes. Mix combat, social and exploration. Resource depletion — wounds, strain, Heat, ammunition — is the core pacing tool.',
   diceDriveStory: 'Let players propose their own Advantage, Triumph, Threat and Despair spends rather than dictating every outcome.'
 };
@@ -1200,8 +1200,8 @@ export const LIFECYCLE = {
     ], clears: ['perEncounterFlags'] },
     { id: 'scene', name: 'End Scene', effects: [
       'Expire scene-duration effects.',
-      'Re-check Heat thresholds (§22.4).',
-      'Clear per-scene dread-check flags — one roll per circumstance per scene (§29).'
+      'Re-check Heat thresholds.',
+      'Clear per-scene dread-check flags — one roll per circumstance per scene.'
     ], clears: ['perSceneFlags'] },
     { id: 'session', name: 'End Session', effects: [
       'Award XP: 20 base, plus or minus 5 for session length, plus 5 for meaningful Motivation play.',

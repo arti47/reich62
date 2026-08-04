@@ -99,7 +99,7 @@ function gmBestiary(mount, rerender) {
       const card = el('div', { class: 'result' }, [
         el('div', { class: 'result-head' }, [
           el('span', { class: 'result-title', text: entry.name }),
-          el('span', { class: 'cite', text: `${entry.kind} · ${entry.cite}` })
+          el('span', { class: 'cite', text: entry.kind })
         ]),
         el('div', { class: 'result-body', text: entry.hook }),
         el('div', { class: 'result-body', text: stats }),
@@ -127,7 +127,7 @@ function gmEncounters(mount, rerender) {
     const card = el('div', { class: 'result' }, [
       el('div', { class: 'result-head' }, [
         el('span', { class: 'result-title', text: block.name }),
-        el('span', { class: 'cite', text: block.cite })
+        el('span', { class: 'cite', text: 'encounter' })
       ]),
       el('div', { class: 'result-body', text: block.hook }),
       el('div', { class: 'result-body', text: `${block.resolution.activeSkills.map(titleCase).join(' or ')} against ${titleCase(block.resolution.opposingSkill)}${dice ? `, ${Array.isArray(dice) ? dice.join('–') : dice} opposition dice` : ''}. ${block.consequence}` })
@@ -209,7 +209,7 @@ function gmBuild(mount, rerender) {
     builder.append(el('div', { class: 'result' }, [
       el('div', { class: 'result-head' }, [
         el('span', { class: 'result-title', text: tier.name }),
-        el('span', { class: 'cite', text: tier.cite })
+        el('span', { class: 'cite', text: 'tier' })
       ]),
       el('div', { class: 'result-body', text: tier.summary }),
       el('ul', { class: 'small muted' }, tier.rules.map((r) => el('li', { text: r }))),
@@ -222,7 +222,7 @@ function gmBuild(mount, rerender) {
     abilityList.append(el('div', { class: 'result' }, [
       el('div', { class: 'result-head' }, [
         el('span', { class: 'result-title', text: ability.name }),
-        el('span', { class: 'cite', text: ability.cite })
+        el('span', { class: 'cite', text: ability.source === 'bestiary' ? 'bestiary' : 'core rules' })
       ]),
       el('div', { class: 'result-body', text: ability.summary })
     ]));

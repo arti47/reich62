@@ -14,14 +14,14 @@ export const ORACLE = {
   interpretation: [
     { id: 'yes',    when: 'Net Success',                              answer: 'Yes' },
     { id: 'no',     when: 'Net Failure',                              answer: 'No' },
-    { id: 'yesAnd', when: 'Uncancelled Triumph',                      answer: 'Yes, and…', note: 'A favourable complication; roll a Random Event (§19).' },
-    { id: 'noAnd',  when: 'Uncancelled Despair',                      answer: 'No, and…', note: 'An adverse complication; roll a Random Event (§19). Feeds Heat if the question concerned a surveilled context (§17.1).', heatHook: true },
+    { id: 'yesAnd', when: 'Uncancelled Triumph',                      answer: 'Yes, and…', note: 'A favourable complication; roll a Random Event.' },
+    { id: 'noAnd',  when: 'Uncancelled Despair',                      answer: 'No, and…', note: 'An adverse complication; roll a Random Event. Feeds Heat if the question concerned a surveilled context.', heatHook: true },
     { id: 'yesBut', when: 'Net Advantage with no net Success or Failure', answer: 'Yes, but… / No, but…', note: 'Interpret narratively.' }
   ],
   procedure: [
     'Frame the question and set its likelihood.',
     'Roll the listed Ability dice against the listed Difficulty dice.',
-    'Read the result with the normal resolution rules (§1).'
+    'Read the result with the normal resolution rules.'
   ]
 };
 
@@ -112,12 +112,12 @@ export const SOLO_LOOP = {
   cite: '§23',
   steps: [
     'Frame the scene yourself: where the character is, and what they want.',
-    'Ask the Oracle whenever the outcome is uncertain and no roll of the character\'s applies (§18).',
-    'On a Triumph or Despair from the Oracle, roll the Random Event table to inject content (§19).',
+    'Ask the Oracle whenever the outcome is uncertain and no roll of the character\'s applies.',
+    'On a Triumph or Despair from the Oracle, roll the Random Event table to inject content.',
     'Resolve the character\'s own actions with ordinary skill checks, exactly as in group play.',
-    'Generate NPCs as needed with quick-gen (§20).',
-    'Track Heat identically (§17); at Personal Heat 4 or 5 the Oracle resolves raid and arrest timing instead of GM fiat.',
+    'Generate NPCs as needed with quick-gen.',
+    'Track suspicion exactly as in group play; at suspicion 4 or 5 the Oracle decides when a raid or arrest lands, rather than you deciding it.',
     'Repeat until the scene resolves, then frame the next one.'
   ],
-  heatRule: { fromLevel: 4, note: 'At Personal Heat 4 or 5, the Oracle decides when the raid or arrest lands (§23).' }
+  heatRule: { fromLevel: 4, note: 'At suspicion 4 or 5, the Oracle decides when the raid or arrest lands.' }
 };

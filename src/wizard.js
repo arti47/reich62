@@ -439,7 +439,7 @@ function renderXpStep(node) {
 function renderDerivedStep(node) {
   const derived = derivedFor(draft);
   node.append(el('p', { class: 'small' }, [
-    el('span', { class: 'badge badge-inferred', text: 'R-1 inferred' }), ' ',
+    el('span', { class: 'badge badge-inferred', text: 'inferred' }), ' ',
     `The manual never prints the human base thresholds. This app uses Wound ${BASE_WOUND_THRESHOLD} + Brawn and Strain ${BASE_STRAIN_THRESHOLD} + Willpower, taken from the pregens that agree.`
   ]));
   node.append(el('div', { class: 'stat-grid' }, [

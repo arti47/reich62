@@ -164,7 +164,7 @@ function pane_skills(mount, character, derived, rerender) {
       }),
       el('label', { for: `cond-${c.id}` }, [
         el('span', { text: c.name }),
-        c.inferred ? el('span', { class: 'badge badge-inferred', text: `${c.ruling} inferred` }) : null,
+        c.inferred ? el('span', { class: 'badge badge-inferred', text: 'inferred' }) : null,
         el('span', { class: 'toggle-desc', text: c.effect })
       ])
     ]));

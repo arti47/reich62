@@ -173,7 +173,10 @@ async function main() {
     await page.waitForTimeout(90);
 
     await page.getByRole('button', { name: 'Next', exact: true }).click();   // derived
-    check('R-1 badge shown on the derived step', await page.getByText('R-1 inferred').first().isVisible());
+    check('the derived step flags an inferred base in plain words',
+      await page.getByText('inferred', { exact: false }).first().isVisible());
+    check('no internal ruling codes leak into the interface',
+      (await page.evaluate(() => (document.querySelector('#screen').innerText.match(/\bR-(?:B1|\d+)\b/g) || []).length)) === 0);
     const woundStat = await page.locator('.stat', { hasText: 'Wound Threshold' }).locator('.stat-value').innerText();
     equal('derived: wound threshold is base 8 + Brawn 2', woundStat.trim(), '10');
     const strainStat = await page.locator('.stat', { hasText: 'Strain Threshold' }).locator('.stat-value').innerText();
@@ -358,6 +361,20 @@ async function main() {
     await page.waitForTimeout(60);
     check('the tier filter finds the 4 nemeses', /4 of 28 entries/.test(await page.locator('#bestiary-list').innerText()));
 
+    // A fresh Roll screen is not a failed check.
+    await go('#/roll');
+    await page.waitForSelector('#roll-result');
+    const pending = await page.locator('#roll-result').innerText();
+    check('with nothing entered the outcome is neutral, not a failure',
+      /waiting for your dice/i.test(pending) && !/failure/i.test(pending), pending.slice(0, 80));
+    check('logging is disabled until symbols are entered',
+      await page.getByRole('button', { name: 'Log this check' }).isDisabled());
+    await page.getByRole('button', { name: 'One more success' }).click();
+    await page.waitForTimeout(90);
+    check('entering a success flips the outcome to a verdict',
+      /success/i.test(await page.locator('#roll-result .status-chip').innerText()));
+    await page.getByRole('button', { name: 'Clear symbols' }).click();
+
     // --- Phase 6: solo mode (official rules, so the tab is real) ---
     await go('#/settings');
     if (!(await page.locator('#flag-soloMode').isChecked())) await page.locator('#flag-soloMode').check();
@@ -466,11 +483,18 @@ async function main() {
     await page.fill('#rules-search', '');
     await page.waitForTimeout(90);
 
-    // Section numbers are gone from the interface copy too, not only from the links.
-    for (const hash of ['#/roll', '#/sheet', '#/combat', '#/']) {
+    // No section numbers and no internal ruling codes anywhere in the interface copy,
+    // with every accordion forced open so nothing hides behind a collapsed panel.
+    await go('#/settings');
+    if (!(await page.locator('#flag-soloMode').isChecked())) await page.locator('#flag-soloMode').check();
+    if (!(await page.locator('#flag-gmScreen').isChecked())) await page.locator('#flag-gmScreen').check();
+    for (const hash of ['#/', '#/sheet', '#/roll', '#/create', '#/combat', '#/solo', '#/gm', '#/rules', '#/settings', '#/safety']) {
       await go(hash);
-      const markers = await page.evaluate(() => (document.querySelector('#screen').innerText.match(/§[0-9A-Za-z.]+/g) || []));
-      check(`${hash} shows no section numbers in its copy`, markers.length === 0, markers.join(', '));
+      await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+      await page.waitForTimeout(80);
+      const markers = await page.evaluate(() =>
+        (document.querySelector('#screen').innerText.match(/\bR-(?:B1|\d+)\b|§[0-9A-Za-z.]+|B§[0-9]+|D§/g) || []));
+      check(`${hash} carries no section numbers or ruling codes`, markers.length === 0, [...new Set(markers)].join(', '));
     }
 
     // --- item damage ladder and attachments (§14B, §14C) ---

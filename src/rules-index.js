@@ -56,7 +56,7 @@ export function buildIndex() {
   D.SKILL_DIFFICULTY_GUIDANCE.forEach((g) => out.push(entry(`Difficulty examples: ${g.skill}`, `Easy — ${g.easy}. Average — ${g.average}. Hard — ${g.hard}. Daunting — ${g.daunting}.`, '§3')));
 
   out.push(entry('Opposed check', D.CHECK_PROCEDURES.opposed.steps.join(' '), '§3A'));
-  out.push(entry('Competitive check', `${D.CHECK_PROCEDURES.competitive.steps.join(' ')} Ties break by ${D.CHECK_PROCEDURES.competitive.tieBreakers.join(', then ')}.`, '§3A', { badge: 'R-3' }));
+  out.push(entry('Competitive check', `${D.CHECK_PROCEDURES.competitive.steps.join(' ')} Ties break by ${D.CHECK_PROCEDURES.competitive.tieBreakers.join(', then ')}.`, '§3A', {}));
   out.push(entry('Assisted check', D.CHECK_PROCEDURES.assisted.summary, '§3A'));
 
   D.CHARACTERISTICS.forEach((c) => out.push(entry(
@@ -88,7 +88,7 @@ export function buildIndex() {
   D.RANGE_BANDS.forEach((r) => out.push(entry(`${r.name} range`, r.note, '§5D')));
   D.ENVIRONMENT.forEach((e) => out.push(entry(e.name, e.summary, '§5E')));
   out.push(entry('Encumbrance', `Threshold 5 + Brawn. ${D.ENCUMBRANCE.overThreshold} ${D.ENCUMBRANCE.severeOverThreshold}`, '§5F'));
-  D.RECOVERY.methods.forEach((m) => out.push(entry(`Recovery: ${m.name}`, `${m.restores}. Limit: ${m.limit}.`, m.cite || '§5G', m.ruling ? { badge: m.ruling, badgeClass: 'badge-inferred' } : {})));
+  D.RECOVERY.methods.forEach((m) => out.push(entry(`Recovery: ${m.name}`, `${m.restores}. Limit: ${m.limit}.`, m.cite || '§5G', {})));
   out.push(entry('Two-weapon combat', D.COMBAT_VARIANTS.twoWeapon.steps.join(' '), '§5H'));
   out.push(entry('Unarmed combat', `Damage equals Brawn, Crit 5, engaged, Knockdown. ${D.COMBAT_VARIANTS.unarmed.note}`, '§5H'));
   D.FALLING.forEach((f) => out.push(entry(`Falling: ${f.band}`, `Wounds ${f.wounds || f.woundsFormula}, strain ${f.strain}${f.criticalModifier ? `, Critical Injury roll +${f.criticalModifier}` : ''}.`, '§5I')));
@@ -98,13 +98,13 @@ export function buildIndex() {
     `${s.examples}. A target two or more sizes larger is one step easier to hit, two or more sizes smaller one step harder`,
     '§5J')));
 
-  D.DERIVED_FORMULAS.forEach((f) => out.push(entry(`Derived: ${f.name}`, `${f.formula}${f.note ? '. ' + f.note : ''}`, f.cite, f.ruling ? { badge: f.ruling, badgeClass: 'badge-inferred' } : {})));
+  D.DERIVED_FORMULAS.forEach((f) => out.push(entry(`Derived: ${f.name}`, `${f.formula}${f.note ? '. ' + f.note : ''}`, f.cite, {})));
   out.push(entry('XP costs', `Characteristic ${'10 × new rating'} (creation only) · career skill 5 × new rank · non-career skill 5 × new rank + 5 · talent 5 × tier. ${D.XP_COSTS.gates.join(' ')}`, '§7'));
-  out.push(entry('Story Points', `${D.STORY_POINTS.flow} ${D.STORY_POINTS.reset} Player pool starts at 1 per PC; the GM pool starts at 0.`, '§8', { badge: 'R-4' }));
+  out.push(entry('Story Points', `${D.STORY_POINTS.flow} ${D.STORY_POINTS.reset} Player pool starts at 1 per PC; the GM pool starts at 0.`, '§8', {}));
   D.STORY_POINTS.playerSpends.forEach((s) => out.push(entry(`Story Point spend: ${s.label}`, 'Player pool.', '§8')));
 
   D.CRITICAL_INJURIES.forEach((c) => out.push(entry(`Critical Injury ${c.min}–${c.max === 9999 ? '+' : c.max}: ${c.name}`, `${c.severity}. ${c.effect}`, '§9')));
-  out.push(entry('Critical Injury modifiers', D.CRITICAL_INJURY_RULES.modifiers.map((m) => m.label).join(' · '), '§9', { badge: 'R-14' }));
+  out.push(entry('Critical Injury modifiers', D.CRITICAL_INJURY_RULES.modifiers.map((m) => m.label).join(' · '), '§9', {}));
   D.ITEM_QUALITIES.forEach((q) => out.push(entry(
     q.name,
     `${q.type === 'passive' ? 'Always on' : 'Triggered when you spend for it'}. ${q.effect}`,
@@ -119,7 +119,7 @@ export function buildIndex() {
 
   D.TALENTS.filter((t) => Settings.showNonSettingTalents() || t.settingApplicable)
     .forEach((t) => out.push(entry(t.name, `A tier ${t.tier} talent costing ${t.tier * 5} experience, used as ${t.activation === 'passive' ? 'a passive effect' : `an ${t.activation}`}${t.ranked ? ', and it can be bought more than once' : ''}. ${t.summary}`, '§12A',
-      t.settingApplicable ? {} : { badge: 'R-11 non-setting' })));
+      t.settingApplicable ? {} : { badge: 'not in this setting' })));
 
   Object.entries(D.MOTIVATIONS).filter(([, v]) => Array.isArray(v)).forEach(([kind, list]) => {
     list.forEach((m) => out.push(entry(`${kind}: ${m.name}`, m.detail || '', '§12B')));
@@ -127,10 +127,10 @@ export function buildIndex() {
 
   N.ADVERSARY_TIERS.forEach((t) => out.push(entry(`Adversary tier: ${t.name}`, `${t.summary} ${t.rules.join(' ')}`, t.cite)));
   out.push(entry('Adversary talent', N.ADVERSARY_TALENT.summary, '§12C'));
-  N.ADVERSARY_ABILITIES.forEach((a) => out.push(entry(a.name, a.summary, a.cite, a.ruling ? { badge: a.ruling } : {})));
-  out.push(entry('NPC quick-generation', `Roll d10 for archetype, then d10 for disposition, then build with the §12C recipes. ${N.NPC_QUICKGEN.tierMapping}`, '§20', { badge: 'R-10' }));
+  N.ADVERSARY_ABILITIES.forEach((a) => out.push(entry(a.name, a.summary, a.cite, {})));
+  out.push(entry('NPC quick-generation', `Roll d10 for archetype, then d10 for disposition, then build with the §12C recipes. ${N.NPC_QUICKGEN.tierMapping}`, '§20', {}));
 
-  D.CREATION_STEPS.forEach((s) => out.push(entry(`Creation: ${s.name}`, s.summary, s.cite, s.ruling ? { badge: s.ruling, badgeClass: 'badge-house' } : {})));
+  D.CREATION_STEPS.forEach((s) => out.push(entry(`Creation: ${s.name}`, s.summary, s.cite, s.ruling ? { badge: 'house aid', badgeClass: 'badge-house' } : {})));
   D.CAREERS.forEach((c) => out.push(entry(
     c.name,
     `${c.summary} Its career skills are ${c.skills.map(titleCase).join(', ')}, and you pick four of them to start at rank 1`,
@@ -167,7 +167,7 @@ export function buildIndex() {
   D.DREAD_CHECKS.ladder.forEach((d) => out.push(entry(`Dread check: ${d.severity}`, `${d.difficulty} Discipline check. ${d.example}`, '§29')));
   D.SKILL_EXAMPLES.forEach((s) => out.push(entry(`Using ${titleCase(s.skill)}`, s.example, '§26')));
   D.QUICK_REFERENCE.sections.forEach((s) => out.push(entry(`Quick reference: ${s.title}`, s.body, '§30')));
-  D.CONDITIONS.forEach((c) => out.push(entry(c.name, c.effect, c.cite || '§3.9', c.inferred ? { badge: `${c.ruling} inferred`, badgeClass: 'badge-inferred' } : {})));
+  D.CONDITIONS.forEach((c) => out.push(entry(c.name, c.effect, c.cite || '§3.9', c.inferred ? { badge: 'inferred', badgeClass: 'badge-inferred' } : {})));
 
   M.BESTIARY.forEach((e) => out.push(entry(`${e.name} (${e.kind})`, `${e.hook}${e.woundThreshold ? ` Wound Threshold ${e.woundThreshold}.` : ''}${e.woundThresholdPerMember && e.kind === 'minion' ? ` Wound Threshold ${e.woundThresholdPerMember} per member.` : ''}`, e.cite)));
   M.ENCOUNTER_BLOCKS.forEach((b) => out.push(entry(b.name, `${b.hook} ${b.consequence}`, b.cite)));

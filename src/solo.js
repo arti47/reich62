@@ -95,7 +95,6 @@ export function renderSolo(mount) {
   };
   drawTally();
   oracleCard.append(el('p', { class: 'small' }, [
-    el('span', { class: 'badge badge-inferred', text: 'R-B1' }), ' ',
     'Roll the listed dice physically and enter what came up; the Oracle reads them with the normal resolution rules.'
   ]), tallyRow);
 

@@ -175,7 +175,7 @@ export function renderRules(mount, params = {}) {
 
   mount.append(panel('Rules library', {
     lede: 'Look up any rule the app uses. Search by name, by what it does, or by section number.',
-    detail: 'Every entry names its source: §x is the core manual, B§x the bestiary, D§ the die faces. Links elsewhere in the app drop you straight here on the right entry.'
+    detail: 'Entries are grouped by the part of the books they come from. Searching for a section number works too, if you know it.'
   }, [
     subTabs(RULE_GROUPS, ruleGroup, (id) => { ruleGroup = id; renderRules(mount, params); }),
     input

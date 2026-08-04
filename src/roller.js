@@ -205,7 +205,7 @@ export function commit(character = activeCharacter()) {
 /** Roll a pool digitally from the supplied face distributions (D§).
  *  Only reachable while `digitalRoller` is on, which needs DIE_FACES to exist (R-B1). */
 export function rollPool(pool) {
-  if (!DIE_FACES) return { ok: false, reason: 'No die face data is loaded (R-B1).' };
+  if (!DIE_FACES) return { ok: false, reason: 'No die face data is loaded, so the app cannot roll for you.' };
   const tally = newTally();
   const dice = [];
   Object.entries(pool).forEach(([dieType, count]) => {
@@ -411,7 +411,6 @@ export function renderRoller(mount) {
 
   const entry = panel('What did you roll?', PANELS.rollEntry, [
     el('p', { class: 'small' }, [
-      el('span', { class: 'badge badge-inferred', text: 'R-B1' }), ' ',
       DIE_FACES === null
         ? 'The manual never prints die face distributions, so the app cannot roll these dice for you. Roll them physically and tap what came up — everything after that is automatic.'
         : Settings.digitalRoller()
@@ -451,18 +450,21 @@ export function renderRoller(mount) {
   const { result, heat } = resolve(character);
   if (state.lastOutcome) mount.append(outcomeBox(state.lastOutcome, { title: 'Last check' }));
 
+  // Nothing entered yet is not a failed check: the panel stays neutral until the player
+  // has tapped in what their dice showed.
+  const anyEntered = Object.values(state.entered).some((n) => n > 0);
   const resultCard = panel('Outcome', PANELS.rollResult, [], { id: 'roll-result' });
   resultCard.querySelector('h2').append(el('span', {
-    class: `status-chip status-${result.success ? 'success' : 'failure'}`,
-    text: result.success ? 'Success' : 'Failure'
+    class: `status-chip status-${anyEntered ? (result.success ? 'success' : 'failure') : 'pending'}`,
+    text: anyEntered ? (result.success ? 'Success' : 'Failure') : 'Waiting for your dice'
   }));
   resultCard.append(
-    el('p', { class: 'small', text: explainCancellation(state.entered, result) }),
-    el('p', {}, [renderTally(result.net)]),
+    el('p', { class: 'small', text: anyEntered ? explainCancellation(state.entered, result) : 'Tap in the symbols above and the result works itself out here.' }),
+    anyEntered ? el('p', {}, [renderTally(result.net)]) : el('span', {}),
     heat.reasons.length ? el('ul', { class: 'small' }, heat.reasons.map((r) => el('li', { text: r }))) : el('span', {})
   );
 
-  const spends = availableSpends(state.context, result.net);
+  const spends = anyEntered ? availableSpends(state.context, result.net) : [];
   if (spends.length) {
     resultCard.append(el('h3', { text: 'Spends available' }));
     spends.slice(0, 8).forEach((row) => {
@@ -487,7 +489,7 @@ export function renderRoller(mount) {
   }
 
   resultCard.append(el('button', {
-    type: 'button', class: 'primary', text: 'Log this check',
+    type: 'button', class: 'primary', text: 'Log this check', disabled: !anyEntered,
     onclick: () => {
       const committed = commit(character);
       const lines = [`Logged as a ${committed.entry.outcome}.`];
