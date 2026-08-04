@@ -7,15 +7,19 @@ import { renderHome, renderRules, renderSettings } from './screens.js';
 import { renderWizard } from './wizard.js';
 import { renderSheet, renderResourceHeader } from './sheet.js';
 import { renderRoller } from './roller.js';
+import { renderCombat } from './combat.js';
+import { renderGm } from './gm.js';
+import { renderSolo } from './solo.js';
 
 const ROUTES = [
   { id: 'home',     path: '#/',         label: 'Home',     glyph: '▣', render: renderHome },
   { id: 'sheet',    path: '#/sheet',    label: 'Sheet',    glyph: '☰', render: renderSheet },
   { id: 'roll',     path: '#/roll',     label: 'Roll',     glyph: '⚄', render: renderRoller },
   { id: 'create',   path: '#/create',   label: 'Create',   glyph: '✎', render: renderWizard, hideInNav: () => !!activeCharacterId() },
+  { id: 'combat',   path: '#/combat',   label: 'Combat',   glyph: '⚔', render: renderCombat },
   { id: 'rules',    path: '#/rules',    label: 'Rules',    glyph: '§', render: renderRules },
-  { id: 'solo',     path: '#/solo',     label: 'Solo',     glyph: '◇', render: placeholder('Solo mode', 'Oracle, random events and the meaning and element tables arrive in Phase 6 (§18–§20, §23).'), gate: () => Settings.soloMode() },
-  { id: 'gm',       path: '#/gm',       label: 'GM',       glyph: '◈', render: placeholder('GM screen', 'Party panel, bestiary browser and the rollable reference tables arrive in Phase 6 (§3.21, B§6–B§7).'), gate: () => Settings.gmScreen() },
+  { id: 'solo',     path: '#/solo',     label: 'Solo',     glyph: '◇', render: renderSolo, gate: () => Settings.soloMode() },
+  { id: 'gm',       path: '#/gm',       label: 'GM',       glyph: '◈', render: renderGm, gate: () => Settings.gmScreen() },
   { id: 'settings', path: '#/settings', label: 'Settings', glyph: '⚙', render: renderSettings }
 ];
 

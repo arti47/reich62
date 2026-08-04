@@ -4,6 +4,7 @@
 import * as D from '../data.js';
 import * as N from '../data-npcs.js';
 import * as M from '../data-monsters.js';
+import * as S from '../data-solo.js';
 import * as R from '../src/rules.js';
 
 export async function pinChecks({ check, equal }) {
@@ -52,6 +53,14 @@ export async function pinChecks({ check, equal }) {
   equal('R-10: random encounter table has 10 rows', M.RANDOM_ENCOUNTERS.table.length, 10);
   ['desire', 'fear', 'strength', 'flaw'].forEach((k) =>
     equal(`R-10: motivation ${k} table has 10 entries`, D.MOTIVATIONS[k].length, 10));
+  equal('R-10: meaning tables are d10', S.MEANING.die, 'd10');
+  equal('R-10: the action table has 10 entries', S.MEANING.action.length, 10);
+  equal('R-10: the subject table has 10 entries', S.MEANING.subject.length, 10);
+  ['location', 'faction', 'complication'].forEach((k) =>
+    equal(`R-10: the ${k} element table has 10 entries`, S.ELEMENTS[k].length, 10));
+  equal('R-10: random event tables are d10', S.RANDOM_EVENT.die, 'd10');
+  check('R-10: the random event category table covers 1–10',
+    S.RANDOM_EVENT.category[0].min === 1 && S.RANDOM_EVENT.category[S.RANDOM_EVENT.category.length - 1].max === 10);
 
   // R-11 — 12 of 71 talents are non-setting and hidden by default.
   equal('R-11: 71 talents total', D.TALENTS.length, 71);

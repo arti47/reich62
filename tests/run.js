@@ -60,9 +60,9 @@ async function main() {
 
     // Every visible tab renders, at 360px, with no horizontal overflow.
     const tabs = await page.locator('#bottom-nav a').all();
-    check('default nav shows 6 tabs (solo and GM gated off)', tabs.length === 6, `got ${tabs.length}`);
+    check('default nav shows 7 tabs (solo and GM gated off)', tabs.length === 7, `got ${tabs.length}`);
 
-    for (const label of ['Home', 'Sheet', 'Roll', 'Create', 'Rules', 'Settings']) {
+    for (const label of ['Home', 'Sheet', 'Roll', 'Create', 'Combat', 'Rules', 'Settings']) {
       await page.getByRole('link', { name: label, exact: true }).click();
       await page.waitForTimeout(60);
       check(`${label} renders content`, await page.locator('#screen .card').first().isVisible());
@@ -184,9 +184,138 @@ async function main() {
     check('Heat is applied to the character', /Heat 2·0/.test(headerAfter), headerAfter);
     check('the roll is logged', (await page.locator('#screen .card', { hasText: 'Roll log' }).locator('.result').count()) >= 1);
 
+    // --- Phase 4: combat tracker, lifecycle, progress tasks ---
+    await page.getByRole('link', { name: 'Combat', exact: true }).click();
+    await page.waitForSelector('#bestiary-pick');
+
+    // Bestiary drop-in loads printed stats verbatim (R-15) and computes group WT (R-18).
+    await page.selectOption('#bestiary-pick', 'checkpointGuards');
+    await page.getByRole('button', { name: 'Drop in', exact: true }).click();
+    const guardCard = page.locator('.result', { hasText: 'Checkpoint Guards' }).first();
+    check('R-18: a 3-strong group of 4-per-member minions has a group threshold of 12',
+      /Wounds 0\/12/.test(await guardCard.innerText()), await guardCard.innerText());
+    await guardCard.getByRole('button', { name: '+1 minion' }).click();
+    check('R-18: resizing to 4 recomputes the group threshold to 16',
+      /Wounds 0\/16/.test(await page.locator('.result', { hasText: 'Checkpoint Guards' }).first().innerText()));
+
+    // R-16: the Guard Dog arrives as a minion and promotes to Rival in one tap.
+    await page.selectOption('#bestiary-pick', 'guardDog');
+    await page.getByRole('button', { name: 'Drop in', exact: true }).click();
+    const dogCard = () => page.locator('.result', { hasText: 'Guard Dog' }).first();
+    check('R-16: the Guard Dog defaults to minion tier', /minion/.test(await dogCard().innerText()));
+    await dogCard().getByRole('button', { name: 'Promote to Rival' }).click();
+    check('R-16: promotion moves it to rival tier', /rival/.test(await dogCard().innerText()));
+
+    // Initiative slots: ownership is fixed and the owning side fills each slot (§5A').
+    await page.fill('#init-label', 'Test Runner');
+    await page.fill('#init-success', '3');
+    await page.selectOption('#init-owner', 'pc');
+    await page.getByRole('button', { name: 'Add roll' }).click();
+    await page.fill('#init-label', 'Checkpoint Guards');
+    await page.fill('#init-success', '1');
+    await page.selectOption('#init-owner', 'npc');
+    await page.getByRole('button', { name: 'Add roll' }).click();
+    await page.getByRole('button', { name: 'Start encounter' }).click();
+    await page.waitForSelector('text=/round 1/');
+    check('initiative produces one slot per roll, ranked by Success',
+      (await page.locator('table tr').count()) === 3); // header plus two slots
+
+    // Progress tracker: the Dragnet escalates and drives both Heat tracks (B§6).
+    await page.fill('#task-name', 'City dragnet');
+    await page.selectOption('#task-kind', 'dragnet');
+    await page.getByRole('button', { name: 'Add task' }).click();
+    const dragnet = () => page.locator('.result', { hasText: 'City dragnet' }).first();
+    check('dragnet starts at 2 opposition dice', /2 opposition dice/.test(await dragnet().innerText()), await dragnet().innerText());
+    await dragnet().getByRole('button', { name: 'Failed round' }).click();
+    check('a failed dragnet round escalates the opposition to 3 dice',
+      /3 opposition dice/.test(await dragnet().innerText()), await dragnet().innerText());
+    // Personal 2 → 3 from the dragnet, and Cell 0 → 2: one from the dragnet itself (B§6)
+    // and one from the member crossing Personal Heat 3 (§17.2).
+    const headerDragnet = await page.locator('#resource-header').innerText();
+    check('a failed dragnet round advances Personal and Cell Heat', /Heat 3·2/.test(headerDragnet), headerDragnet);
+
+    // Lifecycle: End Session awards XP, decays Heat on downtime, and undoes in one step.
+    await page.getByRole('button', { name: 'End Session', exact: true }).click();
+    await page.waitForSelector('.modal');
+    check('the boundary preview lists its deltas before applying', (await page.locator('.modal li').count()) >= 2);
+    await page.locator('#lc-downtime').check();
+    await page.getByRole('button', { name: 'Apply' }).click();
+    await page.waitForTimeout(120);
+    const afterSession = await page.locator('#resource-header').innerText();
+    check('downtime decays Personal Heat by 1 (§17.4)', /Heat 2·/.test(afterSession), afterSession);
+    await page.getByRole('link', { name: 'Sheet', exact: true }).click();
+    // 70 XP at creation, 25 spent (Brawn to 2 and one rank of Grit), plus the 20 session award.
+    const xpText = await page.locator('#screen').innerText();
+    check('the session award adds 20 XP (§27)', /65 XP available of 90 earned/.test(xpText), xpText.match(/\d+ XP available of \d+ earned/) || 'no XP line');
+
+    await page.getByRole('link', { name: 'Combat', exact: true }).click();
+    await page.getByRole('button', { name: /^Undo End session/ }).click();
+    await page.waitForTimeout(120);
+    check('one-step undo restores the pre-boundary state',
+      /Heat 3·2/.test(await page.locator('#resource-header').innerText()));
+
+    // --- Phase 4: guided death procedure and enforced rest limits ---
+    await page.getByRole('link', { name: 'Sheet', exact: true }).click();
+    await page.getByRole('button', { name: 'Start Bleeding Out' }).click();
+    await page.getByRole('button', { name: 'Tick one turn' }).click();
+    await page.waitForTimeout(80);
+    check('Bleeding Out ticks 1 wound and 1 strain per turn (§9)',
+      /W 1\/10/.test(await page.locator('#resource-header').innerText()), await page.locator('#resource-header').innerText());
+
+    await page.getByRole('button', { name: 'Healed — clear' }).click();
+    await page.fill('#recovery-successes', '2');
+    await page.locator('#recovery-nightRest').click();
+    await page.waitForTimeout(80);
+    check('a night\'s rest heals 1 wound and all strain (§5G)',
+      /W 0\/10/.test(await page.locator('#resource-header').innerText()));
+    check('the once-per-night limit is enforced', await page.locator('#recovery-nightRest').isDisabled());
+
+    // --- Phase 6 surface: the GM screen with the bestiary browser ---
+    await page.getByRole('link', { name: 'Settings', exact: true }).click();
+    await page.locator('#flag-gmScreen').check();
+    await page.waitForTimeout(60);
+    await page.getByRole('link', { name: 'GM', exact: true }).click();
+    await page.waitForSelector('#bestiary-list');
+    check('the bestiary browser lists all 28 published blocks',
+      /28 of 28 entries/.test(await page.locator('#bestiary-list').innerText()));
+    await page.locator('#bestiary-challenging').check();
+    await page.waitForTimeout(60);
+    const challenging = await page.locator('#bestiary-list').innerText();
+    check('the very-challenging filter narrows the list (§12C)', /of 28 entries/.test(challenging) && !/28 of 28/.test(challenging), challenging.slice(0, 80));
+    await page.locator('#bestiary-challenging').uncheck();
+    await page.selectOption('#bestiary-tier', 'nemesis');
+    await page.waitForTimeout(60);
+    check('the tier filter finds the 4 nemeses', /4 of 28 entries/.test(await page.locator('#bestiary-list').innerText()));
+
+    // --- Phase 6: solo mode (official rules, so the tab is real) ---
+    await page.getByRole('link', { name: 'Settings', exact: true }).click();
+    if (!(await page.locator('#flag-soloMode').isChecked())) await page.locator('#flag-soloMode').check();
+    await page.waitForTimeout(60);
+    await page.getByRole('link', { name: 'Solo', exact: true }).click();
+    await page.waitForSelector('#oracle-likelihood');
+    check('the Oracle offers all three likelihoods', (await page.locator('#oracle-likelihood option').count()) === 3);
+
+    // A Despair answer reads "No, and…", chains a Random Event, and feeds Heat when the
+    // question concerned a surveilled context (§18, §19, §17.1).
+    await page.locator('#oracle-surveilled').check();
+    const heatBeforeOracle = await page.locator('#resource-header').innerText();
+    await page.getByRole('button', { name: 'One more oracle despair' }).click();
+    await page.getByRole('button', { name: 'Ask the Oracle' }).click();
+    await page.waitForTimeout(80);
+    const oracleAnswer = await page.locator('#oracle-answer').innerText();
+    check('an uncancelled Despair answers "No, and…"', /No, and/.test(oracleAnswer), oracleAnswer);
+    check('a Triumph or Despair chains a Random Event (§19)', /Random Event/.test(oracleAnswer), oracleAnswer);
+    check('Oracle Despair in a surveilled context raises Heat (§17.1)',
+      (await page.locator('#resource-header').innerText()) !== heatBeforeOracle);
+
+    await page.getByRole('button', { name: 'Meaning (§15A)' }).click();
+    check('the meaning table produces a phrase', (await page.locator('#solo-output').innerText()).length > 8);
+    await page.getByRole('button', { name: 'Random encounter (B§7)' }).click();
+    check('the random encounter table rolls', /\(\d+\)/.test(await page.locator('#solo-output').innerText()));
+
     // 390px as well as 360px.
     await page.setViewportSize({ width: 390, height: 780 });
-    for (const label of ['Home', 'Sheet', 'Roll', 'Rules', 'Settings']) {
+    for (const label of ['Home', 'Sheet', 'Roll', 'Combat', 'Solo', 'GM', 'Rules', 'Settings']) {
       await page.getByRole('link', { name: label, exact: true }).click();
       await page.waitForTimeout(60);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

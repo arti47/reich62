@@ -109,3 +109,62 @@ export function importAll(json) {
 }
 
 export { blankCharacter };
+
+// --- combat, tasks and lifecycle (Phase 4) ---
+const K_COMBAT = STORAGE_PREFIX + 'combat';
+const K_TASKS = STORAGE_PREFIX + 'tasks';
+const K_UNDO = STORAGE_PREFIX + 'undo';
+
+export function blankCombat() {
+  return { active: false, round: 0, slots: [], combatants: {}, vehicles: {}, log: [] };
+}
+
+export function getCombat() {
+  return { ...blankCombat(), ...readJson(K_COMBAT, null) };
+}
+
+export function saveCombat(combat) {
+  writeJson(K_COMBAT, combat);
+  document.dispatchEvent(new CustomEvent('store:changed', { detail: { kind: 'combat' } }));
+  return combat;
+}
+
+export function listTasks() {
+  return readJson(K_TASKS, []);
+}
+
+export function saveTasks(tasks) {
+  writeJson(K_TASKS, tasks);
+  document.dispatchEvent(new CustomEvent('store:changed', { detail: { kind: 'tasks' } }));
+  return tasks;
+}
+
+/** One-step undo for lifecycle boundaries (§3.12): snapshot before, restore on undo. */
+export function snapshot(label) {
+  const state = {
+    label,
+    ts: Date.now(),
+    characters: readJson(K_CHARACTERS, []),
+    cell: readJson(K_CELL, null),
+    combat: readJson(K_COMBAT, null),
+    tasks: readJson(K_TASKS, [])
+  };
+  writeJson(K_UNDO, state);
+  return state;
+}
+
+export function lastSnapshot() {
+  return readJson(K_UNDO, null);
+}
+
+export function undoSnapshot() {
+  const state = readJson(K_UNDO, null);
+  if (!state) return null;
+  writeJson(K_CHARACTERS, state.characters || []);
+  if (state.cell) writeJson(K_CELL, state.cell);
+  if (state.combat) writeJson(K_COMBAT, state.combat);
+  writeJson(K_TASKS, state.tasks || []);
+  localStorage.removeItem(K_UNDO);
+  document.dispatchEvent(new CustomEvent('store:changed', { detail: { kind: 'undo' } }));
+  return state;
+}

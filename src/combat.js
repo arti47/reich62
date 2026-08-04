@@ -1,0 +1,652 @@
+// combat.js — the combat tracker (initiative slots, turn budget, combatant cards),
+// the generic progress-task tracker, and the scene/session lifecycle engine.
+
+import { el, clear, titleCase, uid, clamp, rollDie } from './core.js';
+import { showToast, confirmModal, modal } from './ui.js';
+import {
+  MANEUVER_RULES, COMBAT_SEQUENCE, LIFECYCLE, RECOVERY, HEAT, XP_AWARDS, RANGE_BANDS
+} from '../data.js';
+import { BESTIARY, ENCOUNTER_BLOCKS } from '../data-monsters.js';
+import { minionGroupWoundThreshold, minionGroupSkillRanks, bestiaryEntry, encounterBlock } from './rules.js';
+import { woundThreshold, strainThreshold, soak, derivedFor } from './derived.js';
+import {
+  getCombat, saveCombat, blankCombat, listTasks, saveTasks, activeCharacter, listCharacters,
+  saveCharacter, getCell, saveCell, snapshot, undoSnapshot, lastSnapshot
+} from './store.js';
+import { applyCellHeat, applyPersonalHeat, safehouseFor } from './heat.js';
+
+// ---------------------------------------------------------------------------
+// Initiative slots (§5, §5A')
+// ---------------------------------------------------------------------------
+
+/** Rank initiative rolls into slots. Ties break by Advantage, then PC before NPC (§5). */
+export function buildSlots(rolls) {
+  const ordered = [...rolls].sort((a, b) => {
+    if (b.success !== a.success) return b.success - a.success;
+    if (b.advantage !== a.advantage) return b.advantage - a.advantage;
+    if (a.owner !== b.owner) return a.owner === 'pc' ? -1 : 1;
+    return 0;
+  });
+  return ordered.map((roll, index) => ({
+    id: uid(), order: index + 1, owner: roll.owner, label: roll.label || titleCase(roll.owner),
+    success: roll.success, advantage: roll.advantage, filledBy: null
+  }));
+}
+
+export function startEncounter(rolls) {
+  const combat = blankCombat();
+  combat.active = true;
+  combat.round = 1;
+  combat.slots = buildSlots(rolls);
+  combat.combatants = getCombat().combatants || {};
+  Object.values(combat.combatants).forEach(resetTurn);
+  return saveCombat(combat);
+}
+
+/** Slot ownership is fixed for the encounter; the owning side picks who fills each slot. */
+export function fillSlot(slotId, combatantId) {
+  const combat = getCombat();
+  const slot = combat.slots.find((s) => s.id === slotId);
+  const combatant = combat.combatants[combatantId];
+  if (!slot || !combatant) return { ok: false, reason: 'Unknown slot or combatant.' };
+  if (combatant.side !== slot.owner) return { ok: false, reason: `That slot belongs to the ${slot.owner.toUpperCase()} side (§5A').` };
+  if (combatant.actedThisRound) return { ok: false, reason: 'That combatant has already acted this round.' };
+  if (slot.filledBy) return { ok: false, reason: 'That slot is already taken this round.' };
+  slot.filledBy = combatantId;
+  combatant.actedThisRound = true;
+  saveCombat(combat);
+  return { ok: true };
+}
+
+export function nextRound() {
+  const combat = getCombat();
+  combat.round += 1;
+  combat.slots.forEach((s) => { s.filledBy = null; });
+  Object.values(combat.combatants).forEach(resetTurn);
+  // Reinforcements (B§2): at three rounds or more the GM may add a minion to the group.
+  const eligible = Object.values(combat.combatants).filter((c) => (c.abilities || []).includes('reinforcements'));
+  const notes = combat.round >= 3 && eligible.length
+    ? eligible.map((c) => `${c.name}: Reinforcements may add one minion this round (B§2).`)
+    : [];
+  saveCombat(combat);
+  return { round: combat.round, notes };
+}
+
+function resetTurn(combatant) {
+  combatant.actedThisRound = false;
+  combatant.maneuversUsed = 0;
+  combatant.actionUsed = false;
+}
+
+export function endEncounterState() {
+  const combat = getCombat();
+  combat.active = false;
+  combat.slots = [];
+  saveCombat(combat);
+  return combat;
+}
+
+// ---------------------------------------------------------------------------
+// Turn budget (§5A, §5B): one action plus one free maneuver; a second maneuver costs
+// 2 strain; never more than two maneuvers.
+// ---------------------------------------------------------------------------
+
+export function spendManeuver(combatantId) {
+  const combat = getCombat();
+  const c = combat.combatants[combatantId];
+  if (!c) return { ok: false, reason: 'Unknown combatant.' };
+  if (c.maneuversUsed >= MANEUVER_RULES.maxPerTurn) {
+    return { ok: false, reason: `Never more than ${MANEUVER_RULES.maxPerTurn} maneuvers in a turn (§5A).` };
+  }
+  const strainCost = c.maneuversUsed >= MANEUVER_RULES.freePerTurn ? MANEUVER_RULES.secondManeuverStrainCost : 0;
+  if (strainCost && c.tier === 'minion') {
+    return { ok: false, reason: 'Minions cannot choose to suffer strain (§12C).' };
+  }
+  c.maneuversUsed += 1;
+  if (strainCost) c.strain = (c.strain || 0) + strainCost;
+  saveCombat(combat);
+  return { ok: true, strainCost, maneuversUsed: c.maneuversUsed };
+}
+
+export function spendAction(combatantId) {
+  const combat = getCombat();
+  const c = combat.combatants[combatantId];
+  if (!c) return { ok: false, reason: 'Unknown combatant.' };
+  if (c.actionUsed) return { ok: false, reason: 'The action for this turn is already spent (§5B).' };
+  c.actionUsed = true;
+  saveCombat(combat);
+  return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Combatants
+// ---------------------------------------------------------------------------
+
+/** Drop a published bestiary entry straight in. Printed stats load verbatim (R-15). */
+export function addFromBestiary(entryId, { groupSize = null, side = 'npc' } = {}) {
+  const source = bestiaryEntry(entryId);
+  if (!source) return { ok: false, reason: 'Unknown bestiary entry.' };
+  const combat = getCombat();
+  const id = uid();
+  const size = groupSize ?? source.defaultGroupSize ?? 1;
+  const combatant = {
+    id, name: source.name, side, tier: source.tier, kind: source.kind,
+    sourceId: source.id, sourceBook: source.sourceBook, derivedFrom: source.derivedFrom, // R-15
+    characteristics: source.characteristics, skills: source.skills || {},
+    soak: source.soak ?? 0,
+    meleeDef: (source.defense || {}).melee ?? 0,   // R-17
+    rangedDef: (source.defense || {}).ranged ?? 0, // R-17
+    silhouette: source.silhouette ?? 1,
+    abilities: source.abilities || [],
+    adversary: source.adversary || 0,
+    promotable: !!source.promotable, // R-16
+    wounds: 0, strain: 0,
+    strainThreshold: source.strainThreshold ?? null, // nemeses only (§12C)
+    woundThresholdPerMember: source.woundThresholdPerMember ?? null,
+    minionCount: source.tier === 'minion' ? size : null,
+    woundThreshold: source.tier === 'minion'
+      ? minionGroupWoundThreshold(source.woundThresholdPerMember || 0, size) // R-18
+      : source.woundThreshold,
+    conditions: {}, criticalInjuries: [], actedThisRound: false, maneuversUsed: 0, actionUsed: false
+  };
+  combat.combatants[id] = combatant;
+  saveCombat(combat);
+  return { ok: true, combatant };
+}
+
+export function addPlayerCharacter(characterId, { side = 'pc' } = {}) {
+  const character = listCharacters().find((c) => c.id === characterId);
+  if (!character) return { ok: false, reason: 'Unknown character.' };
+  const combat = getCombat();
+  const id = uid();
+  const derived = derivedFor(character);
+  combat.combatants[id] = {
+    id, name: character.identity.name || 'Unnamed', side, tier: 'pc', kind: 'pc',
+    characterId: character.id, derivedFrom: 'pc',
+    soak: derived.soak, meleeDef: derived.meleeDefense, rangedDef: derived.rangedDefense,
+    silhouette: 1, abilities: [], adversary: 0,
+    wounds: character.state.wounds, strain: character.state.strain,
+    woundThreshold: derived.woundThreshold, strainThreshold: derived.strainThreshold,
+    minionCount: null, woundThresholdPerMember: null,
+    conditions: {}, criticalInjuries: [], actedThisRound: false, maneuversUsed: 0, actionUsed: false
+  };
+  saveCombat(combat);
+  return { ok: true, combatant: combat.combatants[id] };
+}
+
+/** Resize a minion group: group Wound Threshold recomputes as per-member × count (R-18). */
+export function resizeMinionGroup(combatantId, count) {
+  const combat = getCombat();
+  const c = combat.combatants[combatantId];
+  if (!c || c.tier !== 'minion') return { ok: false, reason: 'Not a minion group.' };
+  c.minionCount = Math.max(0, count);
+  c.woundThreshold = minionGroupWoundThreshold(c.woundThresholdPerMember || 0, c.minionCount);
+  saveCombat(combat);
+  return { ok: true, woundThreshold: c.woundThreshold, groupSkillRanks: minionGroupSkillRanks(c.minionCount) };
+}
+
+/** R-16 — the Guard Dog ships as a minion and can be promoted to Rival in one tap. */
+export function promoteToRival(combatantId) {
+  const combat = getCombat();
+  const c = combat.combatants[combatantId];
+  if (!c || !c.promotable) return { ok: false, reason: 'This combatant is not promotable.' };
+  const source = bestiaryEntry(c.sourceId);
+  c.tier = 'rival';
+  c.minionCount = null;
+  c.woundThreshold = source.woundThreshold; // printed value is kept (R-16)
+  saveCombat(combat);
+  return { ok: true, tier: 'rival', woundThreshold: c.woundThreshold };
+}
+
+/** Apply damage. Minion groups drop a member per share of the group threshold (§12C). */
+export function damageCombatant(combatantId, { wounds = 0, strain = 0, critical = false }) {
+  const combat = getCombat();
+  const c = combat.combatants[combatantId];
+  if (!c) return { ok: false, reason: 'Unknown combatant.' };
+  const notes = [];
+
+  // Minions and rivals have no strain track: strain effects inflict wounds instead (§12C).
+  let woundDelta = wounds;
+  if (strain && (c.tier === 'minion' || c.tier === 'rival')) {
+    woundDelta += strain;
+    notes.push('No strain track at this tier — the strain became wounds (§12C).');
+  } else if (strain) {
+    c.strain = clamp((c.strain || 0) + strain, 0, 999);
+  }
+  c.wounds = clamp((c.wounds || 0) + woundDelta, 0, 999);
+
+  if (c.tier === 'minion') {
+    const perMember = c.woundThresholdPerMember || 1;
+    if (critical) {
+      // Any Critical Injury takes one minion out; the group takes that share plus one (§12C).
+      c.wounds += perMember + 1;
+      notes.push('A Critical Injury instantly takes one minion out of the fight (§12C).');
+    }
+    const dropped = Math.min(c.minionCount, Math.floor(c.wounds / perMember));
+    const remaining = Math.max(0, c.minionCount - dropped);
+    if (dropped > 0) notes.push(`${dropped} minion(s) down; ${remaining} still standing.`);
+    c.minionsDown = dropped;
+    c.defeated = remaining === 0;
+  } else {
+    c.defeated = c.wounds >= c.woundThreshold;
+    if (c.defeated && c.tier === 'rival') notes.push('The GM may rule a rival killed outright past their threshold (§12C).');
+    if (c.defeated && c.tier === 'nemesis') notes.push('Incapacitated at the threshold (§6).');
+  }
+
+  // Mirror back to the character sheet when this is a PC.
+  if (c.characterId) {
+    const character = listCharacters().find((x) => x.id === c.characterId);
+    if (character) {
+      character.state.wounds = c.wounds;
+      character.state.strain = c.strain;
+      character.state.incapacitated = c.wounds >= woundThreshold(character) || c.strain >= strainThreshold(character);
+      saveCharacter(character);
+    }
+  }
+
+  saveCombat(combat);
+  return { ok: true, combatant: c, notes };
+}
+
+export function removeCombatant(combatantId) {
+  const combat = getCombat();
+  delete combat.combatants[combatantId];
+  combat.slots.forEach((s) => { if (s.filledBy === combatantId) s.filledBy = null; });
+  saveCombat(combat);
+}
+
+// ---------------------------------------------------------------------------
+// Generic progress tracker (§3.13) — Heat, repairs, ad-hoc clocks, and the Dragnet.
+// ---------------------------------------------------------------------------
+
+export function createTask({ name, kind = 'clock', target = 4, oppositionDice = null, note = '' }) {
+  const tasks = listTasks();
+  const task = {
+    id: uid(), name, kind, progress: 0, target, contributors: [], note,
+    oppositionDice: oppositionDice ?? (kind === 'dragnet' ? ENCOUNTER_BLOCKS.find((b) => b.id === 'manhuntDragnet').resolution.oppositionDiceStart : null),
+    elapsedHours: 0, closed: false, createdAt: Date.now()
+  };
+  tasks.push(task);
+  saveTasks(tasks);
+  return task;
+}
+
+export function advanceTask(taskId, amount = 1, contributor = null) {
+  const tasks = listTasks();
+  const task = tasks.find((t) => t.id === taskId);
+  if (!task) return { ok: false, reason: 'Unknown task.' };
+  task.progress = clamp(task.progress + amount, 0, task.target);
+  if (contributor) task.contributors.push({ who: contributor, amount, ts: Date.now() });
+  task.closed = task.progress >= task.target;
+  saveTasks(tasks);
+  return { ok: true, task };
+}
+
+/** One round of the Manhunt/Dragnet extended opposed check (B§6).
+ *  Opposition starts at 2 dice, gains 1 per in-game hour, capped at 4. Every failed round
+ *  advances Personal *and* Cell Heat by 1. */
+export function dragnetRound(taskId, { failed, character = null, hoursElapsed = 1 }) {
+  const block = encounterBlock('manhuntDragnet');
+  const tasks = listTasks();
+  const task = tasks.find((t) => t.id === taskId);
+  if (!task) return { ok: false, reason: 'Unknown task.' };
+
+  task.elapsedHours += hoursElapsed;
+  task.oppositionDice = Math.min(
+    block.resolution.oppositionDiceMax,
+    block.resolution.oppositionDiceStart + task.elapsedHours * block.resolution.oppositionDicePerHour
+  );
+
+  const effects = [];
+  if (failed) {
+    task.progress = clamp(task.progress + 1, 0, task.target);
+    if (character) {
+      const personal = applyPersonalHeat(character, 1);
+      effects.push(`Personal Heat ${personal.before} → ${personal.after} (B§6).`);
+    }
+    const cell = applyCellHeat(1);
+    effects.push(`Cell Heat ${cell.before} → ${cell.after} (B§6).`);
+  } else {
+    effects.push('The round is survived; the dragnet grinds on until the search zone is left behind (B§6).');
+  }
+  task.closed = task.progress >= task.target;
+  saveTasks(tasks);
+  return { ok: true, task, oppositionDice: task.oppositionDice, effects };
+}
+
+export function closeTask(taskId) {
+  const tasks = listTasks().filter((t) => t.id !== taskId);
+  saveTasks(tasks);
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle engine (§3.12): each boundary fires a bundle, shows what it changed,
+// and can be undone in one step.
+// ---------------------------------------------------------------------------
+
+const FLAG_KEYS = {
+  encounter: 'perEncounterFlags',
+  scene: 'perSceneFlags',
+  session: 'perSessionFlags',
+  day: 'perDayFlags',
+  week: 'perWeekFlags'
+};
+
+export function previewBoundary(boundaryId, options = {}) {
+  const boundary = LIFECYCLE.boundaries.find((b) => b.id === boundaryId);
+  if (!boundary) return null;
+  const deltas = [];
+  const characters = listCharacters();
+  const cell = getCell();
+
+  if (boundaryId === 'encounter') {
+    deltas.push('Prompt the end-of-encounter strain recovery check: Simple Discipline or Cool, one strain per uncancelled Success (§5G).');
+    deltas.push('Clear every once-per-encounter talent and ability flag.');
+    deltas.push('Clear "out of ammunition for the encounter" states and expire round-duration effects.');
+  }
+  if (boundaryId === 'scene') {
+    deltas.push('Expire scene-duration effects and per-scene dread-check flags (§29).');
+    characters.forEach((c) => {
+      if (c.state.personalHeat >= 1) deltas.push(`${c.identity.name || 'Unnamed'}: Heat threshold re-check at Personal ${c.state.personalHeat} (§22.4).`);
+    });
+  }
+  if (boundaryId === 'session') {
+    const xp = XP_AWARDS.standardPerSession + (options.lengthAdjustment || 0) + (options.motivationPlay ? XP_AWARDS.motivationBonus : 0);
+    deltas.push(`Award ${xp} XP to every character (${XP_AWARDS.standardPerSession} base${options.lengthAdjustment ? `, ${options.lengthAdjustment > 0 ? '+' : ''}${options.lengthAdjustment} for length` : ''}${options.motivationPlay ? `, +${XP_AWARDS.motivationBonus} for Motivation play` : ''}) (§27).`);
+    if (options.downtime) {
+      characters.filter((c) => c.state.personalHeat > 0)
+        .forEach((c) => deltas.push(`${c.identity.name || 'Unnamed'}: Personal Heat ${c.state.personalHeat} → ${c.state.personalHeat - 1} for low-risk downtime (§17.4).`));
+      if (cell.cellHeat > 0 && characters.every((c) => c.state.personalHeat - 1 < 3)) {
+        deltas.push(`Cell Heat ${cell.cellHeat} → ${cell.cellHeat - 1}: no member is at Personal Heat 3 or more (§17.4).`);
+      }
+    }
+    deltas.push('Clear every once-per-session talent flag. Story Points carry over and are not reset (§8).');
+  }
+  if (boundaryId === 'day') {
+    deltas.push('Reset the painkiller counter (§5G).');
+    deltas.push('Recover 1 vehicle system strain on undamaged vehicles (§12).');
+  }
+  if (boundaryId === 'week') {
+    deltas.push('The week-rest Critical Injury check is available again (§5G).');
+    deltas.push('Reset the per-injury Medicine limit (§5G).');
+  }
+  if (boundaryId === 'adventure') {
+    characters.filter((c) => c.state.personalHeat >= HEAT.max)
+      .forEach((c) => deltas.push(`${c.identity.name || 'Unnamed'} is at Personal Heat ${HEAT.max}: go underground, resetting Heat to 2, or be captured (§24).`));
+    if (!deltas.length) deltas.push('No character is at maximum Heat; nothing to resolve (§24).');
+  }
+  return { boundary, deltas };
+}
+
+export function fireBoundary(boundaryId, options = {}) {
+  const boundary = LIFECYCLE.boundaries.find((b) => b.id === boundaryId);
+  if (!boundary) return { ok: false, reason: 'Unknown boundary.' };
+  const preview = previewBoundary(boundaryId, options);
+  snapshot(`End ${boundaryId}`); // one-step undo (§3.12)
+
+  const characters = listCharacters();
+  const flagKey = FLAG_KEYS[boundaryId];
+
+  characters.forEach((character) => {
+    if (flagKey) character.state[flagKey] = flagKey === 'perDayFlags' ? { painkillers: 0 } : {};
+    if (boundaryId === 'session') {
+      const xp = XP_AWARDS.standardPerSession + (options.lengthAdjustment || 0) + (options.motivationPlay ? XP_AWARDS.motivationBonus : 0);
+      character.xp.total += xp;
+      character.xp.available += xp;
+      character.advancementLog.push({ ts: Date.now(), kind: 'award', detail: 'Session award (§27)', xpSpent: -xp });
+      if (options.downtime && character.state.personalHeat > 0) character.state.personalHeat -= 1;
+    }
+    if (boundaryId === 'day') character.state.perDayFlags = { painkillers: 0 };
+    if (boundaryId === 'encounter') {
+      Object.keys(character.state.conditions || {}).forEach((id) => {
+        if (['staggered', 'disoriented'].includes(id)) return; // these last until healed when a Critical caused them
+        if (character.state.conditions[id] === 'encounter') character.state.conditions[id] = false;
+      });
+    }
+    saveCharacter(character);
+  });
+
+  if (boundaryId === 'session' && options.downtime) {
+    const cell = getCell();
+    const stillHot = listCharacters().some((c) => c.state.personalHeat >= 3);
+    if (!stillHot && cell.cellHeat > 0) {
+      cell.cellHeat -= 1;
+      cell.safehouseStatus = safehouseFor(cell.cellHeat);
+      saveCell(cell);
+    }
+  }
+
+  if (boundaryId === 'encounter') {
+    const combat = getCombat();
+    if (combat.active) endEncounterState();
+  }
+
+  return { ok: true, boundary, deltas: preview.deltas, undoAvailable: true };
+}
+
+export function undoLastBoundary() {
+  const restored = undoSnapshot();
+  return restored ? { ok: true, label: restored.label } : { ok: false, reason: 'Nothing to undo.' };
+}
+
+// ---------------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------------
+
+export function renderCombat(mount) {
+  clear(mount);
+  const rerender = () => renderCombat(mount);
+  const combat = getCombat();
+
+  // --- lifecycle controls ---
+  const lifecycle = el('div', { class: 'card' }, [
+    el('h2', { text: 'Lifecycle' }),
+    el('p', { class: 'small muted', text: 'Each boundary fires its whole bundle, shows every delta first, and can be undone in one step (§21–§24).' })
+  ]);
+  const sessionOptions = { downtime: false, motivationPlay: false, lengthAdjustment: 0 };
+  LIFECYCLE.boundaries.forEach((boundary) => {
+    lifecycle.append(el('button', {
+      type: 'button', class: 'secondary', text: boundary.name,
+      onclick: async () => {
+        const preview = previewBoundary(boundary.id, sessionOptions);
+        const body = el('div', {}, [
+          el('ul', { class: 'small' }, preview.deltas.map((d) => el('li', { text: d })))
+        ]);
+        if (boundary.id === 'session') {
+          body.append(checkbox('lc-downtime', 'This session was low-risk downtime (Heat −1, §17.4)', (v) => { sessionOptions.downtime = v; }));
+          body.append(checkbox('lc-motivation', `Motivation was meaningfully played (+${XP_AWARDS.motivationBonus} XP, §27)`, (v) => { sessionOptions.motivationPlay = v; }));
+        }
+        const m = modal({
+          title: boundary.name,
+          body,
+          actions: [
+            { label: 'Cancel', value: false },
+            { label: 'Apply', value: true, primary: true }
+          ]
+        });
+        m.onClose((confirmed) => {
+          if (!confirmed) return;
+          const result = fireBoundary(boundary.id, sessionOptions);
+          showToast(`${boundary.name} applied — undo available`);
+          rerender();
+        });
+      }
+    }));
+    lifecycle.append(document.createTextNode(' '));
+  });
+  const undoAvailable = lastSnapshot();
+  lifecycle.append(el('button', {
+    type: 'button', class: 'primary', text: undoAvailable ? `Undo ${undoAvailable.label}` : 'Nothing to undo',
+    disabled: !undoAvailable,
+    onclick: () => { const r = undoLastBoundary(); showToast(r.ok ? `Undone: ${r.label}` : r.reason); rerender(); }
+  }));
+  mount.append(lifecycle);
+
+  // --- initiative ---
+  const initiative = el('div', { class: 'card' }, [
+    el('h2', { text: combat.active ? `Combat — round ${combat.round}` : 'Combat' }),
+    el('p', { class: 'small muted', text: COMBAT_SEQUENCE.slotFilling.summary })
+  ]);
+
+  if (!combat.active) {
+    const rolls = [];
+    const rollList = el('div');
+    const draw = () => {
+      clear(rollList);
+      rolls.forEach((r, i) => rollList.append(el('p', { class: 'small', text: `${r.label} (${r.owner.toUpperCase()}): ${r.success} Success, ${r.advantage} Advantage` })));
+    };
+    const label = el('input', { type: 'text', id: 'init-label', placeholder: 'Name', 'aria-label': 'Initiative roll name' });
+    const success = el('input', { type: 'number', id: 'init-success', min: '0', value: '0', 'aria-label': 'Uncancelled Success' });
+    const advantage = el('input', { type: 'number', id: 'init-advantage', min: '0', value: '0', 'aria-label': 'Uncancelled Advantage' });
+    const owner = el('select', { id: 'init-owner', 'aria-label': 'Side' }, [
+      el('option', { value: 'pc', text: 'PC slot' }),
+      el('option', { value: 'npc', text: 'NPC slot' })
+    ]);
+    initiative.append(
+      el('p', { class: 'small', text: 'Everyone rolls a Simple Cool or Vigilance check; enter each result to build the slot order (§5).' }),
+      label, success, advantage, owner,
+      el('button', {
+        type: 'button', class: 'secondary', text: 'Add roll',
+        onclick: () => {
+          rolls.push({ label: label.value || 'Participant', owner: owner.value, success: Number(success.value), advantage: Number(advantage.value) });
+          label.value = ''; success.value = '0'; advantage.value = '0';
+          draw();
+        }
+      }),
+      rollList,
+      el('button', {
+        type: 'button', class: 'primary', text: 'Start encounter',
+        onclick: () => { if (!rolls.length) { showToast('Add at least one initiative roll'); return; } startEncounter(rolls); rerender(); }
+      })
+    );
+  } else {
+    const table = el('table');
+    table.append(el('tr', {}, [el('th', { text: '#' }), el('th', { text: 'Owner' }), el('th', { text: 'Filled by' }), el('th', { text: '' })]));
+    combat.slots.forEach((slot) => {
+      const eligible = Object.values(combat.combatants).filter((c) => c.side === slot.owner && !c.actedThisRound);
+      const picker = el('select', { 'aria-label': `Fill slot ${slot.order}`, disabled: !!slot.filledBy || !eligible.length });
+      picker.append(el('option', { value: '', text: slot.filledBy ? (combat.combatants[slot.filledBy] || {}).name || '—' : 'choose…' }));
+      eligible.forEach((c) => picker.append(el('option', { value: c.id, text: c.name })));
+      picker.addEventListener('change', () => {
+        const result = fillSlot(slot.id, picker.value);
+        if (!result.ok) showToast(result.reason);
+        rerender();
+      });
+      table.append(el('tr', {}, [
+        el('td', { text: String(slot.order) }),
+        el('td', { text: slot.owner.toUpperCase() }),
+        el('td', {}, [picker]),
+        el('td', { text: slot.filledBy ? 'acted' : '' })
+      ]));
+    });
+    initiative.append(el('div', { class: 'table-wrap' }, [table]));
+    initiative.append(el('button', {
+      type: 'button', class: 'secondary', text: 'Next round',
+      onclick: () => { const r = nextRound(); r.notes.forEach((n) => showToast(n)); rerender(); }
+    }));
+    initiative.append(el('button', {
+      type: 'button', class: 'secondary', text: 'End encounter',
+      onclick: () => { endEncounterState(); showToast('Encounter ended — fire End Encounter to run the bundle'); rerender(); }
+    }));
+  }
+  mount.append(initiative);
+
+  // --- combatants ---
+  const roster = el('div', { class: 'card' }, [el('h3', { text: 'Combatants' })]);
+  const character = activeCharacter();
+  if (character) {
+    roster.append(el('button', {
+      type: 'button', class: 'secondary', text: `Add ${character.identity.name || 'active character'}`,
+      onclick: () => { addPlayerCharacter(character.id); rerender(); }
+    }));
+  }
+  const bestiarySelect = el('select', { id: 'bestiary-pick', 'aria-label': 'Bestiary entry' });
+  BESTIARY.forEach((e) => bestiarySelect.append(el('option', { value: e.id, text: `${e.name} (${e.kind})` })));
+  roster.append(bestiarySelect, el('button', {
+    type: 'button', class: 'secondary', text: 'Drop in',
+    onclick: () => { const r = addFromBestiary(bestiarySelect.value); if (!r.ok) showToast(r.reason); rerender(); }
+  }));
+
+  Object.values(combat.combatants).forEach((c) => {
+    const card = el('div', { class: 'result' }, [
+      el('div', { class: 'result-head' }, [
+        el('span', { class: 'result-title', text: `${c.name}${c.minionCount ? ` ×${c.minionCount}` : ''}` }),
+        el('span', { class: 'cite', text: `${c.tier} · ${c.side.toUpperCase()}` })
+      ]),
+      el('div', { class: 'result-body', text: `Wounds ${c.wounds}/${c.woundThreshold ?? '—'}${c.strainThreshold ? ` · Strain ${c.strain}/${c.strainThreshold}` : ''} · Soak ${c.soak} · Def ${c.meleeDef}/${c.rangedDef}${c.adversary ? ` · Adversary ${c.adversary}` : ''}` })
+    ]);
+    if (c.tier === 'minion' && c.woundThresholdPerMember) {
+      card.append(el('p', { class: 'small muted', text: `${c.woundThresholdPerMember} per member × ${c.minionCount} = ${c.woundThreshold} group threshold; group skills at rank ${minionGroupSkillRanks(c.minionCount)} (R-18, §12C).` }));
+      card.append(el('button', { type: 'button', class: 'secondary', text: '−1 minion', onclick: () => { resizeMinionGroup(c.id, c.minionCount - 1); rerender(); } }));
+      card.append(el('button', { type: 'button', class: 'secondary', text: '+1 minion', onclick: () => { resizeMinionGroup(c.id, c.minionCount + 1); rerender(); } }));
+    }
+    if (c.promotable && c.tier === 'minion') {
+      card.append(el('button', {
+        type: 'button', class: 'secondary', text: 'Promote to Rival',
+        onclick: () => { promoteToRival(c.id); showToast('Promoted: Critical Injuries now resolve normally (R-16)'); rerender(); }
+      }));
+    }
+    card.append(el('button', { type: 'button', class: 'secondary', text: 'Maneuver', onclick: () => { const r = spendManeuver(c.id); showToast(r.ok ? (r.strainCost ? `Second maneuver: ${r.strainCost} strain (§5A)` : 'Free maneuver used') : r.reason); rerender(); } }));
+    card.append(el('button', { type: 'button', class: 'secondary', text: 'Action', onclick: () => { const r = spendAction(c.id); showToast(r.ok ? 'Action used' : r.reason); rerender(); } }));
+    card.append(el('button', { type: 'button', class: 'secondary', text: '+1 wound', onclick: () => { const r = damageCombatant(c.id, { wounds: 1 }); r.notes.forEach((n) => showToast(n)); rerender(); } }));
+    card.append(el('button', { type: 'button', class: 'secondary', text: 'Critical', onclick: () => { const r = damageCombatant(c.id, { critical: true }); r.notes.forEach((n) => showToast(n)); rerender(); } }));
+    card.append(el('button', { type: 'button', class: 'secondary', text: 'Remove', onclick: () => { removeCombatant(c.id); rerender(); } }));
+    if (c.defeated) card.append(el('p', { class: 'small', text: 'Out of the fight.' }));
+    roster.append(card);
+  });
+  mount.append(roster);
+
+  // --- progress tasks ---
+  const tasks = listTasks();
+  const taskCard = el('div', { class: 'card' }, [
+    el('h3', { text: 'Progress tasks' }),
+    el('p', { class: 'small muted', text: 'One tracker for Heat, repairs, ad-hoc clocks and the Manhunt/Dragnet extended check (§3.13, B§6).' })
+  ]);
+  const taskName = el('input', { type: 'text', id: 'task-name', placeholder: 'Name', 'aria-label': 'Task name' });
+  const taskKind = el('select', { id: 'task-kind', 'aria-label': 'Task kind' }, [
+    el('option', { value: 'clock', text: 'Ad-hoc clock (house aid)' }),
+    el('option', { value: 'repair', text: 'Repair job (§14B)' }),
+    el('option', { value: 'heat', text: 'Heat track (§17)' }),
+    el('option', { value: 'dragnet', text: 'Manhunt / Dragnet (B§6)' })
+  ]);
+  const taskTarget = el('input', { type: 'number', id: 'task-target', min: '1', value: '4', 'aria-label': 'Target' });
+  taskCard.append(taskName, taskKind, taskTarget, el('button', {
+    type: 'button', class: 'secondary', text: 'Add task',
+    onclick: () => { createTask({ name: taskName.value || 'Task', kind: taskKind.value, target: Number(taskTarget.value) }); rerender(); }
+  }));
+
+  tasks.forEach((task) => {
+    const card = el('div', { class: 'result' }, [
+      el('div', { class: 'result-head' }, [
+        el('span', { class: 'result-title', text: task.name }),
+        el('span', { class: 'cite', text: `${task.progress}/${task.target}${task.kind === 'dragnet' ? ` · ${task.oppositionDice} opposition dice` : ''}` })
+      ]),
+      el('div', { class: 'result-body', text: task.kind === 'dragnet'
+        ? `Stealth or Streetwise against a Perception pool that starts at 2 dice and gains one per in-game hour, capped at 4. Every failed round advances Personal and Cell Heat by 1 (B§6). Elapsed: ${task.elapsedHours}h.`
+        : `${titleCase(task.kind)} track.` })
+    ]);
+    if (task.kind === 'dragnet') {
+      card.append(el('button', {
+        type: 'button', class: 'secondary', text: 'Failed round',
+        onclick: () => { const r = dragnetRound(task.id, { failed: true, character: activeCharacter() }); r.effects.forEach((e) => showToast(e)); rerender(); }
+      }));
+      card.append(el('button', {
+        type: 'button', class: 'secondary', text: 'Survived round',
+        onclick: () => { const r = dragnetRound(task.id, { failed: false }); r.effects.forEach((e) => showToast(e)); rerender(); }
+      }));
+    } else {
+      card.append(el('button', { type: 'button', class: 'secondary', text: '+1', onclick: () => { advanceTask(task.id, 1); rerender(); } }));
+      card.append(el('button', { type: 'button', class: 'secondary', text: '−1', onclick: () => { advanceTask(task.id, -1); rerender(); } }));
+    }
+    card.append(el('button', { type: 'button', class: 'secondary', text: 'Close', onclick: () => { closeTask(task.id); rerender(); } }));
+    taskCard.append(card);
+  });
+  mount.append(taskCard);
+}
+
+function checkbox(id, label, onChange) {
+  return el('div', { class: 'toggle-row' }, [
+    el('input', { type: 'checkbox', id, onchange: (e) => onChange(e.target.checked) }),
+    el('label', { for: id }, [el('span', { text: label })])
+  ]);
+}

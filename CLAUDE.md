@@ -621,7 +621,7 @@ day one; fantasy-phrase join codes; themed `modal()`/`showToast`/`confirmModal`/
 | `data-npcs.js` | Adversary recipes, the 7 §12D abilities + 14 bestiary abilities, quick-gen tables, encounter sizing | **present** |
 | `data-monsters.js` | **Bestiary compendium** — 10 minion groups, 12 rivals, 4 nemeses, 2 animals, 4 encounter blocks, random encounter table | **present** |
 | `data-pregens.js` | 3 published pregens | **present** |
-| `data-solo.js` | Oracle, Random Event, Meaning, Element tables | planned |
+| `data-solo.js` | Oracle, Random Event, Meaning, Element tables | **present** |
 | ~~`data-<expansion>.js`~~ | **Omitted — no expansion books; the bestiary is committed core content, untoggled** | n/a |
 | `firebase-config.js` | Placeholder config + `FIREBASE_ENABLED` | **present** |
 | `database.rules.json` | RTDB rules (player/GM roles; Cell write rules) | **present** |
@@ -813,11 +813,11 @@ is worked in this position, immediately after `data-npcs.js`.)*
 - [x] **T55** 3 pregens (characteristics, skills, thresholds, gear; 70 XP unspent, no talents/motivation) — §16
 
 ### `data-solo.js` (Phase 6)
-- [ ] **T56** Oracle likelihoods + interpretation ladder — §18
-- [ ] **T57** Meaning tables: Action d10, Subject d10 — §15A
-- [ ] **T58** Element tables: Location, Faction, Complication (d10 each) — §15B
-- [ ] **T59** Random Event category + subject tables — §19
-- [ ] **T60** Solo play loop procedure — §23
+- [x] **T56** Oracle likelihoods + interpretation ladder — §18
+- [x] **T57** Meaning tables: Action d10, Subject d10 — §15A
+- [x] **T58** Element tables: Location, Faction, Complication (d10 each) — §15B
+- [x] **T59** Random Event category + subject tables — §19
+- [x] **T60** Solo play loop procedure — §23
 
 ## 11. Build roadmap
 
@@ -876,17 +876,20 @@ is worked in this position, immediately after `data-npcs.js`.)*
 ### 🏁 Milestone — First Session Playable — **REACHED**
 - [x] Create character → live sheet → resolve checks → track wounds/strain/Story Points/Heat, end to end, verified headless with zero console errors *(Phase 5 gated on this)*
 
-### Phase 4 — In-Play Systems
-- [ ] **Guided death procedure** (§3.10): The End Is Nigh countdown, Bleeding Out per-turn ticks + threshold-overflow extra roll, suffocation escalation, Indomitable escape hatch, 151+ terminal state
-- [ ] Rest & recovery with **all once-per-X limits enforced** (§3.11)
-- [ ] **Lifecycle engine** (§3.12): End Encounter / Scene / Session / Day / Week / Adventure with confirmation summary + one-step undo
-- [ ] **Generic progress tracker** (§3.13) reused by Heat, repairs, ad-hoc clocks
-- [ ] Advancement loop (§3.15) with pyramid + creation-only gates, advancement log
-- [ ] Local combat helper: **initiative slot model (§5A')**, turn/maneuver budget with strain cost, combatant cards, minion-group wound pooling from the per-member value (R-18), vehicle scale
-- [ ] NPC builder from the §12C recipes + 7 special abilities + quick-gen tables
-- [ ] **Bestiary browser** (T61–T67): filter by tier / Heat relevance / `veryChallenging`, one-tap drop-in to the combat tracker, printed stats loaded verbatim (R-15), Guard Dog promote-to-Rival control (R-16)
-- [ ] **Encounter blocks (B§6)** deployable as pre-built opposed checks, incl. the **Manhunt/Dragnet extended check** on the generic progress tracker (escalating 2→4 opposition dice, +1 Personal *and* Cell Heat per failed round)
-- [ ] Bestiary Heat hooks wired to `heat.js`: Papers-Check Reflex, Passive Watch, Checkpoint/Dragnet blocks, Hartmann Voss Cell-Heat-4 escalation
+### Phase 4 — In-Play Systems — *complete except vehicle scale and two Heat hooks*
+- [x] **Guided death procedure** (§3.10): The End Is Nigh countdown, Bleeding Out per-turn ticks + threshold-overflow extra roll, suffocation escalation, Indomitable escape hatch, 151+ terminal state
+- [x] Rest & recovery with **all once-per-X limits enforced** (§3.11)
+- [x] **Lifecycle engine** (§3.12): End Encounter / Scene / Session / Day / Week / Adventure with confirmation summary + one-step undo
+- [x] **Generic progress tracker** (§3.13) reused by Heat, repairs, ad-hoc clocks and the Dragnet
+- [x] Advancement loop (§3.15) with pyramid + creation-only gates, Dedication handling, advancement log
+- [x] Local combat helper: **initiative slot model (§5A')**, turn/maneuver budget with strain cost, combatant cards, minion-group wound pooling from the per-member value (R-18)
+- [ ] Combat helper: vehicle scale (§12) — the schema carries `vehicles`; no UI yet
+- [x] NPC builder surface: the §12C recipes, all 21 special abilities, and the quick-gen tables, rollable on the GM screen
+- [ ] NPC builder: save a generated stat block as a reusable combatant
+- [x] **Bestiary browser** (T61–T67): filter by tier / Heat relevance / `veryChallenging`, one-tap drop-in to the combat tracker, printed stats loaded verbatim (R-15), Guard Dog promote-to-Rival control (R-16)
+- [x] **Encounter blocks (B§6)** deployable as pre-built opposed checks, incl. the **Manhunt/Dragnet extended check** on the generic progress tracker (escalating 2→4 opposition dice, +1 Personal *and* Cell Heat per failed round)
+- [x] Bestiary Heat hooks wired to `heat.js`: the Dragnet block, the B§7 Cell-Heat-4 escalation row, and Passive Watch as a scene-start Oracle roll
+- [ ] Bestiary Heat hooks: Papers-Check Reflex and Hartmann Voss's Cell-Heat-4 escalation (flagged in the data, not yet automated)
 
 ### Phase 5 — Multiplayer & Sync *(gated on the milestone)*
 - [ ] Firebase init, anonymous auth, optional Google linking
@@ -897,9 +900,10 @@ is worked in this position, immediately after `data-npcs.js`.)*
 - [ ] Shared tasks + synced roll log; portraits (canvas-compressed ~400px)
 - [ ] PWA update toast
 
-### Phase 6 — Conditional surfaces
-- [ ] **Solo mode** (`data-solo.js` T56–T60): Oracle, Random Event chaining, Meaning/Element tables, solo loop, Heat-4/5 raid resolution via Oracle, random encounter table (B§7), Informant Network Passive Watch as a scene-start Oracle roll (B§2)
-- [ ] **GM screen**: party panel, peek sheets, drop-in combatants from the bestiary, hand out damage/conditions/Heat, all §3.21 rollable reference tables incl. the **random encounter table (B§7)**, broadcast feed
+### Phase 6 — Conditional surfaces — *solo complete; GM screen partial*
+- [x] **Solo mode** (`data-solo.js` T56–T60): Oracle, Random Event chaining, Meaning/Element tables, solo loop, Heat-4/5 raid resolution via Oracle, random encounter table (B§7), Informant Network Passive Watch as a scene-start Oracle roll (B§2)
+- [x] **GM screen**: Cell panel with Heat controls, bestiary browser with drop-in, encounter blocks, the NPC recipes and abilities, encounter sizing, and the §3.21 rollable tables incl. the **random encounter table (B§7)**
+- [ ] GM screen: party panel with peek sheets, handing out damage/conditions/Heat, broadcast feed *(these need the Phase 5 sync layer to be useful beyond one device)*
 - [ ] Advanced automation toggle
 - [ ] Safety-tools note (§20A, paraphrased, one screen)
 
@@ -916,6 +920,7 @@ verification).
 
 | Date | Change | Why | Verification | Cache |
 |---|---|---|---|---|
+| 2026-08-04 | **Phase 4 in-play systems, plus solo mode.** `combat.js` (initiative slots with fixed ownership and per-round slot filling, turn budget with the 2-strain second maneuver and the minion no-strain rule, bestiary drop-in loading printed stats verbatim, minion-group wound pooling and live resizing, Guard Dog promotion, the generic progress tracker with the Dragnet's escalating 2→4 opposition and dual Heat cost, and the six lifecycle boundaries with a delta preview and one-step undo). `sheet.js` gains the guided death procedure (Bleeding Out, The End Is Nigh countdown, suffocation escalation, Indomitable), rest and recovery with every once-per-X limit enforced, the advancement loop with Dedication, and talent tap-to-use. `gm.js` (Cell panel, bestiary browser with tier/Heat/threat filters, encounter blocks, NPC recipes and all 21 abilities, rollable §3.21 tables). `data-solo.js` T56–T60 and `solo.js` (Oracle with Random Event chaining, meaning and element tables, Passive Watch, Heat-4 raid timing). `store.js` gains combat, task and undo-snapshot persistence. | Phase 4 and the solo half of Phase 6 | `npm test`: 224 checks pass — the Phase 4 flow driven headless (bestiary drop-in, R-18 group thresholds recomputing on resize, R-16 promotion, initiative slots, a failed dragnet round advancing both Heat tracks, End Session awarding XP and decaying Heat, one-step undo restoring state, Bleeding Out ticking, the night-rest limit locking out, the Oracle chaining a Random Event and feeding Heat) at 360px and 390px, Firebase aborted, **zero console errors** | `reich62-v4` |
 | 2026-08-04 | **Phases 1–3 to the First Session Playable milestone.** `wizard.js` (career → four career skills → 70 XP with the live cost engine and pyramid gate → derived → Motivation → gear → review, every step validated), `data-pregens.js` (T55, with Anna Voss's R-1 erratum stored and surfaced), `sheet.js` (live sheet, vitals steppers clamped to true maxima, conditions, Critical Injury list with the cumulative +10, inventory with enforced encumbrance, and the persistent resource header), `roller.js` (pool build in the §2.4 modification order, manual symbol entry, cancellation, opposed difficulty side, the four spend tables by affordability, damage applier, Critical Injury roller, Story Point two-pool flow, roll log capped at 100), `heat.js` (Despair → +1 or +2 on evasion, Triumph → −1, threshold effects, Cell escalation at Personal 3+, safehouse status). Router gains Sheet, Roll and Create tabs. | Phases 1–3 of the §11 roadmap | `npm test`: 181 checks pass — the full create → sheet → roll → track flow driven headless at 360px and 390px, Firebase aborted, **zero console errors**; wizard legality gates, the pyramid gate, R-1 derived values, the R-8 badge and Heat generation all asserted through the real UI | `reich62-v2` |
 | 2026-08-04 | **Phase 0 built.** App shell (`index.html`, `styles.css`, `src/` core · ui · settings · rules · rules-index · derived · store · screens · router · main), theme with system default, PWA (manifest, versioned service worker, icon, update toast), local-only persistence with export/import, and the rules library with §/B§ search. **Data extraction complete for Phase 0:** `data.js` T1–T50, `data-npcs.js` T51–T54a, `data-monsters.js` T61–T67. Added `src/rules-index.js` to the module map and the service-worker shell. Corrected the Critical Injury row count from the plan-stage estimate of 22 to the real 29. | Phase 0 of the §11 roadmap | `npm test`: 150 checks pass — headless Chromium at 360px and 390px, Firebase routes aborted, **zero console errors**; every ruling R-B1 and R-1…R-19 pinned; engine invariants (cancellation, pool build, opposed difficulty side, modification order, pyramid, encumbrance, Critical Injury stacking) asserted against the data layer | `reich62-v1` |
 | 2026-08-04 | **Bestiary companion added as a second source of record.** §3.18 rewritten: `data-monsters.js` is reinstated (28 stat blocks + 4 encounter templates) and the app now ships a bestiary browser alongside the NPC builder. §3.13 gains its first published extended task (the Manhunt/Dragnet escalating opposed check). New rulings R-15…R-19 (printed NPC stats authoritative; Guard Dog tier; Defense notation; minion per-member WT; Disciplined ≠ Hardened). Ledger gains T54a + T61–T67; §5 gains 8 bestiary rows; data model gains combatant provenance and the dragnet task kind; book commitment decision updated. | Second book supplied by the user | Bestiary read in full (303 lines); all 28 blocks and 14 new abilities tallied against their sections; every mechanic it reuses traced back to the manual § it cites | n/a |

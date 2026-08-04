@@ -3,6 +3,7 @@
 import * as D from '../data.js';
 import * as N from '../data-npcs.js';
 import * as M from '../data-monsters.js';
+import * as S from '../data-solo.js';
 import * as R from '../src/rules.js';
 import * as D2 from '../src/derived.js';
 import { cancel, outcome, newTally } from '../src/core.js';
@@ -144,6 +145,14 @@ export async function dataChecks({ check, equal }) {
   // --- lifecycle bundles (§21–§24) ---
   equal('6 lifecycle boundaries', D.LIFECYCLE.boundaries.length, 6);
   check('every boundary lists its effects', D.LIFECYCLE.boundaries.every((b) => b.effects.length > 0));
+
+  // --- solo tables (§18–§20, §23) ---
+  equal('3 Oracle likelihoods', S.ORACLE.likelihoods.length, 3);
+  equal('Likely is 2 Ability against 1 Difficulty', `${S.ORACLE.likelihoods[0].ability}v${S.ORACLE.likelihoods[0].difficulty}`, '2v1');
+  equal('50-50 is 2 against 2', `${S.ORACLE.likelihoods[1].ability}v${S.ORACLE.likelihoods[1].difficulty}`, '2v2');
+  equal('Unlikely is 1 against 2', `${S.ORACLE.likelihoods[2].ability}v${S.ORACLE.likelihoods[2].difficulty}`, '1v2');
+  check('the Oracle Despair row feeds Heat', S.ORACLE.interpretation.find((i) => i.id === 'noAnd').heatHook === true);
+  equal('the solo loop hands raid timing to the Oracle at Heat 4', S.SOLO_LOOP.heatRule.fromLevel, 4);
 
   // --- the Dragnet extended check (B§6) ---
   const dragnet = R.encounterBlock('manhuntDragnet');
