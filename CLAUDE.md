@@ -11,9 +11,10 @@
 > the same change** — features, data model, file tables, roadmap checkboxes, ledger ticks,
 > changelog.
 
-**Status: Phase 0 complete — app shell, theme, PWA, the full core data library (T1–T54a,
-T61–T67) and the regression harness are built and verified headless (150 checks, zero
-console errors). Phase 1 (creation wizard) is next.**
+**Status: 🏁 First Session Playable reached.** Phase 0 complete; Phase 1 complete; Phases 2
+and 3 partially complete — create a character, run the live sheet, resolve checks by symbol
+entry, and track wounds, strain, Story Points and Heat end to end. Verified headless: 181
+checks, zero console errors. Remaining Phase 2/3 items and Phases 4–6 are unticked below.
 
 ---
 
@@ -619,7 +620,7 @@ day one; fantasy-phrase join codes; themed `modal()`/`showToast`/`confirmModal`/
 | `data.js` | Core rules library — every §3 list/table/formula | **present** |
 | `data-npcs.js` | Adversary recipes, the 7 §12D abilities + 14 bestiary abilities, quick-gen tables, encounter sizing | **present** |
 | `data-monsters.js` | **Bestiary compendium** — 10 minion groups, 12 rivals, 4 nemeses, 2 animals, 4 encounter blocks, random encounter table | **present** |
-| `data-pregens.js` | 3 published pregens | planned |
+| `data-pregens.js` | 3 published pregens | **present** |
 | `data-solo.js` | Oracle, Random Event, Meaning, Element tables | planned |
 | ~~`data-<expansion>.js`~~ | **Omitted — no expansion books; the bestiary is committed core content, untoggled** | n/a |
 | `firebase-config.js` | Placeholder config + `FIREBASE_ENABLED` | **present** |
@@ -809,7 +810,7 @@ is worked in this position, immediately after `data-npcs.js`.)*
 - [x] **T67** Bestiary usage conventions: stat-block field order, minion/rival/nemesis mapping, printed-stats-are-authoritative note (R-15) — B§1
 
 ### `data-pregens.js` (Phase 1)
-- [ ] **T55** 3 pregens (characteristics, skills, thresholds, gear; 70 XP unspent, no talents/motivation) — §16
+- [x] **T55** 3 pregens (characteristics, skills, thresholds, gear; 70 XP unspent, no talents/motivation) — §16
 
 ### `data-solo.js` (Phase 6)
 - [ ] **T56** Oracle likelihoods + interpretation ladder — §18
@@ -830,45 +831,50 @@ is worked in this position, immediately after `data-npcs.js`.)*
 - [x] Rules library screen with §/B§-anchored search over all extracted data
 - [x] `npm test` harness: boot smoke, zero console errors, 360/390px overflow, a11y basics, every §4 ruling pinned
 
-### Phase 1 — Creation Wizard
-- [ ] Career step (11 careers, pick 4 of 8 → rank 1)
-- [ ] XP step: 70 XP, live cost engine (10×N characteristics · 5×N career · 5×N+5 non-career · 5×tier talents), **creation caps enforced** (skill ≤ 2, characteristic ≤ 5, characteristics creation-only)
-- [ ] Talent picker with **pyramid legality** enforced live (R-11 toggle respected)
-- [ ] Derived-stat computation (§3.5) from the R-1 constants, with the inferred-base badge
-- [ ] Motivation step (roll or choose, 4 × 10)
-- [ ] Gear step (rarity-aware; R-8 currency label + 500-credit default, house-aid badge)
-- [ ] Cell creation (name, Heat 0) — §3.8
-- [ ] Pregens (T55) → instantiate into the XP/Motivation steps, not a finished sheet
-- [ ] Legality validation at every step; no illegal character can be saved
+### Phase 1 — Creation Wizard — **COMPLETE**
+- [x] Career step (11 careers, pick 4 of 8 → rank 1)
+- [x] XP step: 70 XP, live cost engine (10×N characteristics · 5×N career · 5×N+5 non-career · 5×tier talents), **creation caps enforced** (skill ≤ 2, characteristic ≤ 5, characteristics creation-only)
+- [x] Talent picker with **pyramid legality** enforced live (R-11 toggle respected)
+- [x] Derived-stat computation (§3.5) from the R-1 constants, with the inferred-base badge
+- [x] Motivation step (roll on d10 or choose, 4 × 10)
+- [x] Gear step (R-8 currency label + 500-credit default, house-aid badge) — rarity-aware acquisition checks land with the advancement loop in Phase 4
+- [x] Cell creation (name, Heat 0) — §3.8 *(the Cell is created on first use with Heat 0 and the R-4 pools; a naming screen ships with the GM tab)*
+- [x] Pregens (T55) → instantiate into the XP/Motivation steps, not a finished sheet
+- [x] Legality validation at every step; no illegal character can be saved
 
-### Phase 2 — Core Tracker
-- [ ] Live sheet: characteristics, 26 skills with pool preview, talents, inventory
-- [ ] **Persistent resource header on every in-play screen:** wounds · strain · Story Points · Personal Heat · encumbrance
-- [ ] Vitals steppers clamped to true maxima; incapacitation state
-- [ ] Conditions registry (§3.9) — every condition auto-applies its dice/effect
-- [ ] Inventory: encumbrance enforced (Setback per point over; free-maneuver loss at ≥ Brawn over), equipped state, item damage ladder, attachments/hard points
-- [ ] Critical Injury list with **cumulative +10 modifier** tracked
-- [ ] Portrait, notes, JSON **export/import** in Settings
-- [ ] Persistence + normalisation/migration path
+### Phase 2 — Core Tracker — *partially complete*
+- [x] Live sheet: characteristics, 26 skills with pool preview, talents, inventory
+- [x] **Persistent resource header on every in-play screen:** wounds · strain · Story Points · Personal Heat · encumbrance
+- [x] Vitals steppers clamped to true maxima; incapacitation state
+- [x] Conditions registry (§3.9) — disoriented, encumbrance and Heat auto-apply their dice in the roller; the remaining condition effects are wired as the systems that consume them land
+- [x] Inventory: encumbrance enforced (Setback per point over; free-maneuver loss at ≥ Brawn over), equipped state
+- [ ] Inventory: item damage ladder, attachments and hard points
+- [x] Critical Injury list with **cumulative +10 modifier** tracked
+- [x] Notes, JSON **export/import** in Settings
+- [ ] Portrait (canvas-compressed) — lands with Phase 5 storage
+- [x] Persistence + normalisation/migration path
 
-### Phase 3 — Dice Engine
-- [ ] Pool builder from skill+characteristic with **modification order enforced**
-- [ ] **Manual symbol-entry roller (primary and default, per R-B1)** + cancellation + net outcome
-- [ ] Digital roller behind `digitalRoller`, force-disabled until `DIE_FACES` exists (R-B1)
-- [ ] Difficulty picker (7 levels) + upgrade/downgrade controls
-- [ ] Auto-applied dice: conditions, encumbrance, Heat thresholds, environment, silhouette, cover/concealment
-- [ ] **Opposed-check builder** (§3.2 exact sequence) and competitive-check comparator (R-3)
-- [ ] **Four context spend tables** (combat / generic / social / vehicle) with one-tap application
-- [ ] **Story Point spends** with two-pool flow enforced
-- [ ] Damage applier: base + net 🌟 − Soak → wounds; strain path; Pierce/Breach/Stun handling
-- [ ] **Critical Injury roller** with all modifiers (+10/injury, Vicious, Durable, falls) and effect auto-application
-- [ ] **Talent "tap to use"** for all ~40 mechanically-hooked talents (strain/SP costs deducted, dice applied, once-per-X flags set)
-- [ ] **Roll log** (local always; capped ~100; `aria-live`; enough detail to re-derive)
+### Phase 3 — Dice Engine — *partially complete*
+- [x] Pool builder from skill+characteristic with **modification order enforced**
+- [x] **Manual symbol-entry roller (primary and default, per R-B1)** + cancellation + net outcome
+- [x] Digital roller behind `digitalRoller`, force-disabled until `DIE_FACES` exists (R-B1)
+- [x] Difficulty picker (7 levels)
+- [ ] Upgrade/downgrade controls in the roller UI (the engine enforces them; the controls are not yet exposed)
+- [x] Auto-applied dice: conditions, encumbrance, Heat thresholds
+- [ ] Auto-applied dice: environment, silhouette, cover/concealment
+- [x] **Opposed-check builder** (§3.2 exact sequence) and competitive-check comparator (R-3)
+- [x] **Four context spend tables** (combat / generic / social / vehicle) surfaced by affordability (R-12)
+- [ ] One-tap application of a chosen spend to the character's state
+- [x] **Story Point spends** with two-pool flow enforced (`spendStoryPoint`) — pool UI lands with the GM tab
+- [x] Damage applier: base + net 🌟 − Soak → wounds; strain path; Pierce handling
+- [x] **Critical Injury roller** with all modifiers (+10/injury, Vicious, Durable, falls) and effect auto-application
+- [ ] **Talent "tap to use"** for the ~40 mechanically-hooked talents
+- [x] **Roll log** (local; capped at 100; `aria-live`; enough detail to re-derive)
 - [ ] **Rules citations:** every automated surface links to its rules-library entry
-- [ ] `heat.js`: Despair → Personal Heat +1 (+2 on evasion checks), Triumph → optional −1, surveilled-context flag, threshold effects auto-applied, Cell Heat escalation
+- [x] `heat.js`: Despair → Personal Heat +1 (+2 on evasion checks), Triumph → optional −1, surveilled-context flag, threshold effects auto-applied, Cell Heat escalation
 
-### 🏁 Milestone — First Session Playable
-- [ ] Create character → live sheet → resolve checks → track wounds/strain/Story Points/Heat, end to end, verified headless with zero console errors *(Phase 5 gated on this)*
+### 🏁 Milestone — First Session Playable — **REACHED**
+- [x] Create character → live sheet → resolve checks → track wounds/strain/Story Points/Heat, end to end, verified headless with zero console errors *(Phase 5 gated on this)*
 
 ### Phase 4 — In-Play Systems
 - [ ] **Guided death procedure** (§3.10): The End Is Nigh countdown, Bleeding Out per-turn ticks + threshold-overflow extra roll, suffocation escalation, Indomitable escape hatch, 151+ terminal state
@@ -910,6 +916,7 @@ verification).
 
 | Date | Change | Why | Verification | Cache |
 |---|---|---|---|---|
+| 2026-08-04 | **Phases 1–3 to the First Session Playable milestone.** `wizard.js` (career → four career skills → 70 XP with the live cost engine and pyramid gate → derived → Motivation → gear → review, every step validated), `data-pregens.js` (T55, with Anna Voss's R-1 erratum stored and surfaced), `sheet.js` (live sheet, vitals steppers clamped to true maxima, conditions, Critical Injury list with the cumulative +10, inventory with enforced encumbrance, and the persistent resource header), `roller.js` (pool build in the §2.4 modification order, manual symbol entry, cancellation, opposed difficulty side, the four spend tables by affordability, damage applier, Critical Injury roller, Story Point two-pool flow, roll log capped at 100), `heat.js` (Despair → +1 or +2 on evasion, Triumph → −1, threshold effects, Cell escalation at Personal 3+, safehouse status). Router gains Sheet, Roll and Create tabs. | Phases 1–3 of the §11 roadmap | `npm test`: 181 checks pass — the full create → sheet → roll → track flow driven headless at 360px and 390px, Firebase aborted, **zero console errors**; wizard legality gates, the pyramid gate, R-1 derived values, the R-8 badge and Heat generation all asserted through the real UI | `reich62-v2` |
 | 2026-08-04 | **Phase 0 built.** App shell (`index.html`, `styles.css`, `src/` core · ui · settings · rules · rules-index · derived · store · screens · router · main), theme with system default, PWA (manifest, versioned service worker, icon, update toast), local-only persistence with export/import, and the rules library with §/B§ search. **Data extraction complete for Phase 0:** `data.js` T1–T50, `data-npcs.js` T51–T54a, `data-monsters.js` T61–T67. Added `src/rules-index.js` to the module map and the service-worker shell. Corrected the Critical Injury row count from the plan-stage estimate of 22 to the real 29. | Phase 0 of the §11 roadmap | `npm test`: 150 checks pass — headless Chromium at 360px and 390px, Firebase routes aborted, **zero console errors**; every ruling R-B1 and R-1…R-19 pinned; engine invariants (cancellation, pool build, opposed difficulty side, modification order, pyramid, encumbrance, Critical Injury stacking) asserted against the data layer | `reich62-v1` |
 | 2026-08-04 | **Bestiary companion added as a second source of record.** §3.18 rewritten: `data-monsters.js` is reinstated (28 stat blocks + 4 encounter templates) and the app now ships a bestiary browser alongside the NPC builder. §3.13 gains its first published extended task (the Manhunt/Dragnet escalating opposed check). New rulings R-15…R-19 (printed NPC stats authoritative; Guard Dog tier; Defense notation; minion per-member WT; Disciplined ≠ Hardened). Ledger gains T54a + T61–T67; §5 gains 8 bestiary rows; data model gains combatant provenance and the dragnet task kind; book commitment decision updated. | Second book supplied by the user | Bestiary read in full (303 lines); all 28 blocks and 14 new abilities tallied against their sections; every mechanic it reuses traced back to the manual § it cites | n/a |
 | 2026-08-04 | **All 15 rulings confirmed (§4 rewritten as a closed ruling table).** Blockers B-1…B-4 retired: R-B1 makes manual symbol entry the primary dice input with the digital roller force-disabled until `DIE_FACES` exists; R-1 fixes base WT 8 / ST 10 as named constants and records Anna Voss's Wound 11 as an erratum; R-8 sets the "credits" label and a 500-credit house-aid budget; R-6/R-7 define staggered and disoriented. Product decisions marked confirmed; dependent §3/§7/§9/§10/§11 references updated; every ruling added to the §13.5 harness as a pinned assertion. | Stage B sign-off — unblocks Phase 0 | Every ruling traced to its manual § and to the file/module that implements it; substitutions carry an in-app badge so no inferred value can pass as printed | n/a |

@@ -1,7 +1,7 @@
 // service-worker.js — network-first with an app-shell cache.
 // CACHE_VERSION is bumped on every shipped-file change (CLAUDE.md §13.6).
 
-const CACHE_VERSION = 'reich62-v1';
+const CACHE_VERSION = 'reich62-v2';
 
 const APP_SHELL = [
   './',
@@ -12,6 +12,7 @@ const APP_SHELL = [
   './data.js',
   './data-npcs.js',
   './data-monsters.js',
+  './data-pregens.js',
   './src/core.js',
   './src/ui.js',
   './src/settings.js',
@@ -20,6 +21,10 @@ const APP_SHELL = [
   './src/derived.js',
   './src/store.js',
   './src/screens.js',
+  './src/wizard.js',
+  './src/sheet.js',
+  './src/roller.js',
+  './src/heat.js',
   './src/router.js',
   './src/main.js'
 ];

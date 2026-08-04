@@ -369,6 +369,18 @@ th { font-family: var(--font-head); text-transform: uppercase; font-size: 0.7rem
 
 .dice-glyph { font-family: var(--font-mono); }
 
+.chip {
+  display: inline-block;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 0.05rem 0.4rem;
+  background: var(--panel);
+  white-space: nowrap;
+}
+
+label > select, label > input { margin-top: 0.2rem; }
+textarea { min-height: 5rem; }
+
 @media (min-width: 40rem) {
   .screen { padding: 1.2rem; }
 }
