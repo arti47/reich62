@@ -8,7 +8,7 @@ import { showToast, renderTally, modal, panel, accordion, outcomeBox, numberStep
 import { PANELS, label as termLabel, gloss } from './help.js';
 import {
   SKILLS, DIFFICULTIES, SPEND_TABLES, STORY_POINTS, CRITICAL_INJURY_RULES, DIE_FACES,
-  RANGED_DIFFICULTY_BY_RANGE, COMBAT_CHECK_PROCEDURE
+  RANGED_DIFFICULTY_BY_RANGE, COMBAT_CHECK_PROCEDURE, DICE
 } from '../data.js';
 import {
   skill as skillById, buildPool, buildOpposedDifficulty, modifyPool, difficultyDice,
@@ -413,15 +413,12 @@ export function renderRoller(mount) {
   }));
   mount.append(situational);
 
+  // The pool's numbers live in the entry panel, beside the symbols they produce, and
+  // update as soon as anything that feeds them changes.
   const { pool, notes } = assemblePool(character);
-  const poolCard = panel('Your dice', PANELS.rollPool, [], { id: 'roll-pool' });
-  poolCard.append(...[
-    el('p', { class: 'dice-glyph', text: describePool(pool) }),
-    el('ul', { class: 'small muted' }, notes.map((n) => el('li', { text: n })))
-  ]);
-  mount.append(poolCard);
-
-  const entry = panel('What did you roll?', PANELS.rollEntry, [
+  const entry = panel('What did you roll?', PANELS.rollEntry, [], { id: 'roll-pool' });
+  entry.append(...[
+    diceToRoll(pool, notes),
     el('p', { class: 'small' }, [
       DIE_FACES === null
         ? 'The manual never prints die face distributions, so the app cannot roll these dice for you. Roll them physically and tap what came up — everything after that is automatic.'
@@ -581,6 +578,34 @@ export function explainCancellation(entered, result) {
   if (result.despair) parts.push(`${result.despair} despair, which never cancels and always happens`);
 
   return `${parts.join('; ')}.`;
+}
+
+/** The dice this check uses, as live per-type numbers: anything that feeds the pool —
+ *  skill, characteristic, difficulty, opposition, cover, concealment, size, conditions,
+ *  encumbrance, suspicion, upgrades — moves these the moment you touch it. */
+function diceToRoll(pool, notes) {
+  const wrap = el('div', { class: 'dice-to-roll' });
+  wrap.append(el('h3', { class: 'dice-to-roll-title', text: 'Dice to roll' }));
+  const grid = el('div', { class: 'dice-grid' });
+  DICE.forEach((die) => {
+    const count = pool[die.id] || 0;
+    grid.append(el('div', {
+      class: `die-count die-${die.colour}${count ? '' : ' is-empty'}`,
+      title: `${die.name}: a ${die.colour} ${die.sides}-sided die`
+    }, [
+      el('span', { class: 'die-count-value', text: String(count) }),
+      el('span', { class: 'die-count-name', text: die.name }),
+      el('span', { class: 'die-count-sides', text: `d${die.sides}` })
+    ]));
+  });
+  wrap.append(grid);
+  const total = DICE.reduce((sum, die) => sum + (pool[die.id] || 0), 0);
+  wrap.append(el('p', { class: 'small muted', text: total ? `${total} ${total === 1 ? 'die' : 'dice'} in total.` : 'No dice yet — pick a skill and a difficulty.' }));
+  if (notes.length) {
+    wrap.append(accordion('Why these dice', [el('ul', { class: 'small muted' }, notes.map((n) => el('li', { text: n })))],
+      { key: 'roll-why', summary: `${notes.length} reason${notes.length === 1 ? '' : 's'}` }));
+  }
+  return wrap;
 }
 
 function describePool(pool) {

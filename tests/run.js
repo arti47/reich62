@@ -217,10 +217,34 @@ async function main() {
     await go('#/roll');
     await page.waitForSelector('#roller-skill');
     await page.selectOption('#roller-skill', 'deception');
-    const poolText = await page.locator('#roll-pool').innerText();
-    check('pool is built from the skill and its characteristic',
-      /Proficiency|Ability/.test(poolText) && /Deception 1 with Cunning 1/.test(poolText), poolText);
-    check('difficulty dice come from the difficulty ladder', /2 Difficulty/.test(poolText), poolText);
+    // The dice counts live in the entry panel and update as the setup changes.
+    const dieCount = async (name) => Number(await page.locator('.die-count', { hasText: new RegExp(`^\\d+\\s*${name}`, 'i') }).first().locator('.die-count-value').innerText());
+    check('pool is built from the skill and its characteristic', (await dieCount('Proficiency')) === 1, 'proficiency');
+    equal('difficulty dice come from the difficulty ladder', await dieCount('Difficulty'), 2);
+
+    // Change the difficulty and the numbers move without touching anything else.
+    await page.selectOption('#roller-difficulty', 'daunting');
+    await page.waitForTimeout(90);
+    equal('raising the difficulty updates the dice count live', await dieCount('Difficulty'), 4);
+    await page.selectOption('#roller-difficulty', 'average');
+    await page.waitForTimeout(90);
+    equal('lowering it again updates back', await dieCount('Difficulty'), 2);
+
+    // A situational option moves them too.
+    await page.locator('#roller-cover').check();
+    await page.waitForTimeout(90);
+    equal('taking cover adds a Boost die live', await dieCount('Boost'), 1);
+    await page.locator('#roller-cover').uncheck();
+    await page.waitForTimeout(90);
+    equal('leaving cover removes it again', await dieCount('Boost'), 0);
+
+    // Changing the skill rebuilds the positive side.
+    await page.selectOption('#roller-skill', 'athletics');
+    await page.waitForTimeout(90);
+    check('changing skill rebuilds the positive dice',
+      (await dieCount('Ability')) + (await dieCount('Proficiency')) >= 1);
+    await page.selectOption('#roller-skill', 'deception');
+    await page.waitForTimeout(90);
 
     await page.locator('#roller-surveilled').check();
     await page.getByRole('button', { name: 'One more success' }).click();

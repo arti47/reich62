@@ -553,3 +553,27 @@ details.accordion > *:last-child { padding-bottom: 0.6rem; }
 .log-symbols { grid-column: 1; }
 .log-row p { grid-column: 1; margin: 0; }
 .log-delete { grid-column: 2; grid-row: 2 / span 2; align-self: center; padding: 0.35rem 0.6rem; min-height: 2.25rem; }
+
+/* --- live dice-to-roll counts, above the symbol entry --- */
+.dice-to-roll { margin: 0 0 0.6rem; }
+.dice-to-roll-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); margin-bottom: 0.4rem; }
+.dice-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.35rem; margin-bottom: 0.4rem; }
+@media (min-width: 30rem) { .dice-grid { grid-template-columns: repeat(6, 1fr); } }
+.die-count {
+  border: 1px solid var(--rule);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  padding: 0.35rem 0.4rem;
+  background: var(--panel-2);
+  text-align: center;
+}
+.die-count.is-empty { opacity: 0.35; }
+.die-count-value { display: block; font-family: var(--font-mono); font-size: 1.25rem; line-height: 1.1; }
+.die-count-name { display: block; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.02em; line-height: 1.15; overflow-wrap: anywhere; }
+.die-count-sides { display: block; font-family: var(--font-mono); font-size: 0.65rem; color: var(--ink-soft); }
+.die-green  { border-left-color: #6E8F4E; }
+.die-yellow { border-left-color: var(--brass); }
+.die-purple { border-left-color: #6B4A7A; }
+.die-red    { border-left-color: var(--oxblood); }
+.die-blue   { border-left-color: var(--focus); }
+.die-black  { border-left-color: var(--ink-soft); }
