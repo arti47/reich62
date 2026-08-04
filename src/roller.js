@@ -3,8 +3,8 @@
 // primary and default input. The app builds the pool, enforces the modification order,
 // cancels symbols, applies spends, damage, Critical Injuries and Heat, and writes the log.
 
-import { el, clear, titleCase, newTally, cancel, outcome, rollDie, rollFace, clamp } from './core.js';
-import { showToast, renderTally, modal, panel, accordion, outcomeBox, numberStepper, emptyState, symbolGlyph } from './ui.js';
+import { el, clear, titleCase, newTally, cancel, outcome, rollDie, rollFace, clamp, uid } from './core.js';
+import { showToast, renderTally, modal, panel, accordion, outcomeBox, numberStepper, emptyState, symbolGlyph, confirmModal } from './ui.js';
 import { PANELS, label as termLabel, gloss } from './help.js';
 import {
   SKILLS, DIFFICULTIES, SPEND_TABLES, STORY_POINTS, CRITICAL_INJURY_RULES, DIE_FACES,
@@ -40,12 +40,29 @@ export function readLog() {
 
 export function writeLog(entry) {
   const log = readLog();
-  log.unshift(entry);
+  const stored = { id: uid(), spends: [], ...entry };
+  log.unshift(stored);
   localStorage.setItem(LOG_KEY, JSON.stringify(log.slice(0, LOG_CAP)));
-  return entry;
+  return stored;
 }
 
 export function clearLog() { localStorage.removeItem(LOG_KEY); }
+
+export function deleteLogEntry(id) {
+  const log = readLog().filter((e) => e.id !== id);
+  localStorage.setItem(LOG_KEY, JSON.stringify(log));
+  return log;
+}
+
+/** A spend belongs to the check that produced it, so it is appended to that entry rather
+ *  than filling the log with rows of its own. */
+export function appendSpendToLastEntry(text) {
+  const log = readLog();
+  if (!log.length) return null;
+  log[0].spends = [...(log[0].spends || []), text];
+  localStorage.setItem(LOG_KEY, JSON.stringify(log));
+  return log[0];
+}
 
 // --- state for the open check ---
 const blankPool = () => ({ ability: 0, proficiency: 0, difficulty: 0, challenge: 0, boost: 0, setback: 0 });
@@ -312,12 +329,7 @@ export function applySpend(character, row, effectIndex = 0) {
   }
 
   saveCharacter(character);
-  writeLog({
-    ts: Date.now(), by: character.id, characterName: character.identity.name,
-    skill: state.skillId, difficulty: state.difficultyId, poolInputs: {}, symbols: {},
-    net: {}, outcome: 'spend', surveilled: state.surveilled, heatDelta: 0,
-    notes: [`Spend: ${effect}`, ...applied]
-  });
+  appendSpendToLastEntry(effect);
   return { ok: true, applied };
 }
 
@@ -511,16 +523,41 @@ export function renderRoller(mount) {
 
   const log = readLog().slice(0, 12);
   const logBody = el('div', {});
-  const logCard = panel('Recent checks', PANELS.rollLog, [logBody]);
-  if (!log.length) logBody.append(emptyState('Nothing logged yet — resolve a check and it lands here.'));
+  const logCard = panel('Recent checks', PANELS.rollLog, []);
+  if (!log.length) {
+    logBody.append(emptyState('Nothing logged yet — resolve a check and it lands here.'));
+  } else {
+    logCard.append(el('button', {
+      type: 'button', class: 'secondary', id: 'clear-log', text: `Clear all ${readLog().length}`,
+      onclick: async () => {
+        if (!(await confirmModal(`Delete all ${readLog().length} logged checks? This cannot be undone.`, { title: 'Clear the log', confirmLabel: 'Delete them' }))) return;
+        clearLog();
+        rerender();
+      }
+    }));
+  }
+  logCard.append(logBody);
   log.forEach((item) => {
-    logBody.append(el('div', { class: 'result' }, [
+    const verdict = item.outcome === 'success' ? 'Success' : 'Failure';
+    const row = el('div', { class: 'result log-row' }, [
       el('div', { class: 'result-head' }, [
-        el('span', { class: 'result-title', text: `${titleCase(item.skill)} — ${item.outcome}` }),
+        el('span', { class: 'result-title', text: `${titleCase(item.skill)} — ${verdict}` }),
         el('span', { class: 'cite', text: new Date(item.ts).toLocaleTimeString() })
       ]),
-      el('div', { class: 'result-body', text: `Pool ${describePool(item.poolInputs)} · entered ${describeTally(item.symbols)} · net ${describeTally(item.net)}${item.heatDelta ? ` · Heat ${item.heatDelta > 0 ? '+' : ''}${item.heatDelta}` : ''}` })
-    ]));
+      el('div', { class: 'log-symbols' }, [renderTally(item.net || {})])
+    ]);
+    if (item.heatDelta) {
+      row.append(el('p', { class: 'small muted', text: `Suspicion ${item.heatDelta > 0 ? '+' : ''}${item.heatDelta}` }));
+    }
+    (item.spends || []).forEach((spendText) => {
+      row.append(el('p', { class: 'small muted', text: `Spent: ${spendText}` }));
+    });
+    row.append(el('button', {
+      type: 'button', class: 'secondary log-delete', text: 'Delete',
+      'aria-label': `Delete the ${titleCase(item.skill)} check logged at ${new Date(item.ts).toLocaleTimeString()}`,
+      onclick: () => { deleteLogEntry(item.id); rerender(); }
+    }));
+    logBody.append(row);
   });
   mount.append(logCard);
 }
@@ -555,11 +592,6 @@ function describePool(pool) {
   if (pool.boost) parts.push(`${pool.boost} Boost`);
   if (pool.setback) parts.push(`${pool.setback} Setback`);
   return parts.join(' · ') || 'no dice';
-}
-
-function describeTally(tally) {
-  const parts = Object.entries(tally).filter(([, v]) => v > 0).map(([k, v]) => `${v} ${k}`);
-  return parts.join(', ') || 'none';
 }
 
 function toggle(id, label, value, onChange) {

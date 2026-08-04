@@ -252,7 +252,10 @@ async function main() {
     await page.waitForTimeout(80);
     const headerAfter = await page.locator('#resource-header').innerText();
     check('Heat is applied to the character', /Heat 2·0/.test(headerAfter), headerAfter);
-    check('the roll is logged', (await page.locator('#screen section.card', { hasText: 'Recent checks' }).locator('.result').count()) >= 1);
+    check('the roll is logged', (await page.locator('#screen section.card', { hasText: 'Recent checks' }).locator('.log-row').count()) >= 1);
+    const logRow = await page.locator('.log-row').first().innerText();
+    check('a log row shows the result, not the whole derivation',
+      /Success|Failure/.test(logRow) && !/Pool /.test(logRow) && !/entered /.test(logRow), logRow.replace(/\n/g, ' | '));
     check('the outcome stays on screen instead of only flashing a toast',
       /Suspicion on you/.test(await page.locator('.outcome').first().innerText()));
 
@@ -360,6 +363,24 @@ async function main() {
     await page.selectOption('#bestiary-tier', 'nemesis');
     await page.waitForTimeout(60);
     check('the tier filter finds the 4 nemeses', /4 of 28 entries/.test(await page.locator('#bestiary-list').innerText()));
+
+    // Log entries can be deleted one at a time, and the whole log cleared.
+    await go('#/roll');
+    await page.getByRole('button', { name: 'One more success' }).click();
+    await page.getByRole('button', { name: 'Log this check' }).click();
+    await page.waitForTimeout(120);
+    const beforeDelete = await page.locator('.log-row').count();
+    check('a second check adds a second log row', beforeDelete >= 2, `rows ${beforeDelete}`);
+    await page.locator('.log-row').first().getByRole('button', { name: 'Delete' }).click();
+    await page.waitForTimeout(120);
+    check('deleting one entry leaves the rest', (await page.locator('.log-row').count()) === beforeDelete - 1);
+    await page.getByRole('button', { name: /^Clear all/ }).click();
+    await page.waitForSelector('.modal-backdrop');
+    check('clearing the whole log asks first', /cannot be undone/i.test(await page.locator('.modal').innerText()));
+    await page.getByRole('button', { name: 'Delete them' }).click();
+    await page.waitForTimeout(120);
+    check('clearing empties the log', (await page.locator('.log-row').count()) === 0);
+    check('the empty log explains itself', /Nothing logged yet/.test(await page.locator('#screen').innerText()));
 
     // A fresh Roll screen is not a failed check.
     await go('#/roll');

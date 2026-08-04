@@ -546,3 +546,10 @@ details.accordion > *:last-child { padding-bottom: 0.6rem; }
 .field .toggle-desc { display: block; font-size: 0.8rem; color: var(--ink-soft); margin-bottom: 0.3rem; }
 .field-input { width: 5rem; text-align: center; font-family: var(--font-mono); }
 .status-pending { color: var(--ink-soft); }
+
+/* --- roll log rows: result only, with a per-entry delete --- */
+.log-row { display: grid; grid-template-columns: 1fr auto; gap: 0.3rem 0.5rem; align-items: start; }
+.log-row .result-head { grid-column: 1 / -1; }
+.log-symbols { grid-column: 1; }
+.log-row p { grid-column: 1; margin: 0; }
+.log-delete { grid-column: 2; grid-row: 2 / span 2; align-self: center; padding: 0.35rem 0.6rem; min-height: 2.25rem; }
