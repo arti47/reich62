@@ -2,7 +2,8 @@
 // rather than invented; it stays behind the soloMode flag.
 
 import { el, clear, titleCase, rollDie, newTally, outcome } from './core.js';
-import { showToast, modal, renderTally } from './ui.js';
+import { showToast, modal, renderTally, panel, emptyState } from './ui.js';
+import { PANELS } from './help.js';
 import { ORACLE, MEANING, ELEMENTS, RANDOM_EVENT, SOLO_LOOP } from '../data-solo.js';
 import { NPC_QUICKGEN } from '../data-npcs.js';
 import { RANDOM_ENCOUNTERS, MINION_GROUPS } from '../data-monsters.js';
@@ -67,10 +68,7 @@ export function renderSolo(mount) {
   const cell = getCell();
 
   // --- Oracle ---
-  const oracleCard = el('div', { class: 'card' }, [
-    el('h2', { text: 'Oracle' }),
-    el('p', { class: 'small muted', text: ORACLE.procedure.join(' ') })
-  ]);
+  const oracleCard = panel('Ask the Oracle', PANELS.soloOracle, []);
   const likelihood = el('select', { id: 'oracle-likelihood', 'aria-label': 'Likelihood', onchange: (e) => { state.likelihood = e.target.value; rerender(); } });
   ORACLE.likelihoods.forEach((l) => likelihood.append(el('option', {
     value: l.id, selected: state.likelihood === l.id,
@@ -133,7 +131,7 @@ export function renderSolo(mount) {
   mount.append(oracleCard);
 
   // --- tables ---
-  const tables = el('div', { class: 'card' }, [el('h2', { text: 'Tables' })]);
+  const tables = panel('Need an idea?', PANELS.soloTables, []);
   const output = el('div', { id: 'solo-output', 'aria-live': 'polite' });
   const show = (title, text) => { clear(output); output.append(el('h3', { text: title }), el('p', { class: 'small', text })); };
 

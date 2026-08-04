@@ -2,7 +2,8 @@
 // and every rollable reference table (§3.21, B§6–B§7). Gated behind the gmScreen flag.
 
 import { el, clear, titleCase, rollDie } from './core.js';
-import { showToast, modal } from './ui.js';
+import { showToast, modal, panel, subTabs, emptyState, confirmModal } from './ui.js';
+import { PANELS, label as termLabel } from './help.js';
 import {
   CRITICAL_INJURIES, ENCOUNTER_SIZING, DIFFICULTIES, SPEND_TABLES, HEAT, DREAD_CHECKS,
   RARITY, ITEM_DAMAGE, FALLING, SILHOUETTES, QUICK_REFERENCE, CHARACTERISTICS
@@ -24,14 +25,30 @@ function applyCellHeatless(character) {
   return { applied, note: `Papers-Check Reflex: Personal Heat ${applied.before} → ${applied.after} (B§2, §17.1).` };
 }
 
+const GM_TABS = [
+  { id: 'cell',       label: 'Network' },
+  { id: 'bestiary',   label: 'Opponents' },
+  { id: 'encounters', label: 'Encounters' },
+  { id: 'tables',     label: 'Tables' },
+  { id: 'build',      label: 'Build' }
+];
+let gmTab = 'bestiary';
+
 export function renderGm(mount) {
   clear(mount);
   const rerender = () => renderGm(mount);
+  mount.append(el('div', { class: 'card' }, [
+    el('h2', { text: 'GM screen' }),
+    el('p', { class: 'lede', text: 'Everything you need behind the screen, one section at a time.' }),
+    subTabs(GM_TABS, gmTab, (id) => { gmTab = id; rerender(); })
+  ]));
+  ({ cell: gmCell, bestiary: gmBestiary, encounters: gmEncounters, tables: gmTables, build: gmBuild })[gmTab](mount, rerender);
+}
 
+function gmCell(mount, rerender) {
   // --- the Cell ---
   const cell = getCell();
-  const cellCard = el('div', { class: 'card' }, [
-    el('h2', { text: 'Cell' }),
+  const cellCard = panel(termLabel('cell'), PANELS.gmCell, [
     el('label', { class: 'small', for: 'cell-name', text: 'Name' }),
     el('input', {
       type: 'text', id: 'cell-name', value: cell.name,
@@ -42,12 +59,11 @@ export function renderGm(mount) {
     el('button', { type: 'button', class: 'secondary', text: 'Cell Heat −1', onclick: () => { const r = applyCellHeat(-1); showToast(`Cell Heat ${r.before} → ${r.after}`); rerender(); } })
   ]);
   mount.append(cellCard);
+}
 
+function gmBestiary(mount, rerender) {
   // --- bestiary browser ---
-  const browser = el('div', { class: 'card' }, [
-    el('h2', { text: 'Bestiary' }),
-    el('p', { class: 'small muted', text: 'Printed stats load exactly as published and are never recomputed from the PC formulas (R-15).' })
-  ]);
+  const browser = panel('Opponents', PANELS.gmBestiary, []);
   const search = el('input', {
     type: 'search', id: 'bestiary-search', placeholder: 'Search adversaries…', 'aria-label': 'Search the bestiary',
     value: filters.query, oninput: (e) => { filters.query = e.target.value; drawList(); }
@@ -101,12 +117,11 @@ export function renderGm(mount) {
     });
   }
   drawList();
+}
 
+function gmEncounters(mount, rerender) {
   // --- encounter blocks (B§6) ---
-  const blocks = el('div', { class: 'card' }, [
-    el('h2', { text: 'Encounter blocks' }),
-    el('p', { class: 'small muted', text: 'Resolution templates rather than creatures: each names the opposed skills, the opposition pool and the Heat consequence (B§6).' })
-  ]);
+  const blocks = panel('Ready-made encounters', PANELS.gmEncounters, []);
   ENCOUNTER_BLOCKS.forEach((block) => {
     const dice = block.resolution.oppositionDice || block.resolution.oppositionDiceStart;
     const card = el('div', { class: 'result' }, [
@@ -126,9 +141,11 @@ export function renderGm(mount) {
     blocks.append(card);
   });
   mount.append(blocks);
+}
 
+function gmTables(mount, rerender) {
   // --- rollable reference tables (§3.21) ---
-  const tables = el('div', { class: 'card' }, [el('h2', { text: 'Rollable tables' })]);
+  const tables = panel('Roll on a table', PANELS.gmTables, []);
   tables.append(el('button', {
     type: 'button', class: 'secondary', text: 'Random encounter (B§7)',
     onclick: () => {
@@ -163,11 +180,31 @@ export function renderGm(mount) {
   }));
   mount.append(tables);
 
+  // --- encounter sizing ---
+  const sizing = panel('How big should this fight be?', {
+    lede: 'A rough guide to how much opposition four players can handle.',
+    detail: ENCOUNTER_SIZING.adventureSizing
+  }, []);
+  const sizingTable = el('table');
+  sizingTable.append(el('tr', {}, [el('th', { text: 'Setup' }), el('th', { text: 'Difficulty' })]));
+  ENCOUNTER_SIZING.table.forEach((row) => sizingTable.append(el('tr', {}, [el('td', { text: row.setup }), el('td', { text: row.difficulty })])));
+  sizing.append(el('div', { class: 'table-wrap' }, [sizingTable]));
+  mount.append(sizing);
+
+  // --- quick reference ---
+  const quick = panel('One-page reference', { lede: 'The book\'s own summary card.', detail: 'Difficulty ladder, symbols, suspicion thresholds, spend shorthand, injury bands, the Oracle and experience awards.' }, []);
+  QUICK_REFERENCE.sections.forEach((section) => {
+    quick.append(el('div', { class: 'result' }, [
+      el('div', { class: 'result-head' }, [el('span', { class: 'result-title', text: section.title })]),
+      el('div', { class: 'result-body', text: section.body })
+    ]));
+  });
+  mount.append(quick);
+}
+
+function gmBuild(mount, rerender) {
   // --- NPC builder from the §12C recipes ---
-  const builder = el('div', { class: 'card' }, [
-    el('h2', { text: 'NPC builder' }),
-    el('p', { class: 'small muted', text: 'NPCs built from the §12C recipes do derive their stats, and are stored as recipe-built so they stay distinguishable from printed blocks (R-15).' })
-  ]);
+  const builder = panel('Build an opponent', PANELS.gmBuild, []);
   ADVERSARY_TIERS.forEach((tier) => {
     builder.append(el('div', { class: 'result' }, [
       el('div', { class: 'result-head' }, [
@@ -239,22 +276,4 @@ export function renderGm(mount) {
   ]);
   mount.append(reflexCard);
 
-  // --- encounter sizing ---
-  const sizing = el('div', { class: 'card' }, [el('h2', { text: 'Encounter sizing (§20B)' })]);
-  const sizingTable = el('table');
-  sizingTable.append(el('tr', {}, [el('th', { text: 'Setup' }), el('th', { text: 'Difficulty' })]));
-  ENCOUNTER_SIZING.table.forEach((row) => sizingTable.append(el('tr', {}, [el('td', { text: row.setup }), el('td', { text: row.difficulty })])));
-  sizing.append(el('div', { class: 'table-wrap' }, [sizingTable]));
-  sizing.append(el('p', { class: 'small muted', text: ENCOUNTER_SIZING.adventureSizing }));
-  mount.append(sizing);
-
-  // --- quick reference ---
-  const quick = el('div', { class: 'card' }, [el('h2', { text: 'Quick reference (§30)' })]);
-  QUICK_REFERENCE.sections.forEach((section) => {
-    quick.append(el('div', { class: 'result' }, [
-      el('div', { class: 'result-head' }, [el('span', { class: 'result-title', text: section.title })]),
-      el('div', { class: 'result-body', text: section.body })
-    ]));
-  });
-  mount.append(quick);
 }

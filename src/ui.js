@@ -119,4 +119,101 @@ export function renderTally(tally) {
   return wrap;
 }
 
+/** A panel that says what it is for, with an expandable "how this works".
+ *  `key` looks the copy up in help.js; `title` is the heading. */
+export function panel(title, helpEntry, children = [], { open = true, id = null } = {}) {
+  const card = el('section', { class: 'card', id });
+  const heading = el('h2', { text: title });
+  card.append(heading);
+  if (helpEntry) {
+    card.append(el('p', { class: 'lede', text: helpEntry.lede }));
+    if (helpEntry.detail) {
+      const details = el('details', { class: 'howto' });
+      details.append(el('summary', { text: 'How this works' }));
+      details.append(el('p', { class: 'small', text: helpEntry.detail }));
+      card.append(details);
+    }
+  }
+  [].concat(children).forEach((child) => { if (child) card.append(child); });
+  return card;
+}
+
+/** A collapsible section. Open state is remembered per key. */
+export function accordion(title, children = [], { key = null, summary = '', defaultOpen = false } = {}) {
+  const storageKey = key ? `reich62:open:${key}` : null;
+  const stored = storageKey ? localStorage.getItem(storageKey) : null;
+  const isOpen = stored === null ? defaultOpen : stored === '1';
+  const details = el('details', { class: 'accordion', open: isOpen });
+  const label = el('summary', {}, [
+    el('span', { class: 'accordion-title', text: title }),
+    summary ? el('span', { class: 'accordion-summary', text: summary }) : null
+  ]);
+  details.append(label);
+  [].concat(children).forEach((child) => { if (child) details.append(child); });
+  if (storageKey) {
+    details.addEventListener('toggle', () => localStorage.setItem(storageKey, details.open ? '1' : '0'));
+  }
+  return details;
+}
+
+/** Sub-navigation inside one screen. Returns the bar; the caller renders the active pane. */
+export function subTabs(tabs, activeId, onSelect) {
+  const bar = el('div', { class: 'subtabs', role: 'tablist' });
+  tabs.forEach((tab) => {
+    bar.append(el('button', {
+      type: 'button',
+      class: `subtab${tab.id === activeId ? ' is-active' : ''}`,
+      role: 'tab',
+      'aria-selected': tab.id === activeId ? 'true' : 'false',
+      text: tab.label,
+      onclick: () => onSelect(tab.id)
+    }));
+  });
+  return bar;
+}
+
+/** An empty state that always offers the next step rather than dead-ending. */
+export function emptyState(message, action = null) {
+  const node = el('div', { class: 'empty-state' }, [el('p', { class: 'muted', text: message })]);
+  if (action) {
+    node.append(el('a', { class: 'empty-action', href: action.href, text: action.label }));
+  }
+  return node;
+}
+
+/** Persistent outcome panel: results stay on screen instead of vanishing with a toast. */
+export function outcomeBox(lines, { tone = 'neutral', title = 'What happened' } = {}) {
+  return el('div', { class: `outcome outcome-${tone}`, 'aria-live': 'polite' }, [
+    el('h3', { text: title }),
+    el('ul', { class: 'small' }, [].concat(lines).filter(Boolean).map((line) => el('li', { text: line })))
+  ]);
+}
+
+/** A number field with direct entry plus coarse and fine steppers. */
+export function numberStepper({ id, label: text, ariaName = null, value, min = 0, max = 99, steps = [1], suffix = '', onChange }) {
+  const name = ariaName || text;
+  const input = el('input', {
+    type: 'number', id, value: String(value), min: String(min), max: String(max),
+    'aria-label': name, inputmode: 'numeric',
+    onchange: (e) => onChange(Math.max(min, Math.min(max, Number(e.target.value) || 0)))
+  });
+  const controls = el('div', { class: 'stepper-controls' });
+  [...steps].reverse().forEach((step) => {
+    controls.append(el('button', {
+      type: 'button', class: 'secondary', text: `−${step}`, 'aria-label': `Lower ${name} by ${step}`,
+      onclick: () => onChange(Math.max(min, value - step))
+    }));
+  });
+  steps.forEach((step) => {
+    controls.append(el('button', {
+      type: 'button', class: 'secondary', text: `+${step}`, 'aria-label': `Raise ${name} by ${step}`,
+      onclick: () => onChange(Math.min(max, value + step))
+    }));
+  });
+  return el('div', { class: 'stepper' }, [
+    el('label', { class: 'stepper-label', for: id, text: suffix ? `${text} ${suffix}` : text }),
+    el('div', { class: 'stepper-row' }, [input, controls])
+  ]);
+}
+
 export { clear };

@@ -2,7 +2,7 @@
 
 import { $ } from './core.js';
 import { applyTheme, cycleTheme } from './settings.js';
-import { startRouter } from './router.js';
+import { startRouter, openScreenMenu } from './router.js';
 import { showToast } from './ui.js';
 
 applyTheme();
@@ -14,6 +14,9 @@ if (themeButton) {
     showToast(`Theme: ${next}`);
   });
 }
+
+const menuButton = $('#screen-menu');
+if (menuButton) menuButton.addEventListener('click', () => openScreenMenu());
 
 startRouter();
 

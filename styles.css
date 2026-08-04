@@ -384,3 +384,104 @@ textarea { min-height: 5rem; }
 @media (min-width: 40rem) {
   .screen { padding: 1.2rem; }
 }
+
+/* --- help layer, sub-tabs, accordions, outcomes (UX pass) --- */
+.lede {
+  font-size: 0.9rem;
+  color: var(--ink);
+  margin: 0 0 0.5rem;
+}
+
+details.howto, details.accordion { border: 1px solid var(--rule); border-radius: var(--radius); }
+details.howto { margin: 0 0 0.6rem; background: var(--panel-2); }
+details.howto > summary,
+details.accordion > summary {
+  cursor: pointer;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.85rem;
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+}
+details.howto > summary::-webkit-details-marker,
+details.accordion > summary::-webkit-details-marker { display: none; }
+details.howto > summary::before,
+details.accordion > summary::before { content: '▸'; margin-right: 0.4rem; color: var(--brass); }
+details[open].howto > summary::before,
+details[open].accordion > summary::before { content: '▾'; }
+details.howto > p { padding: 0 0.6rem 0.6rem; margin: 0; color: var(--ink-soft); }
+
+details.accordion { margin: 0 0 0.5rem; background: var(--panel); }
+details.accordion > *:not(summary) { padding: 0 0.6rem; }
+details.accordion > *:last-child { padding-bottom: 0.6rem; }
+.accordion-title { font-family: var(--font-head); text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.8rem; }
+.accordion-summary { color: var(--ink-soft); font-size: 0.8rem; font-family: var(--font-mono); text-align: right; }
+
+.subtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0 0 var(--gap);
+}
+.subtab {
+  flex: 1 1 auto;
+  min-width: max-content;
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.45rem 0.6rem;
+  min-height: 2.5rem;
+  background: var(--panel);
+  color: var(--ink-soft);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.subtab.is-active { background: var(--panel-2); color: var(--ink); border-color: var(--brass); }
+
+.empty-state {
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius);
+  padding: 0.8rem;
+  text-align: center;
+}
+.empty-action { display: inline-block; margin-top: 0.3rem; font-size: 0.9rem; }
+
+.outcome {
+  border-left: 3px solid var(--brass);
+  background: var(--panel-2);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.7rem;
+  margin: 0.6rem 0;
+}
+.outcome h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.3rem; }
+.outcome ul { margin: 0; padding-left: 1.1rem; }
+.outcome-warn { border-left-color: var(--oxblood); }
+
+.stepper { padding: 0.4rem 0; border-bottom: 1px solid var(--rule); }
+.stepper:last-child { border-bottom: 0; }
+.stepper-label { display: block; font-size: 0.85rem; margin-bottom: 0.25rem; }
+.stepper-row { display: flex; gap: 0.4rem; align-items: center; }
+.stepper-row input[type="number"] { width: 4.5rem; flex: none; text-align: center; font-family: var(--font-mono); }
+.stepper-controls { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+.stepper-controls button { padding: 0.4rem 0.5rem; min-height: 2.5rem; }
+
+.term-note { color: var(--ink-soft); font-size: 0.75rem; }
+
+.checklist { list-style: none; margin: 0; padding: 0; }
+.checklist li { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.45rem 0; border-bottom: 1px solid var(--rule); }
+.checklist li:last-child { border-bottom: 0; }
+.checklist .tick { font-family: var(--font-mono); color: var(--brass); }
+.checklist .done { color: var(--ink-soft); text-decoration: line-through; }
+
+.menu-item {
+  display: block;
+  padding: 0.6rem 0.4rem;
+  border-bottom: 1px solid var(--rule);
+  text-decoration: none;
+  color: var(--ink);
+}
+.menu-item:last-child { border-bottom: 0; }
+.menu-title { font-family: var(--font-head); text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.85rem; }

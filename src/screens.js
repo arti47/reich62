@@ -2,8 +2,9 @@
 
 import { el, clear, $ } from './core.js';
 import { Settings, FLAGS, theme, cycleTheme } from './settings.js';
-import { modal, showToast, confirmModal } from './ui.js';
-import { listCharacters, activeCharacter, getCell, exportAll, importAll } from './store.js';
+import { modal, showToast, confirmModal, panel, subTabs, emptyState } from './ui.js';
+import { PANELS, MODES, TERMS, label as termLabel } from './help.js';
+import { listCharacters, activeCharacter, getCell, exportAll, importAll, setActiveCharacter } from './store.js';
 import { buildIndex, search } from './rules-index.js';
 import { BASE_WOUND_THRESHOLD, BASE_STRAIN_THRESHOLD, CREATION_RULES, DIE_FACES } from '../data.js';
 
@@ -13,45 +14,72 @@ export function renderHome(mount) {
   const cell = getCell();
   const characters = listCharacters();
 
-  mount.append(el('div', { class: 'card' }, [
-    el('h2', { text: 'Dossier' }),
-    el('p', { class: 'muted small', text: 'A player-character companion for REICH \'62: creation, in-play tracking, the narrative dice engine, and the Heat system.' }),
-    el('p', { class: 'small' }, [
-      el('span', { class: 'badge badge-inferred', text: 'R-B1' }),
-      ' ',
-      DIE_FACES === null
-        ? 'The manual never prints die face distributions, so the roller takes entered symbols: roll physical dice, tap what came up, and the app resolves everything else.'
-        : 'Face data supplied — the simulated roller can be enabled in Settings.'
-    ])
+  // --- start here: numbered next steps, ticking off as they are done ---
+  const steps = [
+    { id: 'mode', label: 'Pick the seat you play in', done: Settings.modeChosen(), href: '#/settings', hint: `Currently: ${(MODES.find((m) => m.id === Settings.mode()) || MODES[0]).name}` },
+    { id: 'character', label: 'Create a character, or load one of the three ready-made ones', done: characters.length > 0, href: '#/create', hint: 'Takes about five minutes; the app checks every rule as you go.' },
+    { id: 'roll', label: 'Try a check on the Roll screen', done: readLogLength() > 0, href: '#/roll', hint: 'Roll your dice, tap what came up, and the app does the rest.' },
+    { id: 'cell', label: 'Name your network', done: !!cell.name, href: '#/gm', hint: 'Optional. Shared suspicion and story points live here.' }
+  ];
+  const remaining = steps.filter((s2) => !s2.done).length;
+  const list = el('ol', { class: 'checklist' });
+  steps.forEach((step, index) => {
+    list.append(el('li', {}, [
+      el('span', { class: 'tick', text: step.done ? '✓' : `${index + 1}.` }),
+      el('span', { class: step.done ? 'done' : '' }, [
+        el('a', { href: step.href, text: step.label }),
+        el('span', { class: 'toggle-desc', text: step.hint })
+      ])
+    ]));
+  });
+  mount.append(panel(remaining ? 'Start here' : 'Set up', PANELS.homeChecklist, [
+    list,
+    remaining === 0 ? el('p', { class: 'small muted', text: 'All set. This list stays here if you want to change anything.' }) : null
   ]));
 
-  mount.append(el('div', { class: 'card' }, [
-    el('h2', { text: 'Characters' }),
-    characters.length
-      ? el('ul', {}, characters.map((c) => el('li', { text: `${c.identity.name || 'Unnamed'} — ${c.identity.career || 'no career'}` })))
-      : el('p', { class: 'muted', text: 'No characters yet. The creation wizard arrives in Phase 1.' }),
-    character ? el('p', { class: 'small muted', text: `Active: ${character.identity.name || 'Unnamed'}` }) : null
-  ]));
+  // --- characters ---
+  const charBody = [];
+  if (characters.length) {
+    characters.forEach((c) => {
+      const isActive = character && character.id === c.id;
+      charBody.push(el('div', { class: 'result' }, [
+        el('div', { class: 'result-head' }, [
+          el('span', { class: 'result-title', text: c.identity.name || 'Unnamed' }),
+          el('span', { class: 'cite', text: isActive ? 'active' : '' })
+        ]),
+        el('div', { class: 'result-body', text: `${titleCaseCareer(c.identity.career)} · ${c.xp.available} experience unspent` }),
+        isActive
+          ? el('a', { class: 'small', href: '#/sheet', text: 'Open the sheet' })
+          : el('button', {
+              type: 'button', class: 'secondary', text: 'Make active',
+              onclick: () => { setActiveCharacter(c.id); renderHome(mount); }
+            })
+      ]));
+    });
+  } else {
+    charBody.push(emptyState('No characters yet.', { href: '#/create', label: 'Create one now' }));
+  }
+  mount.append(panel('Characters', PANELS.homeCharacters, charBody));
 
-  mount.append(el('div', { class: 'card' }, [
-    el('h2', { text: 'Cell' }),
+  // --- the cell ---
+  mount.append(panel(termLabel('cell'), PANELS.homeCell, [
     el('div', { class: 'stat-grid' }, [
-      stat('Cell Heat', `${cell.cellHeat} / 5`),
+      stat(termLabel('cellHeat'), `${cell.cellHeat} / 5`),
       stat('Safehouse', cell.safehouseStatus),
-      stat('Story Points (players)', cell.pools.storyPointsPlayer),
-      stat('Story Points (GM)', cell.pools.storyPointsGM)
+      stat('Story points, players', cell.pools.storyPointsPlayer),
+      stat('Story points, GM', cell.pools.storyPointsGM)
     ]),
-    el('p', { class: 'small muted', text: 'Cell Heat is shared across the whole network (§17.2). The GM pool starts empty and fills only from player spends (R-4).' })
+    el('p', { class: 'small muted', text: cell.name ? `Network: ${cell.name}` : 'Unnamed network — name it on the GM screen.' })
   ]));
+}
 
-  mount.append(el('div', { class: 'card' }, [
-    el('h2', { text: 'Derived-stat bases' }),
-    el('p', { class: 'small' }, [
-      el('span', { class: 'badge badge-inferred', text: 'inferred' }), ' ',
-      `Wound Threshold ${BASE_WOUND_THRESHOLD} + Brawn, Strain Threshold ${BASE_STRAIN_THRESHOLD} + Willpower. `,
-      'The manual never prints the human archetype base (§6); these are ruling R-1, taken from the pregens that agree.'
-    ])
-  ]));
+function titleCaseCareer(id) {
+  if (!id) return 'no career';
+  return String(id).replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
+}
+
+function readLogLength() {
+  try { return JSON.parse(localStorage.getItem('reich62:rollLog') || '[]').length; } catch { return 0; }
 }
 
 function stat(label, value) {
@@ -63,10 +91,22 @@ function stat(label, value) {
 
 let index = null;
 
+const RULE_GROUPS = [
+  { id: 'all',      label: 'All',        match: () => true },
+  { id: 'dice',     label: 'Dice',       match: (e) => /^§1|^§2|^§3/.test(e.cite || '') },
+  { id: 'combat',   label: 'Combat',     match: (e) => /^§5/.test(e.cite || '') },
+  { id: 'character', label: 'Character',  match: (e) => /^§4|^§6|^§7|^§12A|^§12B|^§13|^§14$/.test(e.cite || '') },
+  { id: 'gear',     label: 'Gear',       match: (e) => /^§10|^§14|^§15/.test(e.cite || '') },
+  { id: 'heat',     label: 'Suspicion',  match: (e) => /^§17/.test(e.cite || '') },
+  { id: 'foes',     label: 'Opponents',  match: (e) => /^§12C|^§12D|^§20|^B§/.test(e.cite || '') }
+];
+let ruleGroup = 'all';
+
 export function renderRules(mount, params = {}) {
   clear(mount);
   if (!index) index = buildIndex();
   const initialQuery = params.q || '';
+  if (initialQuery) ruleGroup = 'all';
 
   const results = el('div', { class: 'card', id: 'rules-results' });
   const input = el('input', {
@@ -77,11 +117,14 @@ export function renderRules(mount, params = {}) {
     'aria-label': 'Search the rules library'
   });
 
+  const PAGE = 25;
+  let shown = PAGE;
   const draw = (query) => {
     clear(results);
-    const hits = search(index, query);
+    const group = RULE_GROUPS.find((g) => g.id === ruleGroup) || RULE_GROUPS[0];
+    const hits = search(index, query).filter(group.match);
     results.append(el('p', { class: 'small muted', text: `${hits.length} of ${index.length} entries` }));
-    hits.slice(0, 80).forEach((entry) => {
+    hits.slice(0, shown).forEach((entry) => {
       results.append(el('div', { class: 'result' }, [
         el('div', { class: 'result-head' }, [
           el('span', { class: 'result-title', text: entry.title }),
@@ -91,15 +134,23 @@ export function renderRules(mount, params = {}) {
         entry.badge ? el('span', { class: `badge ${entry.badgeClass || ''}`, text: entry.badge }) : null
       ]));
     });
-    if (hits.length > 80) results.append(el('p', { class: 'small muted', text: 'Refine the search to see more.' }));
+    if (hits.length > shown) {
+      results.append(el('button', {
+        type: 'button', class: 'secondary', id: 'rules-more',
+        text: `Show ${Math.min(PAGE, hits.length - shown)} more of ${hits.length - shown}`,
+        onclick: () => { shown += PAGE; draw(input.value); }
+      }));
+    }
   };
 
-  input.addEventListener('input', () => draw(input.value));
+  input.addEventListener('input', () => { shown = PAGE; draw(input.value); });
 
-  mount.append(el('div', { class: 'card search-row' }, [
-    el('h2', { text: 'Rules library' }),
-    input,
-    el('p', { class: 'small muted', text: 'Every entry is cited: §x is the manual, B§x the bestiary. Search by section number, name or effect.' })
+  mount.append(panel('Rules library', {
+    lede: 'Look up any rule the app uses. Search by name, by what it does, or by section number.',
+    detail: 'Every entry names its source: §x is the core manual, B§x the bestiary, D§ the die faces. Links elsewhere in the app drop you straight here on the right entry.'
+  }, [
+    subTabs(RULE_GROUPS, ruleGroup, (id) => { ruleGroup = id; renderRules(mount, params); }),
+    input
   ]));
   mount.append(results);
   draw(initialQuery);
@@ -128,7 +179,31 @@ export function renderSafety(mount) {
 export function renderSettings(mount) {
   clear(mount);
 
-  const flagCard = el('div', { class: 'card' }, [el('h2', { text: 'Toggles' })]);
+  // --- seat mode: the single biggest lever on how much interface you see ---
+  const modeBody = [];
+  MODES.forEach((mode) => {
+    modeBody.push(el('div', { class: 'toggle-row' }, [
+      el('input', {
+        type: 'radio', name: 'mode', id: `mode-${mode.id}`, checked: Settings.mode() === mode.id,
+        onchange: () => {
+          Settings.setMode(mode.id);
+          showToast(`${mode.name} mode — the tabs now match`);
+          document.dispatchEvent(new CustomEvent('nav:refresh'));
+          renderSettings(mount);
+        }
+      }),
+      el('label', { for: `mode-${mode.id}` }, [
+        el('span', { text: mode.name }),
+        el('span', { class: 'toggle-desc', text: `${mode.desc}${mode.tabs ? ` Tabs: ${mode.tabs.join(', ')}.` : ''}` })
+      ])
+    ]));
+  });
+  mount.append(panel('Your seat', PANELS.settingsMode, modeBody));
+
+  const flagCard = panel('Options', {
+    lede: 'Extra screens and behaviour. Everything here is off until you turn it on.',
+    detail: 'Turning a screen on adds its tab; turning it off only hides it, and nothing you have entered is lost.'
+  }, []);
   FLAGS.forEach((flag) => {
     const blocked = Settings.isBlocked(flag.id);
     const input = el('input', {
@@ -161,22 +236,24 @@ export function renderSettings(mount) {
     type: 'text', value: Settings.currencyLabel(), id: 'currency-label',
     onchange: (e) => { Settings.set('currencyLabel', e.target.value.trim() || 'credits'); showToast('Currency label saved'); }
   });
-  mount.append(el('div', { class: 'card' }, [
-    el('h2', {}, ['House aids ', el('span', { class: 'badge badge-house', text: 'not a printed rule' })]),
-    el('p', { class: 'small muted', text: `The manual states neither a currency name nor a starting budget (${CREATION_RULES.houseAid.ruling}). Both are yours to set.` }),
-    el('label', { for: 'currency-label', class: 'small', text: 'Currency label' }), currency,
-    el('label', { for: 'starting-budget', class: 'small', text: 'Starting gear budget' }), budget
+  mount.append(panel('House aids', PANELS.settingsHouse, [
+    el('p', {}, [el('span', { class: 'badge badge-house', text: 'not a printed rule' })]),
+    el('label', { for: 'currency-label', class: 'small', text: 'What money is called' }), currency,
+    el('label', { for: 'starting-budget', class: 'small', text: 'Money a new character starts with' }), budget
   ]));
 
-  mount.append(el('div', { class: 'card' }, [
-    el('h2', { text: 'Theme' }),
-    el('p', { class: 'small muted', text: `Currently: ${theme()}. The default follows the system setting.` }),
-    el('button', { type: 'button', class: 'secondary', text: 'Cycle theme', onclick: () => { cycleTheme(); renderSettings(mount); } })
+  mount.append(panel('Appearance', {
+    lede: 'Light or dark. By default the app follows your device.',
+    detail: 'The dark theme is the one the app is designed around; the light theme is the same palette inverted for bright rooms.'
+  }, [
+    el('p', { class: 'small muted', text: `Currently: ${theme()}.` }),
+    el('button', { type: 'button', class: 'secondary', text: 'Switch: system → dark → light', onclick: () => { cycleTheme(); renderSettings(mount); } })
   ]));
 
-  mount.append(el('div', { class: 'card' }, [
-    el('h2', { text: 'Backup' }),
-    el('p', { class: 'small muted', text: 'Everything is stored on this device. Export before clearing browser data.' }),
+  mount.append(panel('Backup', {
+    lede: 'Everything lives on this device only. Export a copy before clearing your browser data.',
+    detail: 'The export is a single JSON file holding every character, your network and your settings. Importing one replaces what is on this device, so the app asks first.'
+  }, [
     el('button', {
       type: 'button', class: 'secondary', text: 'Export JSON',
       onclick: () => {
@@ -207,11 +284,10 @@ export function renderSettings(mount) {
     })
   ]));
 
-  mount.append(el('div', { class: 'card' }, [
-    el('h2', { text: 'Safety tools' }),
-    el('p', { class: 'small muted', text: 'Session zero and rule zero, paraphrased from §20A.' }),
-    el('a', { href: '#/safety', class: 'small', text: 'Open the safety-tools note' })
-  ]));
+  mount.append(panel('Safety tools', {
+    lede: 'The conversation worth having before the first session, and the GM\'s right to overrule anything.',
+    detail: 'This setting has a real-world atrocity backdrop. The book asks groups to agree boundaries up front and gives everyone a private way to flag a topic.'
+  }, [el('a', { href: '#/safety', class: 'small', text: 'Open the safety-tools note' })]));
 
   mount.append(el('div', { class: 'card' }, [
     el('h2', { text: 'About' }),

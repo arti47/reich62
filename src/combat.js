@@ -2,7 +2,8 @@
 // the generic progress-task tracker, and the scene/session lifecycle engine.
 
 import { el, clear, titleCase, uid, clamp, rollDie } from './core.js';
-import { showToast, confirmModal, modal } from './ui.js';
+import { showToast, confirmModal, modal, panel, accordion, emptyState, outcomeBox } from './ui.js';
+import { PANELS } from './help.js';
 import {
   MANEUVER_RULES, COMBAT_SEQUENCE, LIFECYCLE, RECOVERY, HEAT, XP_AWARDS, RANGE_BANDS
 } from '../data.js';
@@ -564,16 +565,18 @@ export function undoLastBoundary() {
 // Rendering
 // ---------------------------------------------------------------------------
 
+let lastBoundaryResult = null;
+
 export function renderCombat(mount) {
   clear(mount);
   const rerender = () => renderCombat(mount);
   const combat = getCombat();
+  if (lastBoundaryResult) {
+    mount.append(outcomeBox([`${lastBoundaryResult.name} applied.`, ...lastBoundaryResult.deltas, 'Undo is available below until you fire another boundary.'], { title: 'What just happened' }));
+  }
 
   // --- lifecycle controls ---
-  const lifecycle = el('div', { class: 'card' }, [
-    el('h2', { text: 'Lifecycle' }),
-    el('p', { class: 'small muted', text: 'Each boundary fires its whole bundle, shows every delta first, and can be undone in one step (§21–§24).' })
-  ]);
+  const lifecycle = panel('Wrapping up', PANELS.combatLifecycle, []);
   const sessionOptions = { downtime: false, motivationPlay: false, lengthAdjustment: 0 };
   LIFECYCLE.boundaries.forEach((boundary) => {
     lifecycle.append(el('button', {
@@ -598,7 +601,7 @@ export function renderCombat(mount) {
         m.onClose((confirmed) => {
           if (!confirmed) return;
           const result = fireBoundary(boundary.id, sessionOptions);
-          showToast(`${boundary.name} applied — undo available`);
+          lastBoundaryResult = { name: boundary.name, deltas: result.deltas };
           rerender();
         });
       }
@@ -614,10 +617,7 @@ export function renderCombat(mount) {
   mount.append(lifecycle);
 
   // --- initiative ---
-  const initiative = el('div', { class: 'card' }, [
-    el('h2', { text: combat.active ? `Combat — round ${combat.round}` : 'Combat' }),
-    el('p', { class: 'small muted', text: COMBAT_SEQUENCE.slotFilling.summary })
-  ]);
+  const initiative = panel(combat.active ? `Turn order — round ${combat.round}` : 'Turn order', PANELS.combatInitiative, []);
 
   if (!combat.active) {
     const rolls = [];
@@ -683,7 +683,7 @@ export function renderCombat(mount) {
   mount.append(initiative);
 
   // --- combatants ---
-  const roster = el('div', { class: 'card' }, [el('h3', { text: 'Combatants' })]);
+  const roster = panel('Who is in the fight', PANELS.combatRoster, []);
   const character = activeCharacter();
   if (character) {
     roster.append(el('button', {
@@ -698,6 +698,9 @@ export function renderCombat(mount) {
     onclick: () => { const r = addFromBestiary(bestiarySelect.value); if (!r.ok) showToast(r.reason); rerender(); }
   }));
 
+  if (!Object.keys(combat.combatants).length) {
+    roster.append(emptyState('Nobody in the fight yet. Add your character, or drop an opponent in from the list above.'));
+  }
   Object.values(combat.combatants).forEach((c) => {
     const card = el('div', { class: 'result' }, [
       el('div', { class: 'result-head' }, [
@@ -721,25 +724,31 @@ export function renderCombat(mount) {
     card.append(el('button', { type: 'button', class: 'secondary', text: 'Action', onclick: () => { const r = spendAction(c.id); showToast(r.ok ? 'Action used' : r.reason); rerender(); } }));
     card.append(el('button', { type: 'button', class: 'secondary', text: '+1 wound', onclick: () => { const r = damageCombatant(c.id, { wounds: 1 }); r.notes.forEach((n) => showToast(n)); rerender(); } }));
     card.append(el('button', { type: 'button', class: 'secondary', text: 'Critical', onclick: () => { const r = damageCombatant(c.id, { critical: true }); r.notes.forEach((n) => showToast(n)); rerender(); } }));
-    card.append(el('button', { type: 'button', class: 'secondary', text: 'Remove', onclick: () => { removeCombatant(c.id); rerender(); } }));
+    card.append(el('button', {
+      type: 'button', class: 'secondary', text: 'Remove',
+      onclick: async () => {
+        if (!(await confirmModal(`Take ${c.name} out of the fight? Their wounds and state are lost.`, { title: 'Remove combatant', confirmLabel: 'Remove' }))) return;
+        removeCombatant(c.id); rerender();
+      }
+    }));
     if (c.defeated) card.append(el('p', { class: 'small', text: 'Out of the fight.' }));
     roster.append(card);
   });
   mount.append(roster);
 
   // --- vehicles (§12) ---
-  const vehicleCard = el('div', { class: 'card' }, [
-    el('h3', { text: 'Vehicles' }),
-    el('p', { class: 'small muted', text: `${VEHICLE_RULES.scale} ${VEHICLE_RULES.turnOrder}` })
+  const vehicleBody = el('div', {});
+  const vehicleCard = panel('Vehicles', PANELS.combatVehicles, [
+    accordion('Add or manage a vehicle', [vehicleBody], { key: 'combat-vehicles', summary: `${Object.keys(combat.vehicles || {}).length} in play` })
   ]);
   const vehiclePick = el('select', { id: 'vehicle-pick', 'aria-label': 'Vehicle' });
   VEHICLES.forEach((v) => vehiclePick.append(el('option', { value: v.id, text: `${v.name} (sil ${v.silhouette})` })));
-  vehicleCard.append(vehiclePick, el('button', {
+  vehicleBody.append(vehiclePick, el('button', {
     type: 'button', class: 'secondary', text: 'Add vehicle',
     onclick: () => { addVehicle(vehiclePick.value); rerender(); }
   }));
   Object.values(combat.vehicles || {}).forEach((v) => {
-    vehicleCard.append(el('div', { class: 'result' }, [
+    vehicleBody.append(el('div', { class: 'result' }, [
       el('div', { class: 'result-head' }, [
         el('span', { class: 'result-title', text: v.name }),
         el('span', { class: 'cite', text: `sil ${v.silhouette} · handling ${v.handling >= 0 ? '+' : ''}${v.handling}` })
@@ -750,7 +759,13 @@ export function renderCombat(mount) {
       el('button', { type: 'button', class: 'secondary', text: '+1 system strain', onclick: () => { vehicleDamage(v.id, { systemStrain: 1 }); rerender(); } }),
       el('button', { type: 'button', class: 'secondary', text: 'Damage Control', onclick: () => { const r = repairSystemStrain(v.id); showToast(r.note); rerender(); } }),
       el('button', { type: 'button', class: 'secondary', text: 'Crash', onclick: () => { const r = crashVehicle(v.id); showToast(r.note); rerender(); } }),
-      el('button', { type: 'button', class: 'secondary', text: 'Remove', onclick: () => { removeVehicle(v.id); rerender(); } })
+      el('button', {
+        type: 'button', class: 'secondary', text: 'Remove',
+        onclick: async () => {
+          if (!(await confirmModal(`Remove ${v.name}? Its damage is lost.`, { title: 'Remove vehicle', confirmLabel: 'Remove' }))) return;
+          removeVehicle(v.id); rerender();
+        }
+      })
     ]));
   });
   mount.append(vehicleCard);
@@ -766,10 +781,7 @@ export function renderCombat(mount) {
 
   // --- progress tasks ---
   const tasks = listTasks();
-  const taskCard = el('div', { class: 'card' }, [
-    el('h3', { text: 'Progress tasks' }),
-    el('p', { class: 'small muted', text: 'One tracker for Heat, repairs, ad-hoc clocks and the Manhunt/Dragnet extended check (§3.13, B§6).' })
-  ]);
+  const taskCard = panel('Things that take a while', PANELS.combatTasks, []);
   const taskName = el('input', { type: 'text', id: 'task-name', placeholder: 'Name', 'aria-label': 'Task name' });
   const taskKind = el('select', { id: 'task-kind', 'aria-label': 'Task kind' }, [
     el('option', { value: 'clock', text: 'Ad-hoc clock (house aid)' }),
@@ -806,7 +818,13 @@ export function renderCombat(mount) {
       card.append(el('button', { type: 'button', class: 'secondary', text: '+1', onclick: () => { advanceTask(task.id, 1); rerender(); } }));
       card.append(el('button', { type: 'button', class: 'secondary', text: '−1', onclick: () => { advanceTask(task.id, -1); rerender(); } }));
     }
-    card.append(el('button', { type: 'button', class: 'secondary', text: 'Close', onclick: () => { closeTask(task.id); rerender(); } }));
+    card.append(el('button', {
+      type: 'button', class: 'secondary', text: 'Close',
+      onclick: async () => {
+        if (!(await confirmModal(`Close "${task.name}"? Its progress is discarded.`, { title: 'Close task', confirmLabel: 'Close it' }))) return;
+        closeTask(task.id); rerender();
+      }
+    }));
     taskCard.append(card);
   });
   mount.append(taskCard);

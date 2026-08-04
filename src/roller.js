@@ -4,7 +4,8 @@
 // cancels symbols, applies spends, damage, Critical Injuries and Heat, and writes the log.
 
 import { el, clear, titleCase, newTally, cancel, outcome, rollDie, rollFace, clamp } from './core.js';
-import { showToast, renderTally, modal } from './ui.js';
+import { showToast, renderTally, modal, panel, accordion, outcomeBox, numberStepper, emptyState } from './ui.js';
+import { PANELS, label as termLabel, gloss } from './help.js';
 import {
   SKILLS, DIFFICULTIES, SPEND_TABLES, STORY_POINTS, CRITICAL_INJURY_RULES, DIE_FACES,
   RANGED_DIFFICULTY_BY_RANGE, COMBAT_CHECK_PROCEDURE
@@ -48,6 +49,7 @@ export const state = {
   publicCheck: true,
   entered: newTally(),
   lastDice: null,
+  lastOutcome: null,
   context: 'combat',
   spendTriumphOnHeat: false,
   // Situational modifiers the manual defines (§5E, §5J) and the two Story Point die
@@ -324,7 +326,7 @@ export function renderRoller(mount) {
   const character = activeCharacter();
   const rerender = () => renderRoller(mount);
 
-  const setup = el('div', { class: 'card' }, [el('h2', { text: 'Check' })]);
+  const setup = panel('What are you attempting?', PANELS.rollCheck, []);
 
   const skillSelect = el('select', { id: 'roller-skill', 'aria-label': 'Skill', onchange: (e) => { state.skillId = e.target.value; rerender(); } });
   SKILLS.forEach((s) => skillSelect.append(el('option', { value: s.id, text: `${s.name} (${titleCase(s.characteristic)})`, selected: state.skillId === s.id })));
@@ -347,32 +349,34 @@ export function renderRoller(mount) {
   mount.append(setup);
 
   // --- situational modifiers (§5E, §5J) and die modifications (§2.4, §8) ---
-  const situational = el('div', { class: 'card' }, [el('h3', { text: 'Situation' })]);
+  const situationBody = el('div', {});
+  const situational = panel('The situation', PANELS.rollSituation, [situationBody]);
   if (!Settings.advancedAutomation()) {
-    situational.append(el('p', { class: 'small muted', text: 'Automatic dice are listed for confirmation. Switch on advanced automation in Settings to apply them without asking.' }));
-    situational.append(toggle('auto-conditions', 'Apply condition dice (§3.9)', state.autoDice.conditions, (v) => { state.autoDice.conditions = v; rerender(); }));
-    situational.append(toggle('auto-encumbrance', 'Apply encumbrance dice (§5F)', state.autoDice.encumbrance, (v) => { state.autoDice.encumbrance = v; rerender(); }));
-    situational.append(toggle('auto-heat', 'Apply Heat threshold dice (§17.3)', state.autoDice.heat, (v) => { state.autoDice.heat = v; rerender(); }));
+    situationBody.append(el('p', { class: 'small muted', text: 'Automatic dice are listed for confirmation. Switch on advanced automation in Settings to apply them without asking.' }));
+    situationBody.append(toggle('auto-conditions', 'Apply condition dice (§3.9)', state.autoDice.conditions, (v) => { state.autoDice.conditions = v; rerender(); }));
+    situationBody.append(toggle('auto-encumbrance', 'Apply encumbrance dice (§5F)', state.autoDice.encumbrance, (v) => { state.autoDice.encumbrance = v; rerender(); }));
+    situationBody.append(toggle('auto-heat', 'Apply Heat threshold dice (§17.3)', state.autoDice.heat, (v) => { state.autoDice.heat = v; rerender(); }));
   } else {
     state.autoDice = { conditions: true, encumbrance: true, heat: true };
-    situational.append(el('p', { class: 'small muted', text: 'Advanced automation is on: condition, encumbrance and Heat dice are applied without prompting.' }));
+    situationBody.append(el('p', { class: 'small muted', text: 'Advanced automation is on: condition, encumbrance and Heat dice are applied without prompting.' }));
   }
   const concealSelect = el('select', { id: 'roller-concealment-role', 'aria-label': 'Concealment role', onchange: (e) => { state.concealmentRole = e.target.value; rerender(); } });
   [['none', 'No concealment'], ['hiding', 'I am the concealed one'], ['observing', 'My target is concealed']]
     .forEach(([value, label]) => concealSelect.append(el('option', { value, text: label, selected: state.concealmentRole === value })));
-  situational.append(el('label', { class: 'small', for: 'roller-concealment-role', text: 'Concealment (§5E)' }), concealSelect);
-  situational.append(numberField('roller-concealment', 'Concealment dice (1 mist · 2 fog or dusk · 3 night or smoke)', state.concealment, (v) => { state.concealment = v; rerender(); }));
-  situational.append(toggle('roller-cover', 'Behind cover (§5E)', state.cover, (v) => { state.cover = v; rerender(); }));
-  situational.append(numberField('roller-silhouette', 'Target silhouette minus mine (§5J)', state.silhouetteDelta, (v) => { state.silhouetteDelta = v; rerender(); }));
-  situational.append(numberField('roller-adversary', 'Target\'s Adversary rank (§12C)', state.targetAdversary, (v) => { state.targetAdversary = v; rerender(); }));
-  situational.append(citation('§5E'));
+  situationBody.append(el('label', { class: 'small', for: 'roller-concealment-role', text: 'Concealment (§5E)' }), concealSelect);
+  situationBody.append(numberField('roller-concealment', 'Concealment dice (1 mist · 2 fog or dusk · 3 night or smoke)', state.concealment, (v) => { state.concealment = v; rerender(); }));
+  situationBody.append(toggle('roller-cover', 'Behind cover (§5E)', state.cover, (v) => { state.cover = v; rerender(); }));
+  situationBody.append(numberField('roller-silhouette', 'Target silhouette minus mine (§5J)', state.silhouetteDelta, (v) => { state.silhouetteDelta = v; rerender(); }));
+  situationBody.append(numberField('roller-adversary', 'Target\'s Adversary rank (§12C)', state.targetAdversary, (v) => { state.targetAdversary = v; rerender(); }));
+  situationBody.append(citation('§5E'));
 
-  situational.append(el('h3', { text: 'Die modifications (§2.4)' }));
-  situational.append(numberField('roller-upgrade-ability', 'Upgrade Ability → Proficiency', state.upgradeAbility, (v) => { state.upgradeAbility = v; rerender(); }));
-  situational.append(numberField('roller-downgrade-ability', 'Downgrade Proficiency → Ability', state.downgradeAbility, (v) => { state.downgradeAbility = v; rerender(); }));
-  situational.append(numberField('roller-upgrade-difficulty', 'Upgrade Difficulty → Challenge', state.upgradeDifficulty, (v) => { state.upgradeDifficulty = v; rerender(); }));
-  situational.append(numberField('roller-downgrade-difficulty', 'Downgrade Challenge → Difficulty', state.downgradeDifficulty, (v) => { state.downgradeDifficulty = v; rerender(); }));
-  situational.append(el('button', {
+  const modBody = el('div', {});
+  situationBody.append(accordion('Change the dice by hand', [modBody], { key: 'roll-mods', summary: 'upgrade, downgrade, spend a story point' }));
+  modBody.append(numberField('roller-upgrade-ability', 'Upgrade Ability → Proficiency', state.upgradeAbility, (v) => { state.upgradeAbility = v; rerender(); }));
+  modBody.append(numberField('roller-downgrade-ability', 'Downgrade Proficiency → Ability', state.downgradeAbility, (v) => { state.downgradeAbility = v; rerender(); }));
+  modBody.append(numberField('roller-upgrade-difficulty', 'Upgrade Difficulty → Challenge', state.upgradeDifficulty, (v) => { state.upgradeDifficulty = v; rerender(); }));
+  modBody.append(numberField('roller-downgrade-difficulty', 'Downgrade Challenge → Difficulty', state.downgradeDifficulty, (v) => { state.downgradeDifficulty = v; rerender(); }));
+  modBody.append(el('button', {
     type: 'button', class: 'secondary', id: 'spend-story-point-upgrade',
     text: 'Spend a Story Point to upgrade (§8)',
     onclick: () => {
@@ -384,20 +388,18 @@ export function renderRoller(mount) {
       rerender();
     }
   }));
-  situational.append(citation('§8'));
+  modBody.append(citation('§8'));
   mount.append(situational);
 
   const { pool, notes } = assemblePool(character);
-  const poolCard = el('div', { class: 'card' }, [
-    el('h3', { text: 'Pool' }),
+  const poolCard = panel('Your dice', PANELS.rollPool, [
     el('p', { class: 'dice-glyph', text: describePool(pool) }),
     el('ul', { class: 'small muted' }, notes.map((n) => el('li', { text: n }))),
     citation('§2')
   ]);
   mount.append(poolCard);
 
-  const entry = el('div', { class: 'card' }, [
-    el('h3', { text: 'Enter the symbols you rolled' }),
+  const entry = panel('What did you roll?', PANELS.rollEntry, [
     el('p', { class: 'small' }, [
       el('span', { class: 'badge badge-inferred', text: 'R-B1' }), ' ',
       DIE_FACES === null
@@ -434,11 +436,14 @@ export function renderRoller(mount) {
   mount.append(entry);
 
   const { result, heat } = resolve(character);
-  const resultCard = el('div', { class: 'card', id: 'roll-result', 'aria-live': 'polite' }, [
-    el('h3', { text: result.success ? 'Success' : 'Failure' }),
+  if (state.lastOutcome) mount.append(outcomeBox(state.lastOutcome, { title: 'Last check' }));
+
+  const resultCard = panel(result.success ? 'It worked' : 'It failed', PANELS.rollResult, [], { id: 'roll-result' });
+  resultCard.append(
+    el('p', { class: 'small muted', text: result.success ? 'At least one success survived cancellation.' : 'No success survived cancellation.' }),
     el('p', {}, [renderTally(result.net)]),
-    heat.reasons.length ? el('ul', { class: 'small' }, heat.reasons.map((r) => el('li', { text: r }))) : null
-  ]);
+    heat.reasons.length ? el('ul', { class: 'small' }, heat.reasons.map((r) => el('li', { text: r }))) : el('span', {})
+  );
 
   const spends = availableSpends(state.context, result.net);
   if (spends.length) {
@@ -469,9 +474,14 @@ export function renderRoller(mount) {
     type: 'button', class: 'primary', text: 'Log this check',
     onclick: () => {
       const committed = commit(character);
-      let message = `Logged: ${committed.entry.outcome}`;
-      if (committed.heatApplied) message += ` · Personal Heat ${committed.heatApplied.before} → ${committed.heatApplied.after}`;
-      showToast(message);
+      const lines = [`Logged as a ${committed.entry.outcome}.`];
+      committed.heat.reasons.forEach((r) => lines.push(r));
+      if (committed.heatApplied) {
+        lines.push(`Suspicion on you: ${committed.heatApplied.before} → ${committed.heatApplied.after}.`);
+        committed.heatApplied.crossed.forEach((t) => lines.push(`Now at level ${t.level}: ${t.personal}`));
+        if (committed.heatApplied.escalation) lines.push(`Network suspicion ${committed.heatApplied.escalation.before} → ${committed.heatApplied.escalation.after}: ${committed.heatApplied.escalation.reason}`);
+      }
+      state.lastOutcome = lines;
       state.entered = newTally();
       state.lastDice = null;
       rerender();
@@ -482,10 +492,11 @@ export function renderRoller(mount) {
   mount.append(resultCard);
 
   const log = readLog().slice(0, 12);
-  const logCard = el('div', { class: 'card' }, [el('h3', { text: 'Roll log' })]);
-  if (!log.length) logCard.append(el('p', { class: 'muted small', text: 'Nothing logged yet.' }));
+  const logBody = el('div', {});
+  const logCard = panel('Recent checks', PANELS.rollLog, [logBody]);
+  if (!log.length) logBody.append(emptyState('Nothing logged yet — resolve a check and it lands here.'));
   log.forEach((item) => {
-    logCard.append(el('div', { class: 'result' }, [
+    logBody.append(el('div', { class: 'result' }, [
       el('div', { class: 'result-head' }, [
         el('span', { class: 'result-title', text: `${titleCase(item.skill)} — ${item.outcome}` }),
         el('span', { class: 'cite', text: new Date(item.ts).toLocaleTimeString() })

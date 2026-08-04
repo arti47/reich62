@@ -2,7 +2,8 @@
 // resource header that rides on every in-play screen.
 
 import { el, clear, titleCase, clamp } from './core.js';
-import { showToast, confirmModal } from './ui.js';
+import { showToast, confirmModal, panel, subTabs, emptyState, outcomeBox, numberStepper } from './ui.js';
+import { PANELS, label as termLabel, gloss } from './help.js';
 import {
   SKILLS, CHARACTERISTICS, CONDITIONS, HEAT, CRITICAL_INJURIES, SUFFOCATION, RECOVERY,
   XP_COSTS, SKILL_RANK_MAX
@@ -28,17 +29,27 @@ export function renderResourceHeader() {
   const enc = encumbranceState(character);
   node.hidden = false;
   clear(node);
-  const chip = (label, value, extra = '') =>
-    el('span', { class: 'chip', title: extra }, [`${label} ${value}`]);
+  const chip = (short, value, extra = '') =>
+    el('span', { class: 'chip', title: extra }, [`${short} ${value}`]);
   node.append(
-    chip('W', `${character.state.wounds}/${woundThreshold(character)}`),
-    chip('S', `${character.state.strain}/${strainThreshold(character)}`),
-    chip('SP', `${cell.pools.storyPointsPlayer}/${cell.pools.storyPointsGM}`, 'Player pool / GM pool (§8)'),
-    chip('Heat', `${character.state.personalHeat}·${cell.cellHeat}`, 'Personal · Cell (§17.2)'),
-    chip('Enc', `${enc.carried}/${enc.threshold}`)
+    chip('Injury', `${character.state.wounds}/${woundThreshold(character)}`, `${termLabel('wounds')} — ${gloss('wounds')}`),
+    chip('Stress', `${character.state.strain}/${strainThreshold(character)}`, `${termLabel('strain')} — ${gloss('strain')}`),
+    chip('Story', `${cell.pools.storyPointsPlayer}/${cell.pools.storyPointsGM}`, `${termLabel('storyPoints')}: players / GM. ${gloss('storyPoints')}`),
+    chip('Heat', `${character.state.personalHeat}·${cell.cellHeat}`, `${termLabel('personalHeat')} · ${termLabel('cellHeat')}. ${gloss('personalHeat')}`),
+    chip('Load', `${enc.carried}/${enc.threshold}`, `${termLabel('encumbrance')} — ${gloss('encumbrance')}`)
   );
   if (character.state.incapacitated) node.append(el('span', { class: 'chip', text: 'INCAPACITATED' }));
 }
+
+export const SHEET_TABS = [
+  { id: 'vitals',  label: 'Vitals' },
+  { id: 'skills',  label: 'Skills' },
+  { id: 'gear',    label: 'Gear' },
+  { id: 'talents', label: 'Talents & injuries' },
+  { id: 'care',    label: 'Recovery' },
+  { id: 'advance', label: 'Advance' }
+];
+let sheetTab = 'vitals';
 
 export function renderSheet(mount) {
   clear(mount);
@@ -46,58 +57,64 @@ export function renderSheet(mount) {
   const rerender = () => { renderSheet(mount); renderResourceHeader(); };
 
   if (!character) {
-    mount.append(el('div', { class: 'card' }, [
-      el('h2', { text: 'No active character' }),
-      el('p', { class: 'muted', text: 'Create one first — the wizard walks the manual\'s creation order (§13).' }),
-      el('a', { href: '#/create', class: 'small', text: 'Open the creation wizard' })
-    ]));
+    mount.append(panel('No character yet', {
+      lede: 'This screen shows whichever character is active, and there is not one yet.',
+      detail: 'Creating one takes about five minutes, and the app checks every rule as you go so an illegal character cannot be saved. You can also start from one of the three ready-made characters the book prints.'
+    }, [emptyState('Nothing to show until a character exists.', { href: '#/create', label: 'Create a character' })]));
     return;
   }
 
   const derived = derivedFor(character);
 
-  // identity
   mount.append(el('div', { class: 'card' }, [
     el('h2', { text: character.identity.name || 'Unnamed' }),
-    el('p', { class: 'small muted', text: `${titleCase(character.identity.career || '')} · ${character.xp.available} XP available` }),
+    el('p', { class: 'small muted', text: `${titleCase(character.identity.career || '')} · ${character.xp.available} experience unspent` }),
     character.identity.erratum
-      ? el('p', { class: 'small' }, [el('span', { class: 'badge badge-inferred', text: 'erratum' }), ' ', character.identity.erratum.note])
-      : null
+      ? el('p', { class: 'small' }, [el('span', { class: 'badge badge-inferred', text: 'corrected' }), ' ', character.identity.erratum.note])
+      : null,
+    subTabs(SHEET_TABS, sheetTab, (id) => { sheetTab = id; rerender(); })
   ]));
 
-  // vitals with steppers clamped to true maxima
-  const vitals = el('div', { class: 'card' }, [el('h3', { text: 'Vitals' })]);
-  vitals.append(stepper('Wounds', character.state.wounds, derived.woundThreshold, (v) => {
+  PANES[sheetTab](mount, character, derived, rerender);
+}
+
+function pane_vitals(mount, character, derived, rerender) {
+  // vitals with direct entry plus coarse and fine steps
+  const vitals = panel(`${termLabel('wounds')}, ${termLabel('strain')} and ${termLabel('personalHeat')}`, PANELS.sheetVitals, []);
+  vitals.append(stepper(`${termLabel('wounds')} — ${gloss('wounds')}`, character.state.wounds, derived.woundThreshold, (v) => {
     character.state.wounds = clamp(v, 0, 99);
     character.state.incapacitated = character.state.wounds >= derived.woundThreshold || character.state.strain >= derived.strainThreshold;
     saveCharacter(character); rerender();
-  }));
-  vitals.append(stepper('Strain', character.state.strain, derived.strainThreshold, (v) => {
+  }, 'Injury'));
+  vitals.append(stepper(`${termLabel('strain')} — ${gloss('strain')}`, character.state.strain, derived.strainThreshold, (v) => {
     character.state.strain = clamp(v, 0, 99);
     character.state.incapacitated = character.state.wounds >= derived.woundThreshold || character.state.strain >= derived.strainThreshold;
     saveCharacter(character); rerender();
-  }));
-  vitals.append(stepper('Personal Heat', character.state.personalHeat, HEAT.max, (v) => {
+  }, 'Stress'));
+  vitals.append(stepper(`${termLabel('personalHeat')} — ${gloss('personalHeat')}`, character.state.personalHeat, HEAT.max, (v) => {
     character.state.personalHeat = clamp(v, HEAT.min, HEAT.max);
     saveCharacter(character); rerender();
-  }));
+  }, 'Suspicion'));
   if (character.state.incapacitated) {
-    vitals.append(el('p', { class: 'small', text: 'Incapacitated: wounds or strain have met the threshold (§6).' }));
+    vitals.append(outcomeBox(['Out of the fight: injury or stress has reached the limit. Heal below it to act again (§6).'], { tone: 'warn', title: 'Down' }));
   }
   mount.append(vitals);
 
+
   // derived stats
   mount.append(el('div', { class: 'card' }, [
-    el('h3', { text: 'Derived' }),
+    el('h3', { text: 'Worked-out numbers' }),
+    el('p', { class: 'lede', text: 'These come from your characteristics, gear and talents. They update themselves.' }),
     el('div', { class: 'stat-grid' }, [
-      statBox('Wound Threshold', derived.woundThreshold),
-      statBox('Strain Threshold', derived.strainThreshold),
-      statBox('Soak', derived.soak),
-      statBox('Melee Defence', derived.meleeDefense),
-      statBox('Ranged Defence', derived.rangedDefense),
-      statBox('Encumbrance', `${encumbranceState(character).carried} / ${derived.encumbranceThreshold}`)
+      statBox('Injury limit', derived.woundThreshold),
+      statBox('Stress limit', derived.strainThreshold),
+      statBox(termLabel('soak'), derived.soak),
+      statBox('Close defence', derived.meleeDefense),
+      statBox('Ranged defence', derived.rangedDefense),
+      statBox('Carrying', `${encumbranceState(character).carried} / ${derived.encumbranceThreshold}`)
     ])
   ]));
+
 
   // characteristics
   mount.append(el('div', { class: 'card' }, [
@@ -105,6 +122,23 @@ export function renderSheet(mount) {
     el('div', { class: 'stat-grid' }, CHARACTERISTICS.map((c) => statBox(c.name, character.attributes[c.id])))
   ]));
 
+
+  // Heat effects in force
+  const cell = getCell();
+  const heatCard = el('div', { class: 'card' }, [
+    el('h3', { text: 'Heat' }),
+    el('p', { class: 'small', text: `Personal ${character.state.personalHeat} / 5 · Cell ${cell.cellHeat} / 5 · safehouse ${cell.safehouseStatus}` })
+  ]);
+  const personal = personalEffects(character.state.personalHeat);
+  const cellFx = cellEffects(cell.cellHeat);
+  if (personal.length) heatCard.append(el('ul', { class: 'small' }, personal.map((t) => el('li', { text: t }))));
+  if (cellFx.length) heatCard.append(el('ul', { class: 'small muted' }, cellFx.map((t) => el('li', { text: t }))));
+  if (!personal.length && !cellFx.length) heatCard.append(el('p', { class: 'small muted', text: 'No threshold effects in force.' }));
+  mount.append(heatCard);
+
+}
+
+function pane_skills(mount, character, derived, rerender) {
   // skills with pool preview
   const skillTable = el('table');
   skillTable.append(el('tr', {}, [el('th', { text: 'Skill' }), el('th', { text: 'Rank' }), el('th', { text: 'Pool' })]));
@@ -117,14 +151,11 @@ export function renderSheet(mount) {
       el('td', { class: 'dice-glyph', text: `${pool.ability}A ${pool.proficiency}P` })
     ]));
   });
-  mount.append(el('div', { class: 'card' }, [
-    el('h3', { text: 'Skills' }),
-    el('p', { class: 'small muted', text: 'Pool preview: the higher of rank and characteristic sets Ability dice, the lower upgrades that many to Proficiency (§2).' }),
-    el('div', { class: 'table-wrap' }, [skillTable])
-  ]));
+  mount.append(panel('Skills', PANELS.sheetSkills, [el('div', { class: 'table-wrap' }, [skillTable])]));
+
 
   // conditions — each auto-applies its effect in the roller
-  const conditionCard = el('div', { class: 'card' }, [el('h3', { text: 'Conditions' })]);
+  const conditionCard = panel('States you are in', PANELS.sheetConditions, []);
   CONDITIONS.filter((c) => !c.id.startsWith('heat')).forEach((c) => {
     conditionCard.append(el('div', { class: 'toggle-row' }, [
       el('input', {
@@ -140,191 +171,11 @@ export function renderSheet(mount) {
   });
   mount.append(conditionCard);
 
-  // Heat effects in force
-  const cell = getCell();
-  const heatCard = el('div', { class: 'card' }, [
-    el('h3', { text: 'Heat' }),
-    el('p', { class: 'small', text: `Personal ${character.state.personalHeat} / 5 · Cell ${cell.cellHeat} / 5 · safehouse ${cell.safehouseStatus}` })
-  ]);
-  const personal = personalEffects(character.state.personalHeat);
-  const cellFx = cellEffects(cell.cellHeat);
-  if (personal.length) heatCard.append(el('ul', { class: 'small' }, personal.map((t) => el('li', { text: t }))));
-  if (cellFx.length) heatCard.append(el('ul', { class: 'small muted' }, cellFx.map((t) => el('li', { text: t }))));
-  if (!personal.length && !cellFx.length) heatCard.append(el('p', { class: 'small muted', text: 'No threshold effects in force.' }));
-  mount.append(heatCard);
+}
 
-  // Critical Injuries with the cumulative modifier
-  const mod = criticalModifier(character);
-  const critCard = el('div', { class: 'card' }, [
-    el('h3', { text: 'Critical Injuries' }),
-    el('p', { class: 'small muted', text: `${mod.untreated} untreated — future Critical Injury rolls take +${mod.plus} (§5G).` })
-  ]);
-  (character.state.criticalInjuries || []).forEach((injury, index) => {
-    critCard.append(el('div', { class: 'result' }, [
-      el('div', { class: 'result-head' }, [
-        el('span', { class: 'result-title', text: `${injury.name} (${injury.severity})` }),
-        el('span', { class: 'cite', text: `rolled ${injury.roll} → ${injury.total}` })
-      ]),
-      el('button', {
-        type: 'button', class: 'secondary', text: injury.healed ? 'Mark untreated' : 'Mark healed',
-        onclick: () => { character.state.criticalInjuries[index].healed = !injury.healed; saveCharacter(character); rerender(); }
-      })
-    ]));
-  });
-  if (!(character.state.criticalInjuries || []).length) critCard.append(el('p', { class: 'small muted', text: 'None.' }));
-  mount.append(critCard);
-
-  // talents
-  const talentCard = el('div', { class: 'card' }, [el('h3', { text: 'Talents' })]);
-  if (!character.talents.length) talentCard.append(el('p', { class: 'small muted', text: 'None bought.' }));
-  character.talents.forEach((held) => {
-    const def = talent(held.id);
-    if (!def) return;
-    talentCard.append(el('div', { class: 'result' }, [
-      el('div', { class: 'result-head' }, [
-        el('span', { class: 'result-title', text: `${def.name}${held.ranks > 1 ? ` ×${held.ranks}` : ''}` }),
-        el('span', { class: 'cite', text: `T${def.tier} · ${def.activation}` })
-      ]),
-      el('div', { class: 'result-body', text: def.summary }),
-      def.activation === 'passive' ? null : el('button', {
-        type: 'button', class: 'secondary', text: 'Use',
-        onclick: () => {
-          const result = useTalent(character, held.id);
-          if (!result.ok) { showToast(result.reason); return; }
-          const cost = [result.strainCost ? `${result.strainCost} strain` : null, result.storyPointCost ? `${result.storyPointCost} Story Point` : null].filter(Boolean).join(', ');
-          showToast(`${def.name}${cost ? ` — ${cost}` : ''}: ${result.effects[0]}`);
-          rerender();
-        }
-      })
-    ]));
-  });
-  mount.append(talentCard);
-
-  // --- guided death procedure (§3.10) ---
-  const deathCard = el('div', { class: 'card' }, [el('h3', { text: 'Death procedure' })]);
-  const deathState = character.state.deathState;
-  if (deathState && DEATH_STATES[deathState.kind]) {
-    const def = DEATH_STATES[deathState.kind];
-    deathCard.append(el('p', { class: 'small' }, [
-      el('span', { class: 'badge badge-inferred', text: def.name }), ' ', def.perTurn
-    ]));
-    if (deathState.kind === 'endIsNigh') {
-      deathCard.append(el('p', { class: 'small', text: `Rounds remaining: ${deathState.roundsRemaining ?? 1}.` }));
-    }
-    if (deathState.kind !== 'dead') {
-      deathCard.append(el('button', {
-        type: 'button', class: 'secondary', text: 'Tick one turn',
-        onclick: () => { const r = tickDeathState(character); r.events.forEach((e) => showToast(e)); rerender(); }
-      }));
-      deathCard.append(el('button', {
-        type: 'button', class: 'secondary', text: 'Healed — clear',
-        onclick: () => { clearDeathState(character); showToast('Death state cleared'); rerender(); }
-      }));
-    }
-  } else {
-    deathCard.append(el('p', { class: 'small muted', text: 'No death state running. Bleeding Out, The End Is Nigh and suffocation start themselves from the Critical Injury table (§9) and the suffocation rules (§5I).' }));
-    ['bleedingOut', 'endIsNigh', 'suffocating'].forEach((kind) => {
-      deathCard.append(el('button', {
-        type: 'button', class: 'secondary', text: `Start ${DEATH_STATES[kind].name}`,
-        onclick: () => {
-          character.state.deathState = { kind, roundsRemaining: kind === 'endIsNigh' ? 1 : null };
-          saveCharacter(character); rerender();
-        }
-      }));
-    });
-  }
-  if (character.talents.some((t) => t.id === 'indomitable')) {
-    deathCard.append(el('button', {
-      type: 'button', class: 'primary', text: 'Indomitable (1 Story Point)',
-      onclick: () => { const r = useIndomitable(character); showToast(r.ok ? r.note : r.reason); rerender(); }
-    }));
-  }
-  mount.append(deathCard);
-
-  // --- rest and recovery, with the once-per-X limits enforced (§5G) ---
-  const recoveryCard = el('div', { class: 'card' }, [
-    el('h3', { text: 'Rest and recovery' }),
-    el('p', { class: 'small muted', text: 'Every limit here is a rule, so the app enforces it rather than warning about it.' })
-  ]);
-  const successInput = el('input', { type: 'number', id: 'recovery-successes', min: '0', value: '0', 'aria-label': 'Uncancelled Success' });
-  const advantageInput = el('input', { type: 'number', id: 'recovery-advantages', min: '0', value: '0', 'aria-label': 'Uncancelled Advantage' });
-  recoveryCard.append(el('label', { class: 'small', for: 'recovery-successes', text: 'Uncancelled Success' }), successInput);
-  recoveryCard.append(el('label', { class: 'small', for: 'recovery-advantages', text: 'Uncancelled Advantage' }), advantageInput);
-  RECOVERY.methods.filter((m) => m.id !== 'vehicleSystemStrain').forEach((method) => {
-    const gate = recoveryAvailable(character, method.id);
-    recoveryCard.append(el('div', { class: 'result' }, [
-      el('div', { class: 'result-head' }, [
-        el('span', { class: 'result-title', text: method.name }),
-        el('span', { class: 'cite', text: method.limit })
-      ]),
-      el('div', { class: 'result-body', text: method.restores }),
-      el('button', {
-        type: 'button', class: 'secondary', text: gate.ok ? 'Apply' : 'Used', disabled: !gate.ok,
-        id: `recovery-${method.id}`,
-        onclick: () => {
-          const result = applyRecovery(character, method.id, {
-            successes: Number(successInput.value), advantages: Number(advantageInput.value)
-          });
-          if (!result.ok) { showToast(result.reason); return; }
-          result.events.forEach((e) => showToast(e));
-          rerender();
-        }
-      })
-    ]));
-  });
-  mount.append(recoveryCard);
-
-  // --- advancement (§3.15) ---
-  const advCard = el('div', { class: 'card' }, [
-    el('h3', { text: 'Advancement' }),
-    el('p', { class: 'small', text: `${character.xp.available} XP available of ${character.xp.total} earned.` }),
-    el('p', { class: 'small muted', text: 'Characteristics are creation-only; after that only Dedication raises one, to a maximum of 5 and never the same one twice (§7, §12A).' })
-  ]);
-  const advSkill = el('select', { id: 'advance-skill', 'aria-label': 'Skill to raise' });
-  SKILLS.forEach((s) => {
-    const entry = character.skills[s.id];
-    advSkill.append(el('option', { value: s.id, text: `${s.name} ${entry.rank} → ${entry.rank + 1} (${xpCost('skill', { newRank: entry.rank + 1, career: entry.career })} XP)` }));
-  });
-  advCard.append(advSkill, el('button', {
-    type: 'button', class: 'secondary', text: 'Buy rank',
-    onclick: () => { const r = advanceSkill(character, advSkill.value); showToast(r.ok ? `Bought for ${r.cost} XP` : r.reason); rerender(); }
-  }));
-
-  const advTalent = el('select', { id: 'advance-talent', 'aria-label': 'Talent to buy' });
-  const heldMap = {};
-  character.talents.forEach((t) => { heldMap[t.id] = t.ranks; });
-  visibleTalents(Settings.showNonSettingTalents()).forEach((t) => {
-    const legality = canBuyTalent(t.id, heldMap);
-    advTalent.append(el('option', { value: t.id, text: `${t.name} (T${t.tier})${legality.ok ? '' : ' — locked'}`, disabled: !legality.ok }));
-  });
-  advCard.append(advTalent, el('button', {
-    type: 'button', class: 'secondary', text: 'Buy talent',
-    onclick: () => {
-      const r = advanceTalent(character, advTalent.value);
-      if (!r.ok) { showToast(r.reason); return; }
-      showToast(`Bought for ${r.cost} XP`);
-      if (r.dedication) showToast('Dedication: pick the characteristic it raises below.');
-      rerender();
-    }
-  }));
-  if (character.talents.some((t) => t.id === 'dedication')) {
-    const dedSelect = el('select', { id: 'dedication-target', 'aria-label': 'Characteristic Dedication raises' });
-    CHARACTERISTICS.forEach((c) => dedSelect.append(el('option', { value: c.id, text: c.name })));
-    advCard.append(dedSelect, el('button', {
-      type: 'button', class: 'secondary', text: 'Apply Dedication',
-      onclick: () => { const r = applyDedication(character, dedSelect.value); showToast(r.ok ? 'Characteristic raised' : r.reason); rerender(); }
-    }));
-  }
-  if (character.advancementLog.length) {
-    advCard.append(el('h3', { text: 'Log' }));
-    character.advancementLog.slice(-8).reverse().forEach((entry) => {
-      advCard.append(el('p', { class: 'small muted', text: `${new Date(entry.ts).toLocaleDateString()} · ${entry.detail} · ${entry.xpSpent > 0 ? `${entry.xpSpent} XP` : `+${-entry.xpSpent} XP`}` }));
-    });
-  }
-  mount.append(advCard);
-
+function pane_gear(mount, character, derived, rerender) {
   // inventory
-  const invCard = el('div', { class: 'card' }, [el('h3', { text: 'Inventory' })]);
+  const invCard = panel('What you are carrying', PANELS.sheetGear, []);
   const enc = encumbranceState(character);
   invCard.append(el('p', { class: 'small', text: `Carrying ${enc.carried} against a threshold of ${enc.threshold}.` }));
   if (enc.over) {
@@ -403,8 +254,184 @@ export function renderSheet(mount) {
     }
     invCard.append(card);
   });
-  if (!(character.inventory.items || []).length) invCard.append(el('p', { class: 'small muted', text: 'Empty.' }));
+  if (!(character.inventory.items || []).length) invCard.append(emptyState('Carrying nothing.', { href: '#/rules?q=Gear', label: 'Browse the gear list' }));
   mount.append(invCard);
+
+}
+
+function pane_talents(mount, character, derived, rerender) {
+  // talents
+  const talentCard = panel('Talents', PANELS.sheetTalents, []);
+  if (!character.talents.length) talentCard.append(emptyState('No talents yet.', { href: '#/sheet', label: 'Buy one on the Advance tab' }));
+  character.talents.forEach((held) => {
+    const def = talent(held.id);
+    if (!def) return;
+    talentCard.append(el('div', { class: 'result' }, [
+      el('div', { class: 'result-head' }, [
+        el('span', { class: 'result-title', text: `${def.name}${held.ranks > 1 ? ` ×${held.ranks}` : ''}` }),
+        el('span', { class: 'cite', text: `T${def.tier} · ${def.activation}` })
+      ]),
+      el('div', { class: 'result-body', text: def.summary }),
+      def.activation === 'passive' ? null : el('button', {
+        type: 'button', class: 'secondary', text: 'Use',
+        onclick: () => {
+          const result = useTalent(character, held.id);
+          if (!result.ok) { showToast(result.reason); return; }
+          const cost = [result.strainCost ? `${result.strainCost} strain` : null, result.storyPointCost ? `${result.storyPointCost} Story Point` : null].filter(Boolean).join(', ');
+          showToast(`${def.name}${cost ? ` — ${cost}` : ''}: ${result.effects[0]}`);
+          rerender();
+        }
+      })
+    ]));
+  });
+  mount.append(talentCard);
+
+
+  // Critical Injuries with the cumulative modifier
+  const mod = criticalModifier(character);
+  const critCard = panel(termLabel('criticalInjury'), PANELS.sheetCriticals, [
+    el('p', { class: 'small muted', text: `${mod.untreated} untreated, so the next roll on the injury table takes +${mod.plus} (§5G).` })
+  ]);
+  (character.state.criticalInjuries || []).forEach((injury, index) => {
+    critCard.append(el('div', { class: 'result' }, [
+      el('div', { class: 'result-head' }, [
+        el('span', { class: 'result-title', text: `${injury.name} (${injury.severity})` }),
+        el('span', { class: 'cite', text: `rolled ${injury.roll} → ${injury.total}` })
+      ]),
+      el('button', {
+        type: 'button', class: 'secondary', text: injury.healed ? 'Mark untreated' : 'Mark healed',
+        onclick: () => { character.state.criticalInjuries[index].healed = !injury.healed; saveCharacter(character); rerender(); }
+      })
+    ]));
+  });
+  if (!(character.state.criticalInjuries || []).length) critCard.append(el('p', { class: 'small muted', text: 'None — nothing lasting yet.' }));
+  mount.append(critCard);
+
+
+  // --- guided death procedure (§3.10) ---
+  const deathCard = panel('Dying', PANELS.sheetDeath, []);
+  const deathState = character.state.deathState;
+  if (deathState && DEATH_STATES[deathState.kind]) {
+    const def = DEATH_STATES[deathState.kind];
+    deathCard.append(el('p', { class: 'small' }, [
+      el('span', { class: 'badge badge-inferred', text: def.name }), ' ', def.perTurn
+    ]));
+    if (deathState.kind === 'endIsNigh') {
+      deathCard.append(el('p', { class: 'small', text: `Rounds remaining: ${deathState.roundsRemaining ?? 1}.` }));
+    }
+    if (deathState.kind !== 'dead') {
+      deathCard.append(el('button', {
+        type: 'button', class: 'secondary', text: 'Tick one turn',
+        onclick: () => { const r = tickDeathState(character); r.events.forEach((e) => showToast(e)); rerender(); }
+      }));
+      deathCard.append(el('button', {
+        type: 'button', class: 'secondary', text: 'Healed — clear',
+        onclick: () => { clearDeathState(character); showToast('Death state cleared'); rerender(); }
+      }));
+    }
+  } else {
+    deathCard.append(el('p', { class: 'small muted', text: 'No death state running. Bleeding Out, The End Is Nigh and suffocation start themselves from the Critical Injury table (§9) and the suffocation rules (§5I).' }));
+    ['bleedingOut', 'endIsNigh', 'suffocating'].forEach((kind) => {
+      deathCard.append(el('button', {
+        type: 'button', class: 'secondary', text: `Start ${DEATH_STATES[kind].name}`,
+        onclick: () => {
+          character.state.deathState = { kind, roundsRemaining: kind === 'endIsNigh' ? 1 : null };
+          saveCharacter(character); rerender();
+        }
+      }));
+    });
+  }
+  if (character.talents.some((t) => t.id === 'indomitable')) {
+    deathCard.append(el('button', {
+      type: 'button', class: 'primary', text: 'Indomitable (1 Story Point)',
+      onclick: () => { const r = useIndomitable(character); showToast(r.ok ? r.note : r.reason); rerender(); }
+    }));
+  }
+  mount.append(deathCard);
+
+}
+
+function pane_care(mount, character, derived, rerender) {
+  // --- rest and recovery, with the once-per-X limits enforced (§5G) ---
+  const recoveryCard = panel('Healing', PANELS.sheetRecovery, []);
+  const successInput = el('input', { type: 'number', id: 'recovery-successes', min: '0', value: '0', 'aria-label': 'Uncancelled Success' });
+  const advantageInput = el('input', { type: 'number', id: 'recovery-advantages', min: '0', value: '0', 'aria-label': 'Uncancelled Advantage' });
+  recoveryCard.append(el('label', { class: 'small', for: 'recovery-successes', text: 'Uncancelled Success' }), successInput);
+  recoveryCard.append(el('label', { class: 'small', for: 'recovery-advantages', text: 'Uncancelled Advantage' }), advantageInput);
+  RECOVERY.methods.filter((m) => m.id !== 'vehicleSystemStrain').forEach((method) => {
+    const gate = recoveryAvailable(character, method.id);
+    recoveryCard.append(el('div', { class: 'result' }, [
+      el('div', { class: 'result-head' }, [
+        el('span', { class: 'result-title', text: method.name }),
+        el('span', { class: 'cite', text: method.limit })
+      ]),
+      el('div', { class: 'result-body', text: method.restores }),
+      el('button', {
+        type: 'button', class: 'secondary', text: gate.ok ? 'Apply' : 'Used', disabled: !gate.ok,
+        id: `recovery-${method.id}`,
+        onclick: () => {
+          const result = applyRecovery(character, method.id, {
+            successes: Number(successInput.value), advantages: Number(advantageInput.value)
+          });
+          if (!result.ok) { showToast(result.reason); return; }
+          result.events.forEach((e) => showToast(e));
+          rerender();
+        }
+      })
+    ]));
+  });
+  mount.append(recoveryCard);
+
+}
+
+function pane_advance(mount, character, derived, rerender) {
+  // --- advancement (§3.15) ---
+  const advCard = panel('Spend experience', PANELS.sheetAdvance, [
+    el('p', { class: 'small', text: `${character.xp.available} XP available of ${character.xp.total} earned.` })
+  ]);
+  const advSkill = el('select', { id: 'advance-skill', 'aria-label': 'Skill to raise' });
+  SKILLS.forEach((s) => {
+    const entry = character.skills[s.id];
+    advSkill.append(el('option', { value: s.id, text: `${s.name} ${entry.rank} → ${entry.rank + 1} (${xpCost('skill', { newRank: entry.rank + 1, career: entry.career })} XP)` }));
+  });
+  advCard.append(advSkill, el('button', {
+    type: 'button', class: 'secondary', text: 'Buy rank',
+    onclick: () => { const r = advanceSkill(character, advSkill.value); showToast(r.ok ? `Bought for ${r.cost} XP` : r.reason); rerender(); }
+  }));
+
+  const advTalent = el('select', { id: 'advance-talent', 'aria-label': 'Talent to buy' });
+  const heldMap = {};
+  character.talents.forEach((t) => { heldMap[t.id] = t.ranks; });
+  visibleTalents(Settings.showNonSettingTalents()).forEach((t) => {
+    const legality = canBuyTalent(t.id, heldMap);
+    advTalent.append(el('option', { value: t.id, text: `${t.name} (T${t.tier})${legality.ok ? '' : ' — locked'}`, disabled: !legality.ok }));
+  });
+  advCard.append(advTalent, el('button', {
+    type: 'button', class: 'secondary', text: 'Buy talent',
+    onclick: () => {
+      const r = advanceTalent(character, advTalent.value);
+      if (!r.ok) { showToast(r.reason); return; }
+      showToast(`Bought for ${r.cost} XP`);
+      if (r.dedication) showToast('Dedication: pick the characteristic it raises below.');
+      rerender();
+    }
+  }));
+  if (character.talents.some((t) => t.id === 'dedication')) {
+    const dedSelect = el('select', { id: 'dedication-target', 'aria-label': 'Characteristic Dedication raises' });
+    CHARACTERISTICS.forEach((c) => dedSelect.append(el('option', { value: c.id, text: c.name })));
+    advCard.append(dedSelect, el('button', {
+      type: 'button', class: 'secondary', text: 'Apply Dedication',
+      onclick: () => { const r = applyDedication(character, dedSelect.value); showToast(r.ok ? 'Characteristic raised' : r.reason); rerender(); }
+    }));
+  }
+  if (character.advancementLog.length) {
+    advCard.append(el('h3', { text: 'Log' }));
+    character.advancementLog.slice(-8).reverse().forEach((entry) => {
+      advCard.append(el('p', { class: 'small muted', text: `${new Date(entry.ts).toLocaleDateString()} · ${entry.detail} · ${entry.xpSpent > 0 ? `${entry.xpSpent} XP` : `+${-entry.xpSpent} XP`}` }));
+    });
+  }
+  mount.append(advCard);
+
 
   // notes
   mount.append(el('div', { class: 'card' }, [
@@ -416,12 +443,14 @@ export function renderSheet(mount) {
   ]));
 }
 
-function stepper(label, value, max, onChange) {
-  return el('div', { class: 'toggle-row' }, [
-    el('label', {}, [el('span', { text: `${label} ${value} / ${max}` })]),
-    el('button', { type: 'button', class: 'secondary', text: '−', 'aria-label': `Lower ${label}`, onclick: () => onChange(value - 1) }),
-    el('button', { type: 'button', class: 'secondary', text: '+', 'aria-label': `Raise ${label}`, onclick: () => onChange(value + 1) })
-  ]);
+const PANES = { vitals: pane_vitals, skills: pane_skills, gear: pane_gear, talents: pane_talents, care: pane_care, advance: pane_advance };
+
+function stepper(labelText, value, max, onChange, ariaName) {
+  return numberStepper({
+    id: `vital-${ariaName.toLowerCase()}`,
+    label: labelText, ariaName, value, min: 0, max, steps: [1, 5],
+    suffix: `(limit ${max})`, onChange
+  });
 }
 
 function statBox(label, value) {

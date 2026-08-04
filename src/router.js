@@ -2,6 +2,8 @@
 
 import { $, el, clear } from './core.js';
 import { Settings } from './settings.js';
+import { MODES, SCREEN_BLURBS } from './help.js';
+import { modal } from './ui.js';
 import { activeCharacterId } from './store.js';
 import { renderHome, renderRules, renderSettings, renderSafety } from './screens.js';
 import { renderWizard } from './wizard.js';
@@ -18,8 +20,8 @@ const ROUTES = [
   { id: 'create',   path: '#/create',   label: 'Create',   glyph: '✎', render: renderWizard, hideInNav: () => !!activeCharacterId() },
   { id: 'combat',   path: '#/combat',   label: 'Combat',   glyph: '⚔', render: renderCombat },
   { id: 'rules',    path: '#/rules',    label: 'Rules',    glyph: '§', render: renderRules },
-  { id: 'solo',     path: '#/solo',     label: 'Solo',     glyph: '◇', render: renderSolo, gate: () => Settings.soloMode() },
-  { id: 'gm',       path: '#/gm',       label: 'GM',       glyph: '◈', render: renderGm, gate: () => Settings.gmScreen() },
+  { id: 'solo',     path: '#/solo',     label: 'Solo',     glyph: '◇', render: renderSolo, gate: () => Settings.soloMode() || Settings.mode() === 'solo' },
+  { id: 'gm',       path: '#/gm',       label: 'GM',       glyph: '◈', render: renderGm, gate: () => Settings.gmScreen() || Settings.mode() === 'gm' },
   { id: 'settings', path: '#/settings', label: 'Settings', glyph: '⚙', render: renderSettings },
   { id: 'safety',   path: '#/safety',   label: 'Safety',   glyph: '⚑', render: renderSafety, hideInNav: () => true }
 ];
@@ -31,8 +33,15 @@ function placeholder(title, body) {
   };
 }
 
+/** Tabs shown for the current seat (help.js MODES), so the bar never fills with slivers. */
 export function visibleRoutes() {
-  return ROUTES.filter((r) => (!r.gate || r.gate()) && !(r.hideInNav && r.hideInNav()));
+  const mode = MODES.find((m) => m.id === Settings.mode()) || MODES[0];
+  return ROUTES.filter((r) => {
+    if (r.hideInNav && r.hideInNav()) return false;
+    if (r.gate && !r.gate()) return false;
+    if (!mode.tabs) return true;
+    return mode.tabs.includes(r.id);
+  });
 }
 
 /** Routes reachable by hash, including ones the nav hides (the wizard once a PC exists). */
@@ -52,6 +61,21 @@ export function currentParams() {
   const params = {};
   new URLSearchParams(query).forEach((value, key) => { params[key] = value; });
   return params;
+}
+
+/** Everything reachable, whether or not it has a tab in this seat. */
+export function openScreenMenu() {
+  const body = el('div', {});
+  routableRoutes().forEach((route) => {
+    body.append(el('a', {
+      class: 'menu-item', href: route.path,
+      onclick: () => { setTimeout(() => document.querySelector('.modal-backdrop')?.remove(), 0); }
+    }, [
+      el('span', { class: 'menu-title', text: `${route.glyph} ${route.label}` }),
+      el('span', { class: 'toggle-desc', text: SCREEN_BLURBS[route.id] || '' })
+    ]));
+  });
+  modal({ title: 'All screens', body, actions: [{ label: 'Close', primary: true }] });
 }
 
 export function renderNav() {

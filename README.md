@@ -4,12 +4,13 @@ An installable PWA player-character companion for **REICH '62**, a Genesys narra
 system: character creation wizard, in-play tracker, dice engine, Heat system, solo oracle,
 bestiary, and an opt-in GM screen.
 
-**Status: everything except multiplayer is built.** Character creation, the live sheet, the
+**Status: everything except multiplayer is built, and the interface has had a usability pass.** Character creation, the live sheet, the
 symbol-entry dice engine, Heat, the combat tracker with initiative slots, the guided death
 procedure, enforced rest limits, the lifecycle engine with one-step undo, the progress
 tracker, advancement, the bestiary browser and the solo Oracle loop all work — verified
-headless (271 checks, zero console errors), alongside vehicle scale, the item damage ladder,
-situational dice, the GM screen, solo mode and the simulated roller. Multiplayer sync and the rest of the GM screen
+headless (285 checks, zero console errors), alongside vehicle scale, the item damage ladder,
+situational dice, the GM screen, solo mode and the simulated roller. Pick your seat — player,
+GM or solo — and the app shows only the screens that seat needs. Multiplayer sync and the rest of the GM screen
 are still to come; see the roadmap in `CLAUDE.md` §11.
 
 ## Running it

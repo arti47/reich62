@@ -37,7 +37,14 @@ export const FLAGS = [
   { id: 'advancedAutomation', label: 'Advanced automation', desc: 'Applies environmental dice, encumbrance penalties and Heat setbacks without prompting first.' }
 ];
 
+export const MODE_KEY = 'mode';
+
 export const Settings = {
+  /** Which seat the user is in; the router shows only that seat's tabs. */
+  mode: () => get(MODE_KEY) || 'player',
+  setMode: (id) => set(MODE_KEY, id),
+  modeChosen: () => !!get(MODE_KEY),
+
   soloMode: () => !!get('soloMode'),
   gmScreen: () => !!get('gmScreen'),
   // R-B1 — force-disabled while DIE_FACES is absent, whatever is stored.

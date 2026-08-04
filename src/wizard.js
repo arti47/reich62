@@ -3,7 +3,8 @@
 // No illegal character can be saved: every step validates before it will advance.
 
 import { el, clear, titleCase } from './core.js';
-import { showToast, modal } from './ui.js';
+import { showToast, modal, panel, subTabs, accordion, emptyState } from './ui.js';
+import { PANELS } from './help.js';
 import {
   CAREERS, SKILLS, CHARACTERISTICS, MOTIVATIONS, CREATION_RULES, XP_COSTS, TALENT_RULES,
   CHARACTERISTIC_MIN, CHARACTERISTIC_MAX, SKILL_RANK_MAX_AT_CREATION, GEAR, WEAPONS, ARMOUR,
@@ -17,6 +18,53 @@ import { Settings } from './settings.js';
 import { rollDie } from './core.js';
 
 const STEPS = ['career', 'skills', 'xp', 'derived', 'motivation', 'gear', 'review'];
+
+const XP_TABS = [
+  { id: 'characteristics', label: 'Characteristics' },
+  { id: 'skills',          label: 'Skills' },
+  { id: 'talents',         label: 'Talents' }
+];
+let xpTab = 'characteristics';
+let skillFilter = '';
+let talentFilter = '';
+
+const STEP_HELP = {
+  career: { lede: 'Your background. It decides which skills stay cheap for you, for good.', detail: 'Pick a career, then choose four of its eight skills to start at rank 1. All eight stay cheaper to raise for the rest of this character\'s life, so the four you pick now are a head start rather than a limit (§13, §14).' },
+  skills: { lede: 'Choose four of your career\'s eight skills. Each starts at rank 1.', detail: 'There is no wrong answer: the other four are still cheap to buy later.' },
+  xp: { lede: 'Every character gets the same 70 experience. Spend it here.', detail: 'Characteristics can only be raised now, at ten times the new rating per step. Skills cost five times the new rank, plus five if they are not career skills, and stop at rank 2 during creation. Talents cost five times their tier and follow the pyramid rule (§7).' },
+  derived: { lede: 'The numbers that fall out of your choices.', detail: 'Injury and stress limits are fixed when creation ends; only talents raise them afterwards. Damage resisted keeps pace with Brawn (§6).' },
+  motivation: { lede: 'What drives your character, and what trips them up.', detail: 'One of each: a desire, a fear, a strength and a flaw. They are the levers other people use on you socially, and playing to them earns extra experience at the end of a session (§12B, §27).' },
+  gear: { lede: 'Spend the starting money on equipment.', detail: 'The book prints prices but never names the currency or the starting budget, so both are house aids you can change in Settings.' },
+  review: { lede: 'A last look before the character is saved.', detail: 'Only characteristics lock at this point; skills, talents and gear all keep growing through play.' }
+};
+
+/** A legal 70-XP spread for the chosen career, as a starting point to adjust.
+ *  Raises the characteristics behind the chosen skills, then the skills themselves. */
+export function suggestedSpend() {
+  const careerDef = careerById(draft.identity.career);
+  if (!careerDef) return { ok: false, reason: 'Choose a career first.' };
+  const picks = draft.identity.careerSkills.length ? draft.identity.careerSkills : careerDef.skills.slice(0, 4);
+  const wanted = [];
+  picks.forEach((id) => {
+    const def = SKILLS.find((sk) => sk.id === id);
+    if (def && !wanted.includes(def.characteristic)) wanted.push(def.characteristic);
+  });
+
+  const applied = [];
+  wanted.slice(0, 2).forEach((charId) => {
+    while (draft.attributes[charId] < 3) {
+      if (raiseCharacteristic(charId)) break;
+      applied.push(`${titleCase(charId)} to ${draft.attributes[charId]}`);
+    }
+  });
+  picks.forEach((id) => {
+    while (draft.skills[id].rank < SKILL_RANK_MAX_AT_CREATION) {
+      if (raiseSkill(id)) break;
+      applied.push(`${titleCase(id)} to rank ${draft.skills[id].rank}`);
+    }
+  });
+  return { ok: true, applied, remaining: draft.xp.available };
+}
 
 let draft = null;
 let step = 0;
@@ -207,9 +255,9 @@ export function renderWizard(mount) {
   rerender = () => renderWizard(mount);
   if (!draft) startWizard();
 
-  mount.append(el('div', { class: 'card' }, [
-    el('h2', { text: `Create a character — ${titleCase(STEPS[step])}` }),
-    el('p', { class: 'small muted', text: `Step ${step + 1} of ${STEPS.length} · ${draft.xp.available} of ${draft.xp.total} XP left` })
+  const stepName = STEPS[step];
+  mount.append(panel(`Step ${step + 1} of ${STEPS.length}: ${titleCase(stepName)}`, STEP_HELP[stepName], [
+    el('p', { class: 'small muted', text: `${draft.xp.available} of ${draft.xp.total} experience left to spend` })
   ]));
 
   const body = el('div', { class: 'card' });
@@ -289,61 +337,103 @@ function renderSkillsStep(node) {
 }
 
 function renderXpStep(node) {
-  node.append(el('h3', { text: 'Characteristics (10 × new rating, creation only)' }));
-  const grid = el('div', { class: 'stat-grid' });
-  CHARACTERISTICS.forEach((c) => {
-    const value = draft.attributes[c.id];
-    grid.append(el('div', { class: 'stat' }, [
-      el('span', { class: 'stat-label', text: c.name }),
-      el('span', { class: 'stat-value', text: String(value) }),
-      el('button', { type: 'button', class: 'secondary', text: '−', 'aria-label': `Lower ${c.name}`, onclick: () => { lowerCharacteristic(c.id); rerender(); } }),
-      el('button', {
-        type: 'button', class: 'secondary', text: `+ (${xpCost('characteristic', { newRating: value + 1 })})`, 'aria-label': `Raise ${c.name}`,
-        onclick: () => { const problem = raiseCharacteristic(c.id); if (problem) showToast(problem); rerender(); }
-      })
-    ]));
-  });
-  node.append(grid);
+  node.append(el('button', {
+    type: 'button', class: 'primary', id: 'suggest-spend',
+    text: 'Suggest a spread for my career',
+    onclick: () => {
+      const result = suggestedSpend();
+      if (!result.ok) { showToast(result.reason); return; }
+      showToast(`Spent on ${result.applied.slice(0, 3).join(', ')}${result.applied.length > 3 ? ' and more' : ''}`);
+      rerender();
+    }
+  }));
+  node.append(el('p', { class: 'small muted', text: 'It only spends what you have, and every part of it can be undone with the minus buttons.' }));
+  node.append(subTabs(XP_TABS, xpTab, (id) => { xpTab = id; rerender(); }));
 
-  node.append(el('h3', { text: `Skills (career 5 × rank, non-career 5 × rank + 5; capped at ${SKILL_RANK_MAX_AT_CREATION} here)` }));
-  const table = el('table');
-  table.append(el('tr', {}, [el('th', { text: 'Skill' }), el('th', { text: 'Rank' }), el('th', { text: 'Cost' }), el('th', { text: '' })]));
-  SKILLS.forEach((s) => {
-    const skill = draft.skills[s.id];
-    const next = xpCost('skill', { newRank: skill.rank + 1, career: skill.career });
-    table.append(el('tr', {}, [
-      el('td', { text: `${s.name}${skill.career ? ' ●' : ''}` }),
-      el('td', { text: String(skill.rank) }),
-      el('td', { text: skill.rank >= SKILL_RANK_MAX_AT_CREATION ? '—' : String(next) }),
-      el('td', {}, [
-        el('button', { type: 'button', class: 'secondary', text: '−', 'aria-label': `Lower ${s.name}`, onclick: () => { lowerSkill(s.id); rerender(); } }),
-        el('button', { type: 'button', class: 'secondary', text: '+', 'aria-label': `Raise ${s.name}`, onclick: () => { const p = raiseSkill(s.id); if (p) showToast(p); rerender(); } })
-      ])
-    ]));
-  });
-  node.append(el('div', { class: 'table-wrap' }, [table]));
+  if (xpTab === 'characteristics') {
+    node.append(el('p', { class: 'lede', text: 'Raise these now or never — after creation only the Dedication talent can (§7).' }));
+    const grid = el('div', { class: 'stat-grid' });
+    CHARACTERISTICS.forEach((c) => {
+      const value = draft.attributes[c.id];
+      grid.append(el('div', { class: 'stat' }, [
+        el('span', { class: 'stat-label', text: c.name }),
+        el('span', { class: 'stat-value', text: String(value) }),
+        el('button', { type: 'button', class: 'secondary', text: '−', 'aria-label': `Lower ${c.name}`, onclick: () => { lowerCharacteristic(c.id); rerender(); } }),
+        el('button', {
+          type: 'button', class: 'secondary', text: `+ (${xpCost('characteristic', { newRating: value + 1 })})`, 'aria-label': `Raise ${c.name}`,
+          onclick: () => { const problem = raiseCharacteristic(c.id); if (problem) showToast(problem); rerender(); }
+        })
+      ]));
+    });
+    node.append(grid);
+  }
 
-  node.append(el('h3', { text: 'Talents (5 × tier; the pyramid is enforced)' }));
-  const held = heldTalents();
-  const list = el('div');
-  visibleTalents(Settings.showNonSettingTalents()).forEach((t) => {
-    const legality = canBuyTalent(t.id, held);
-    const ranks = held[t.id] || 0;
-    list.append(el('div', { class: 'result' }, [
-      el('div', { class: 'result-head' }, [
-        el('span', { class: 'result-title', text: `${t.name}${ranks ? ` ×${ranks}` : ''}` }),
-        el('span', { class: 'cite', text: `T${t.tier} · ${TALENT_RULES.costPerTier[t.tier - 1]} XP` })
-      ]),
-      el('div', { class: 'result-body', text: t.summary }),
-      el('button', {
-        type: 'button', class: 'secondary', text: legality.ok ? 'Buy' : 'Locked', disabled: !legality.ok,
-        title: legality.ok ? '' : legality.reason,
-        onclick: () => { const p = buyTalent(t.id); if (p) showToast(p); rerender(); }
-      }),
-      ranks ? el('button', { type: 'button', class: 'secondary', text: 'Refund', onclick: () => { sellTalent(t.id); rerender(); } }) : null
-    ]));
-  });
-  node.append(list);
+  if (xpTab === 'skills') {
+    node.append(el('p', { class: 'lede', text: `Career skills are marked with a dot and cost less. Nothing passes rank ${SKILL_RANK_MAX_AT_CREATION} during creation.` }));
+    node.append(el('input', {
+      type: 'search', id: 'skill-filter', placeholder: 'Filter skills', 'aria-label': 'Filter skills', value: skillFilter,
+      oninput: (e) => { skillFilter = e.target.value; rerender(); }
+    }));
+    const table = el('table');
+    table.append(el('tr', {}, [el('th', { text: 'Skill' }), el('th', { text: 'Rank' }), el('th', { text: 'Cost' }), el('th', { text: '' })]));
+    const needle = skillFilter.trim().toLowerCase();
+    SKILLS.filter((sk) => !needle || sk.name.toLowerCase().includes(needle))
+      .slice()
+      .sort((a, b) => (draft.skills[b.id].career ? 1 : 0) - (draft.skills[a.id].career ? 1 : 0))
+      .forEach((sk) => {
+        const skill = draft.skills[sk.id];
+        const next = xpCost('skill', { newRank: skill.rank + 1, career: skill.career });
+        table.append(el('tr', {}, [
+          el('td', { text: `${sk.name}${skill.career ? ' ●' : ''}` }),
+          el('td', { text: String(skill.rank) }),
+          el('td', { text: skill.rank >= SKILL_RANK_MAX_AT_CREATION ? '—' : String(next) }),
+          el('td', {}, [
+            el('button', { type: 'button', class: 'secondary', text: '−', 'aria-label': `Lower ${sk.name}`, onclick: () => { lowerSkill(sk.id); rerender(); } }),
+            el('button', { type: 'button', class: 'secondary', text: '+', 'aria-label': `Raise ${sk.name}`, onclick: () => { const p = raiseSkill(sk.id); if (p) showToast(p); rerender(); } })
+          ])
+        ]));
+      });
+    node.append(el('div', { class: 'table-wrap' }, [table]));
+  }
+
+  if (xpTab === 'talents') {
+    node.append(el('p', { class: 'lede', text: 'Talents cost five times their tier. You need as many talents in the tier below as you are about to have in the tier above.' }));
+    node.append(el('input', {
+      type: 'search', id: 'talent-filter', placeholder: 'Filter talents', 'aria-label': 'Filter talents', value: talentFilter,
+      oninput: (e) => { talentFilter = e.target.value; rerender(); }
+    }));
+    const held = heldTalents();
+    const needle = talentFilter.trim().toLowerCase();
+    const all = visibleTalents(Settings.showNonSettingTalents())
+      .filter((t) => !needle || `${t.name} ${t.summary}`.toLowerCase().includes(needle));
+    [1, 2, 3, 4, 5].forEach((tier) => {
+      const inTier = all.filter((t) => t.tier === tier);
+      if (!inTier.length) return;
+      const body = el('div', {});
+      inTier.forEach((t) => {
+        const legality = canBuyTalent(t.id, held);
+        const ranks = held[t.id] || 0;
+        body.append(el('div', { class: 'result' }, [
+          el('div', { class: 'result-head' }, [
+            el('span', { class: 'result-title', text: `${t.name}${ranks ? ` ×${ranks}` : ''}` }),
+            el('span', { class: 'cite', text: `${TALENT_RULES.costPerTier[t.tier - 1]} XP` })
+          ]),
+          el('div', { class: 'result-body', text: t.summary }),
+          el('button', {
+            type: 'button', class: 'secondary', text: legality.ok ? 'Buy' : 'Locked', disabled: !legality.ok,
+            title: legality.ok ? '' : legality.reason,
+            onclick: () => { const p = buyTalent(t.id); if (p) showToast(p); rerender(); }
+          }),
+          legality.ok ? null : el('span', { class: 'toggle-desc', text: legality.reason }),
+          ranks ? el('button', { type: 'button', class: 'secondary', text: 'Refund', onclick: () => { sellTalent(t.id); rerender(); } }) : null
+        ]));
+      });
+      node.append(accordion(`Tier ${tier} — ${TALENT_RULES.costPerTier[tier - 1]} XP each`, [body], {
+        key: `wizard-talents-t${tier}`, summary: `${inTier.length} talent${inTier.length === 1 ? '' : 's'}`, defaultOpen: tier === 1 || !!needle
+      }));
+    });
+    if (!all.length) node.append(emptyState('No talents match that filter.'));
+  }
 }
 
 function renderDerivedStep(node) {

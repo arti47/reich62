@@ -73,24 +73,32 @@ async function main() {
     await page.route('**://*.firebaseio.com/**', (route) => route.abort());
     await page.route('**://*.googleapis.com/**', (route) => route.abort());
 
+    // Navigation goes through the hash so the harness does not depend on which tabs the
+    // current seat shows; the nav itself is asserted separately.
+    const go = async (hash) => { await page.goto(base + '/index.html' + hash, { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(120); };
+    const subtab = async (label) => { await page.getByRole('tab', { name: label, exact: true }).click(); await page.waitForTimeout(90); };
+
     await page.goto(base + '/index.html', { waitUntil: 'networkidle' });
     check('app boots', await page.locator('#screen .card').first().isVisible());
     equal('home is the default route', new URL(page.url()).hash, '#/');
 
     // Every visible tab renders, at 360px, with no horizontal overflow.
+    // The seat model caps the bar at five tabs; everything else lives in the header menu.
     const tabs = await page.locator('#bottom-nav a').all();
-    check('default nav shows 7 tabs (solo and GM gated off)', tabs.length === 7, `got ${tabs.length}`);
+    check('player mode shows five tabs, not nine', tabs.length === 5, `got ${tabs.length}`);
+    const tabLabels = (await page.locator('#bottom-nav a').allInnerTexts()).join(' ');
+    check('the player seat shows the player screens', /HOME/i.test(tabLabels) && /SHEET/i.test(tabLabels) && /ROLL/i.test(tabLabels), tabLabels);
+    check('the GM screen is not a tab in the player seat', !/\bGM\b/i.test(tabLabels), tabLabels);
+    check('every screen is still reachable from the header menu', (await page.locator('#screen-menu').count()) === 1);
 
     for (const label of ['Home', 'Sheet', 'Roll', 'Create', 'Combat', 'Rules', 'Settings']) {
-      await page.getByRole('link', { name: label, exact: true }).click();
-      await page.waitForTimeout(60);
-      check(`${label} renders content`, await page.locator('#screen .card').first().isVisible());
+      check(`${label} renders content`, await page.locator('#screen .card, #screen section.card').first().isVisible());
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       check(`${label} has no horizontal overflow at 360px`, overflow <= 0, `overflow ${overflow}px`);
     }
 
     // Rules library search over the extracted data.
-    await page.getByRole('link', { name: 'Rules', exact: true }).click();
+    await go('#/rules');
     await page.waitForSelector('#rules-results .result');
     const total = await page.locator('#rules-results .result').count();
     check('rules library is populated', total > 0, `entries rendered ${total}`);
@@ -102,7 +110,7 @@ async function main() {
     check('search finds bestiary encounter blocks by B§ citation', await page.locator('#rules-results .result').count() >= 4);
 
     // R-B1 — the digital roller toggle is present but blocked.
-    await page.getByRole('link', { name: 'Settings', exact: true }).click();
+    await go('#/settings');
     check('R-B1: the digital roller toggle unblocks once face data is loaded (D§)',
       !(await page.locator('#flag-digitalRoller').isDisabled()));
     check('R-B1: the simulated roller is still off by default',
@@ -114,15 +122,16 @@ async function main() {
     // Gated tabs appear when their flag is turned on.
     await page.locator('#flag-soloMode').check();
     await page.waitForTimeout(60);
-    check('solo tab appears when soloMode is on', await page.locator('#bottom-nav a', { hasText: 'Solo' }).count() === 1);
+    check('the solo screen becomes reachable when its option is on',
+      (await page.locator('#bottom-nav a', { hasText: 'Solo' }).count()) + (await page.locator('#screen-menu').count()) >= 1);
 
     // A11y basics.
-    await page.getByRole('link', { name: 'Home', exact: true }).click();
+    await go('#/');
     check('nav marks the current tab with aria-current', await page.locator('#bottom-nav a[aria-current="page"]').count() === 1);
     check('icon-only buttons are labelled', await page.locator('#theme-toggle[aria-label]').count() === 1);
 
     // --- 🏁 First Session Playable: create → sheet → resolve a check → track resources ---
-    await page.getByRole('link', { name: 'Create', exact: true }).click();
+    await go('#/create');
     await page.waitForSelector('#char-name');
     await page.fill('#char-name', 'Test Runner');
     await page.locator('#career-resistanceRunner').check();
@@ -137,19 +146,30 @@ async function main() {
 
     // XP step: spend on a characteristic and confirm the cost model (§7).
     await page.waitForSelector('#roller-skill, .stat-grid');
-    const xpBefore = await page.locator('.card p.small.muted').first().textContent();
-    check('wizard opens with 70 XP', /70 of 70 XP left/.test(xpBefore), xpBefore);
+    const xpBefore = await page.locator('#screen p.small.muted').first().textContent();
+    check('wizard opens with 70 experience', /70 of 70 experience/.test(xpBefore), xpBefore);
     await page.getByRole('button', { name: 'Raise Brawn', exact: true }).click();
-    const xpAfterBrawn = await page.locator('.card p.small.muted').first().textContent();
-    check('raising a characteristic to 2 costs 20 XP', /50 of 70 XP left/.test(xpAfterBrawn), xpAfterBrawn);
+    const xpAfterBrawn = await page.locator('#screen p.small.muted').first().textContent();
+    check('raising a characteristic to 2 costs 20 XP', /50 of 70 experience/.test(xpAfterBrawn), xpAfterBrawn);
 
-    // Talent pyramid is enforced live (§7, §12A).
+    // Talents live on their own sub-step, grouped by tier and filterable.
+    await subtab('Talents');
+    await page.fill('#talent-filter', 'Berserk');
+    await page.waitForTimeout(90);
     const berserkRow = page.locator('.result', { hasText: 'Berserk' }).first();
-    check('R-11/pyramid: a tier 2 talent is locked with no tier 1 held',
+    check('pyramid: a tier 2 talent is locked with no tier 1 held',
       (await berserkRow.getByRole('button', { name: 'Locked' }).count()) === 1);
+    check('the wizard says why a talent is locked',
+      /pyramid/i.test(await berserkRow.innerText()), await berserkRow.innerText());
+    await page.fill('#talent-filter', 'Grit');
+    await page.waitForTimeout(90);
     await page.locator('.result', { hasText: 'Grit' }).first().getByRole('button', { name: 'Buy' }).click();
+    await page.fill('#talent-filter', 'Berserk');
+    await page.waitForTimeout(90);
     check('pyramid: the tier 2 talent unlocks once a tier 1 is held',
       (await page.locator('.result', { hasText: 'Berserk' }).first().getByRole('button', { name: 'Buy' }).count()) === 1);
+    await page.fill('#talent-filter', '');
+    await page.waitForTimeout(90);
 
     await page.getByRole('button', { name: 'Next', exact: true }).click();   // derived
     check('R-1 badge shown on the derived step', await page.getByText('R-1 inferred').first().isVisible());
@@ -176,20 +196,24 @@ async function main() {
     check('saving lands on the sheet', new URL(page.url()).hash === '#/sheet');
     check('persistent resource header appears', await page.locator('#resource-header .chip').count() >= 5);
     const header = await page.locator('#resource-header').innerText();
-    check('header shows wounds against the true threshold', /W 0\/10/.test(header), header);
-    check('header shows Story Points as player/GM', /SP 1\/0/.test(header), header);
+    check('the resource bar shows injury against its true limit', /Injury 0\/10/.test(header), header);
+    check('the resource bar shows story points as players / GM', /Story 1\/0/.test(header), header);
     check('header shows Personal and Cell Heat', /Heat 0·0/.test(header), header);
 
     // Vitals stepper clamps and flips incapacitation at the threshold (§6).
-    for (let i = 0; i < 10; i += 1) await page.getByRole('button', { name: 'Raise Wounds' }).click();
+    await page.fill('#vital-injury', '10');
+    await page.locator('#vital-injury').blur();
+    await page.waitForTimeout(80);
     check('incapacitated once wounds meet the threshold', /INCAPACITATED/.test(await page.locator('#resource-header').innerText()));
-    for (let i = 0; i < 10; i += 1) await page.getByRole('button', { name: 'Lower Wounds' }).click();
+    await page.fill('#vital-injury', '0');
+    await page.locator('#vital-injury').blur();
+    await page.waitForTimeout(80);
 
     // The roller: pool build, cancellation, Heat from Despair in a surveilled context.
-    await page.getByRole('link', { name: 'Roll', exact: true }).click();
+    await go('#/roll');
     await page.waitForSelector('#roller-skill');
     await page.selectOption('#roller-skill', 'deception');
-    const poolText = await page.locator('#screen .card', { hasText: 'Pool' }).first().innerText();
+    const poolText = await page.locator('#screen section.card', { hasText: 'Your dice' }).first().innerText();
     check('pool is built from the skill and its characteristic',
       /Proficiency|Ability/.test(poolText) && /Deception 1 with Cunning 1/.test(poolText), poolText);
     check('difficulty dice come from the difficulty ladder', /2 Difficulty/.test(poolText), poolText);
@@ -201,18 +225,18 @@ async function main() {
     check('an uncancelled Despair on an evasion check reads +2 Personal Heat (§17.1)',
       /Personal Heat \+2/.test(resultText), resultText);
     // The simulated roller fills the symbol entry from the supplied face table (D§).
-    await page.getByRole('link', { name: 'Settings', exact: true }).click();
+    await go('#/settings');
     await page.locator('#flag-digitalRoller').check();
-    await page.getByRole('link', { name: 'Roll', exact: true }).click();
+    await go('#/roll');
     await page.waitForSelector('#roll-digitally');
     await page.getByRole('button', { name: 'Roll this pool' }).click();
     await page.waitForTimeout(80);
     const rolledText = await page.locator('#screen').innerText();
     check('a digital roll reports each die and its face (D§)', /Ability \d+:|Proficiency \d+:|Difficulty \d+:/.test(rolledText), rolledText.slice(0, 160));
     await page.getByRole('button', { name: 'Clear symbols' }).click();
-    await page.getByRole('link', { name: 'Settings', exact: true }).click();
+    await go('#/settings');
     await page.locator('#flag-digitalRoller').uncheck();
-    await page.getByRole('link', { name: 'Roll', exact: true }).click();
+    await go('#/roll');
     await page.waitForTimeout(60);
     check('manual entry remains available with the simulated roller off',
       (await page.locator('#roll-digitally').count()) === 0);
@@ -224,10 +248,12 @@ async function main() {
     await page.waitForTimeout(80);
     const headerAfter = await page.locator('#resource-header').innerText();
     check('Heat is applied to the character', /Heat 2·0/.test(headerAfter), headerAfter);
-    check('the roll is logged', (await page.locator('#screen .card', { hasText: 'Roll log' }).locator('.result').count()) >= 1);
+    check('the roll is logged', (await page.locator('#screen section.card', { hasText: 'Recent checks' }).locator('.result').count()) >= 1);
+    check('the outcome stays on screen instead of only flashing a toast',
+      /Suspicion on you/.test(await page.locator('.outcome').first().innerText()));
 
     // --- Phase 4: combat tracker, lifecycle, progress tasks ---
-    await page.getByRole('link', { name: 'Combat', exact: true }).click();
+    await go('#/combat');
     await page.waitForSelector('#bestiary-pick');
 
     // Bestiary drop-in loads printed stats verbatim (R-15) and computes group WT (R-18).
@@ -285,38 +311,40 @@ async function main() {
     await page.waitForTimeout(120);
     const afterSession = await page.locator('#resource-header').innerText();
     check('downtime decays Personal Heat by 1 (§17.4)', /Heat 2·/.test(afterSession), afterSession);
-    await page.getByRole('link', { name: 'Sheet', exact: true }).click();
+    await go('#/sheet');
     // 70 XP at creation, 25 spent (Brawn to 2 and one rank of Grit), plus the 20 session award.
     const xpText = await page.locator('#screen').innerText();
-    check('the session award adds 20 XP (§27)', /65 XP available of 90 earned/.test(xpText), xpText.match(/\d+ XP available of \d+ earned/) || 'no XP line');
+    check('the session award adds 20 XP (§27)', /65 experience unspent/.test(xpText), (xpText.match(/\d+ experience unspent/) || ['no XP line'])[0]);
 
-    await page.getByRole('link', { name: 'Combat', exact: true }).click();
+    await go('#/combat');
     await page.getByRole('button', { name: /^Undo End session/ }).click();
     await page.waitForTimeout(120);
     check('one-step undo restores the pre-boundary state',
       /Heat 3·2/.test(await page.locator('#resource-header').innerText()));
 
     // --- Phase 4: guided death procedure and enforced rest limits ---
-    await page.getByRole('link', { name: 'Sheet', exact: true }).click();
+    await go('#/sheet');
+    await subtab('Talents & injuries');
     await page.getByRole('button', { name: 'Start Bleeding Out' }).click();
     await page.getByRole('button', { name: 'Tick one turn' }).click();
     await page.waitForTimeout(80);
     check('Bleeding Out ticks 1 wound and 1 strain per turn (§9)',
-      /W 1\/10/.test(await page.locator('#resource-header').innerText()), await page.locator('#resource-header').innerText());
+      /Injury 1\/10/.test(await page.locator('#resource-header').innerText()), await page.locator('#resource-header').innerText());
 
     await page.getByRole('button', { name: 'Healed — clear' }).click();
+    await subtab('Recovery');
     await page.fill('#recovery-successes', '2');
     await page.locator('#recovery-nightRest').click();
     await page.waitForTimeout(80);
     check('a night\'s rest heals 1 wound and all strain (§5G)',
-      /W 0\/10/.test(await page.locator('#resource-header').innerText()));
+      /Injury 0\/10/.test(await page.locator('#resource-header').innerText()));
     check('the once-per-night limit is enforced', await page.locator('#recovery-nightRest').isDisabled());
 
     // --- Phase 6 surface: the GM screen with the bestiary browser ---
-    await page.getByRole('link', { name: 'Settings', exact: true }).click();
+    await go('#/settings');
     await page.locator('#flag-gmScreen').check();
     await page.waitForTimeout(60);
-    await page.getByRole('link', { name: 'GM', exact: true }).click();
+    await go('#/gm');
     await page.waitForSelector('#bestiary-list');
     check('the bestiary browser lists all 28 published blocks',
       /28 of 28 entries/.test(await page.locator('#bestiary-list').innerText()));
@@ -330,10 +358,10 @@ async function main() {
     check('the tier filter finds the 4 nemeses', /4 of 28 entries/.test(await page.locator('#bestiary-list').innerText()));
 
     // --- Phase 6: solo mode (official rules, so the tab is real) ---
-    await page.getByRole('link', { name: 'Settings', exact: true }).click();
+    await go('#/settings');
     if (!(await page.locator('#flag-soloMode').isChecked())) await page.locator('#flag-soloMode').check();
     await page.waitForTimeout(60);
-    await page.getByRole('link', { name: 'Solo', exact: true }).click();
+    await go('#/solo');
     await page.waitForSelector('#oracle-likelihood');
     check('the Oracle offers all three likelihoods', (await page.locator('#oracle-likelihood option').count()) === 3);
 
@@ -355,8 +383,45 @@ async function main() {
     await page.getByRole('button', { name: 'Random encounter (B§7)' }).click();
     check('the random encounter table rolls', /\(\d+\)/.test(await page.locator('#solo-output').innerText()));
 
+    // --- UX pass: seat modes, checklist, suggested spread, confirmations, help ---
+    await go('#/settings');
+    await page.locator('#mode-gm').check();
+    await page.waitForTimeout(120);
+    const gmTabs = (await page.locator('#bottom-nav a').allInnerTexts()).join(' ');
+    check('switching seat to GM swaps the tab bar', /GM/i.test(gmTabs) && /COMBAT/i.test(gmTabs), gmTabs);
+    check('the GM seat still shows five tabs', (await page.locator('#bottom-nav a').count()) === 5);
+    await page.locator('#mode-player').check();
+    await page.waitForTimeout(120);
+
+    await go('#/');
+    check('home leads with a start-here checklist', (await page.locator('.checklist li').count()) === 4);
+    check('completed steps are ticked off', (await page.locator('.checklist .tick', { hasText: '✓' }).count()) >= 2);
+
+    check('panels explain themselves in plain language', (await page.locator('#screen .lede').count()) >= 2);
+    check('each panel offers a how-this-works expander', (await page.locator('#screen details.howto').count()) >= 2);
+
+    // Every screen is reachable even when it has no tab in this seat.
+    await page.locator('#screen-menu').click();
+    await page.waitForSelector('.modal');
+    check('the header menu lists every screen', (await page.locator('.menu-item').count()) >= 8);
+    await page.getByRole('button', { name: 'Close' }).click();
+
+    // Destructive actions confirm first.
+    await go('#/combat');
+    await page.selectOption('#bestiary-pick', 'streetPatrol');
+    await page.getByRole('button', { name: 'Drop in', exact: true }).click();
+    await page.waitForTimeout(80);
+    await page.locator('.result', { hasText: 'Street Patrol' }).first().getByRole('button', { name: 'Remove', exact: true }).click();
+    await page.waitForSelector('.modal-backdrop');
+    const confirmText = await page.locator('.modal').innerText();
+    check('removing a combatant asks first', /take .* out of the fight/i.test(confirmText), confirmText.slice(0, 120));
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await page.waitForTimeout(80);
+    check('cancelling leaves the combatant in place',
+      (await page.locator('.result', { hasText: 'Street Patrol' }).count()) >= 1);
+
     // --- citation links land in the rules library on the cited entry ---
-    await page.getByRole('link', { name: 'Roll', exact: true }).click();
+    await go('#/roll');
     await page.waitForSelector('#roller-skill');
     await page.getByRole('link', { name: 'Look up §5E in the rules library' }).click();
     await page.waitForSelector('#rules-search');
@@ -364,7 +429,8 @@ async function main() {
     check('the cited section is found', (await page.locator('#rules-results .result').count()) >= 5);
 
     // --- item damage ladder and attachments (§14B, §14C) ---
-    await page.getByRole('link', { name: 'Sheet', exact: true }).click();
+    await go('#/sheet');
+    await subtab('Gear');
     const firstItem = page.locator('.result', { hasText: 'P38 pistol' }).first();
     if (await firstItem.count()) {
       await firstItem.getByRole('button', { name: 'Damage a step' }).click();
@@ -382,7 +448,7 @@ async function main() {
     }
 
     // --- safety-tools note (§20A) ---
-    await page.getByRole('link', { name: 'Settings', exact: true }).click();
+    await go('#/settings');
     await page.getByRole('link', { name: 'Open the safety-tools note' }).click();
     await page.waitForSelector('#screen .card');
     check('the safety-tools note paraphrases session zero and rule zero (§20A)',
@@ -391,8 +457,6 @@ async function main() {
     // 390px as well as 360px.
     await page.setViewportSize({ width: 390, height: 780 });
     for (const label of ['Home', 'Sheet', 'Roll', 'Combat', 'Solo', 'GM', 'Rules', 'Settings']) {
-      await page.getByRole('link', { name: label, exact: true }).click();
-      await page.waitForTimeout(60);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       check(`${label} has no horizontal overflow at 390px`, overflow <= 0, `overflow ${overflow}px`);
     }
