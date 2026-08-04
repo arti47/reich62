@@ -451,13 +451,19 @@ async function main() {
     const firstStep = await page.locator('.checklist li').first().innerText();
     check('checklist hints sit on their own line', /\n/.test(firstStep), JSON.stringify(firstStep));
 
-    // --- citation links land in the rules library on the cited entry ---
+    // --- no section-number links clutter the screens; they stay searchable instead ---
     await go('#/roll');
     await page.waitForSelector('#roller-skill');
-    await page.getByRole('link', { name: 'Look up §5E in the rules library' }).click();
+    check('the roll screen carries no section-number links', (await page.locator('#screen a.cite').count()) === 0);
+    await go('#/rules');
     await page.waitForSelector('#rules-search');
-    equal('a citation link carries its section into the search box', await page.inputValue('#rules-search'), '§5E');
-    check('the cited section is found', (await page.locator('#rules-results .rule-entry').count()) >= 5);
+    check('rules entries carry no repeated section links', (await page.locator('#rules-results a.cite').count()) === 0);
+    await page.fill('#rules-search', '§5E');
+    await page.waitForTimeout(90);
+    check('a section number typed into the search still finds its rules',
+      (await page.locator('#rules-results .rule-entry').count()) >= 5);
+    await page.fill('#rules-search', '');
+    await page.waitForTimeout(90);
 
     // --- item damage ladder and attachments (§14B, §14C) ---
     await go('#/sheet');

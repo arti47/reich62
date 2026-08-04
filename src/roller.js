@@ -355,7 +355,6 @@ export function renderRoller(mount) {
   setup.append(toggle('roller-surveilled', 'Surveilled context (§17.1)', state.surveilled, (v) => { state.surveilled = v; rerender(); }));
   setup.append(toggle('roller-triumph-heat', 'Spend a Triumph to reduce Personal Heat by 1 (§17.1)', state.spendTriumphOnHeat, (v) => { state.spendTriumphOnHeat = v; rerender(); }));
   setup.append(toggle('roller-public', 'Public check (Heat Setbacks apply)', state.publicCheck, (v) => { state.publicCheck = v; rerender(); }));
-  setup.append(citation('§17.1'));
   mount.append(setup);
 
   // --- situational modifiers (§5E, §5J) and die modifications (§2.4, §8) ---
@@ -378,7 +377,6 @@ export function renderRoller(mount) {
   situationBody.append(toggle('roller-cover', 'Behind cover (§5E)', state.cover, (v) => { state.cover = v; rerender(); }));
   situationBody.append(numberField('roller-silhouette', 'Target silhouette minus mine (§5J)', state.silhouetteDelta, (v) => { state.silhouetteDelta = v; rerender(); }));
   situationBody.append(numberField('roller-adversary', 'Target\'s Adversary rank (§12C)', state.targetAdversary, (v) => { state.targetAdversary = v; rerender(); }));
-  situationBody.append(citation('§5E'));
 
   const modBody = el('div', {});
   situationBody.append(accordion('Change the dice by hand', [modBody], { key: 'roll-mods', summary: 'upgrade, downgrade, spend a story point' }));
@@ -398,14 +396,12 @@ export function renderRoller(mount) {
       rerender();
     }
   }));
-  modBody.append(citation('§8'));
   mount.append(situational);
 
   const { pool, notes } = assemblePool(character);
   const poolCard = panel('Your dice', PANELS.rollPool, [
     el('p', { class: 'dice-glyph', text: describePool(pool) }),
-    el('ul', { class: 'small muted' }, notes.map((n) => el('li', { text: n }))),
-    citation('§2')
+    el('ul', { class: 'small muted' }, notes.map((n) => el('li', { text: n })))
   ]);
   mount.append(poolCard);
 
@@ -465,7 +461,6 @@ export function renderRoller(mount) {
   const spends = availableSpends(state.context, result.net);
   if (spends.length) {
     resultCard.append(el('h3', { text: 'Spends available' }));
-    resultCard.append(citation(SPEND_TABLES[state.context].cite));
     spends.slice(0, 8).forEach((row) => {
       resultCard.append(el('div', { class: 'result' }, [
         el('div', { class: 'result-head' }, [
@@ -559,14 +554,6 @@ function describePool(pool) {
 function describeTally(tally) {
   const parts = Object.entries(tally).filter(([, v]) => v > 0).map(([k, v]) => `${v} ${k}`);
   return parts.join(', ') || 'none';
-}
-
-/** Every automated surface links back to its rules-library entry (template §9.2). */
-export function citation(cite) {
-  return el('a', {
-    class: 'cite', href: `#/rules?q=${encodeURIComponent(cite)}`,
-    'aria-label': `Look up ${cite} in the rules library`, text: `${cite} ↗`
-  });
 }
 
 function toggle(id, label, value, onChange) {

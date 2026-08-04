@@ -146,7 +146,6 @@ export function renderRules(mount, params = {}) {
         body.append(el('article', { class: 'rule-entry' }, [
           el('h4', { text: item.title }),
           el('p', { text: item.body }),
-          el('a', { class: 'cite', href: `#/rules?q=${encodeURIComponent(item.cite || '')}`, text: item.cite || '' }),
           item.badge ? el('span', { class: `badge ${item.badgeClass || ''}`, text: item.badge }) : null
         ]));
       });
