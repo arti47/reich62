@@ -393,19 +393,29 @@ textarea { min-height: 5rem; }
 }
 
 details.howto, details.accordion { border: 1px solid var(--rule); border-radius: var(--radius); }
-details.howto { margin: 0 0 0.6rem; background: var(--panel-2); }
+details.howto { margin: 0 0 0.6rem; background: transparent; border-color: transparent; }
+details.howto[open] { border-color: var(--rule); background: var(--panel-2); }
 details.howto > summary,
 details.accordion > summary {
   cursor: pointer;
-  padding: 0.5rem 0.6rem;
-  font-size: 0.85rem;
   list-style: none;
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+details.howto > summary {
+  padding: 0.3rem 0.5rem;
+  min-height: 2rem;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+details.accordion > summary {
+  padding: 0.5rem 0.6rem;
   min-height: 2.5rem;
 }
+/* the right-hand count on an accordion is the only thing that gets pushed away */
+.accordion-summary { margin-left: auto; }
 details.howto > summary::-webkit-details-marker,
 details.accordion > summary::-webkit-details-marker { display: none; }
 details.howto > summary::before,
@@ -418,7 +428,7 @@ details.accordion { margin: 0 0 0.5rem; background: var(--panel); }
 details.accordion > *:not(summary) { padding: 0 0.6rem; }
 details.accordion > *:last-child { padding-bottom: 0.6rem; }
 .accordion-title { font-family: var(--font-head); text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.8rem; }
-.accordion-summary { color: var(--ink-soft); font-size: 0.8rem; font-family: var(--font-mono); text-align: right; }
+.accordion-summary { color: var(--ink-soft); font-size: 0.8rem; font-family: var(--font-mono); text-align: right; margin-left: auto; }
 
 .subtabs {
   display: flex;
@@ -474,7 +484,10 @@ details.accordion > *:last-child { padding-bottom: 0.6rem; }
 .checklist li { display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.45rem 0; border-bottom: 1px solid var(--rule); }
 .checklist li:last-child { border-bottom: 0; }
 .checklist .tick { font-family: var(--font-mono); color: var(--brass); }
-.checklist .done { color: var(--ink-soft); text-decoration: line-through; }
+.checklist li > span { display: flex; flex-direction: column; gap: 0.15rem; }
+.checklist .toggle-desc { display: block; font-size: 0.8rem; color: var(--ink-soft); }
+.checklist .done > a { color: var(--ink-soft); text-decoration: line-through; }
+.checklist .done .toggle-desc { text-decoration: none; }
 
 .menu-item {
   display: block;
@@ -485,3 +498,43 @@ details.accordion > *:last-child { padding-bottom: 0.6rem; }
 }
 .menu-item:last-child { border-bottom: 0; }
 .menu-title { font-family: var(--font-head); text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.85rem; }
+
+/* --- symbols are always labelled, never a bare glyph --- */
+.sym {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.2rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  margin-right: 0.5rem;
+}
+.sym-count { font-weight: 600; }
+.sym-name { font-family: var(--font-body); font-size: 0.8rem; color: var(--ink-soft); }
+.sym-positive .sym-count { color: var(--brass); }
+.sym-negative .sym-count { color: var(--oxblood); }
+
+/* --- outcome chip on the result panel --- */
+.status-chip {
+  display: inline-block;
+  font-family: var(--font-head);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius);
+  border: 1px solid currentColor;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+.status-success { color: var(--brass); }
+.status-failure { color: var(--oxblood); }
+
+/* --- rules library, grouped by section --- */
+.rule-section { margin: 0 0 0.6rem; }
+.rule-section > summary { font-family: var(--font-head); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.8rem; }
+.rule-entry { padding: 0.5rem 0; border-bottom: 1px solid var(--rule); }
+.rule-entry:last-child { border-bottom: 0; }
+.rule-entry h4 { margin: 0 0 0.15rem; font-size: 0.95rem; font-family: var(--font-body); font-weight: 600; }
+.rule-entry p { margin: 0; font-size: 0.9rem; color: var(--ink-soft); }
+.rule-entry .cite { display: inline-block; margin-top: 0.2rem; }

@@ -97,25 +97,38 @@ export function promptModal(message, { title = 'Enter a value', value = '', conf
   });
 }
 
-/** Dice symbol glyph, colour- and shape-coded (never colour alone — a11y, CLAUDE.md §1.2). */
+export const SYMBOL_GLYPHS = {
+  success: '🌟', advantage: '🔺', triumph: '☀️',
+  failure: '💥', threat: '🔻', despair: '⚡'
+};
+
+export const SYMBOL_NAMES = {
+  success: 'Success', advantage: 'Advantage', triumph: 'Triumph',
+  failure: 'Failure', threat: 'Threat', despair: 'Despair'
+};
+
+const POSITIVE = ['success', 'advantage', 'triumph'];
+
+/** A dice symbol is never shown bare: glyph, count and name always travel together, so
+ *  nothing on screen needs a separate legend to decode (CLAUDE.md §1.2 a11y). */
 export function symbolGlyph(symbol, count = 1) {
-  const map = {
-    success: '🌟', advantage: '🔺', triumph: '☀️',
-    failure: '💥', threat: '🔻', despair: '⚡'
-  };
+  const name = SYMBOL_NAMES[symbol] || symbol;
   return el('span', {
-    class: 'dice-glyph',
-    'aria-label': `${count} ${symbol}`,
-    text: `${count > 1 ? count : ''}${map[symbol] || '?'}`
-  });
+    class: `sym ${POSITIVE.includes(symbol) ? 'sym-positive' : 'sym-negative'}`,
+    'aria-label': `${count} ${name}`
+  }, [
+    el('span', { class: 'dice-glyph', 'aria-hidden': 'true', text: SYMBOL_GLYPHS[symbol] || '?' }),
+    el('span', { class: 'sym-count', text: String(count) }),
+    el('span', { class: 'sym-name', text: name })
+  ]);
 }
 
 export function renderTally(tally) {
   const wrap = el('span', {});
   for (const key of ['success', 'advantage', 'triumph', 'failure', 'threat', 'despair']) {
-    if (tally[key]) wrap.append(symbolGlyph(key, tally[key]), ' ');
+    if (tally[key]) wrap.append(symbolGlyph(key, tally[key]));
   }
-  if (!wrap.childNodes.length) wrap.append(document.createTextNode('—'));
+  if (!wrap.childNodes.length) wrap.append(el('span', { class: 'muted small', text: 'Nothing left over' }));
   return wrap;
 }
 
@@ -129,7 +142,7 @@ export function panel(title, helpEntry, children = [], { open = true, id = null 
     card.append(el('p', { class: 'lede', text: helpEntry.lede }));
     if (helpEntry.detail) {
       const details = el('details', { class: 'howto' });
-      details.append(el('summary', { text: 'How this works' }));
+      details.append(el('summary', {}, [el('span', { text: 'How this works' })]));
       details.append(el('p', { class: 'small', text: helpEntry.detail }));
       card.append(details);
     }

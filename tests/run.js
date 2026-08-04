@@ -99,15 +99,16 @@ async function main() {
 
     // Rules library search over the extracted data.
     await go('#/rules');
-    await page.waitForSelector('#rules-results .result');
-    const total = await page.locator('#rules-results .result').count();
+    await page.waitForSelector('#rules-results .rule-entry');
+    const total = await page.locator('#rules-results .rule-entry').count();
     check('rules library is populated', total > 0, `entries rendered ${total}`);
     await page.fill('#rules-search', '§17.3');
     await page.waitForTimeout(60);
-    check('search finds Heat thresholds by section number', await page.locator('#rules-results .result').count() >= 5);
+    check('search finds Heat thresholds by section number', await page.locator('#rules-results .rule-entry').count() >= 5);
+    check('results are grouped by the part of the books they come from', (await page.locator('#rules-results .rule-section').count()) >= 1);
     await page.fill('#rules-search', 'B§6');
     await page.waitForTimeout(60);
-    check('search finds bestiary encounter blocks by B§ citation', await page.locator('#rules-results .result').count() >= 4);
+    check('search finds bestiary encounter blocks by B§ citation', await page.locator('#rules-results .rule-entry').count() >= 4);
 
     // R-B1 — the digital roller toggle is present but blocked.
     await go('#/settings');
@@ -420,13 +421,43 @@ async function main() {
     check('cancelling leaves the combatant in place',
       (await page.locator('.result', { hasText: 'Street Patrol' }).count()) >= 1);
 
+    // --- formatting pass: labelled symbols, outcome chip, tidy help bars ---
+    await go('#/roll');
+    await page.getByRole('button', { name: 'One more success' }).click();
+    await page.getByRole('button', { name: 'One more failure' }).click();
+    await page.getByRole('button', { name: 'One more threat' }).click();
+    await page.waitForTimeout(90);
+    const outcomeText = await page.locator('#roll-result').innerText();
+    check('the result panel is headed Outcome rather than shouting a verdict',
+      /OUTCOME/i.test(outcomeText) && !/IT FAILED/i.test(outcomeText), outcomeText.slice(0, 60));
+    check('the verdict is a status chip', (await page.locator('#roll-result .status-chip').count()) === 1);
+    check('the panel says why the check landed as it did',
+      /cancelled against/.test(outcomeText), outcomeText.slice(0, 200));
+    check('no symbol is shown bare — each carries its name',
+      (await page.locator('#roll-result .sym .sym-name').count()) >= 1);
+    const symText = await page.locator('#roll-result .sym').first().innerText();
+    check('a symbol reads as glyph, count and name', /\d/.test(symText) && /Threat|Success|Advantage/.test(symText), symText);
+    await page.getByRole('button', { name: 'Clear symbols' }).click();
+
+    // The help bar is a compact left-aligned row, not a wide bar with a dead gap.
+    await go('#/');
+    const helpBox = await page.locator('#screen details.howto summary').first().boundingBox();
+    check('the help bar is compact', helpBox.height <= 40, `height ${helpBox.height}px`);
+    const helpLabel = await page.locator('#screen details.howto summary span').first().boundingBox();
+    check('its label sits at the left, with no dead gap',
+      helpLabel.x - helpBox.x < 40, `label offset ${Math.round(helpLabel.x - helpBox.x)}px`);
+
+    // Checklist links and their hints are separate lines, not run together.
+    const firstStep = await page.locator('.checklist li').first().innerText();
+    check('checklist hints sit on their own line', /\n/.test(firstStep), JSON.stringify(firstStep));
+
     // --- citation links land in the rules library on the cited entry ---
     await go('#/roll');
     await page.waitForSelector('#roller-skill');
     await page.getByRole('link', { name: 'Look up §5E in the rules library' }).click();
     await page.waitForSelector('#rules-search');
     equal('a citation link carries its section into the search box', await page.inputValue('#rules-search'), '§5E');
-    check('the cited section is found', (await page.locator('#rules-results .result').count()) >= 5);
+    check('the cited section is found', (await page.locator('#rules-results .rule-entry').count()) >= 5);
 
     // --- item damage ladder and attachments (§14B, §14C) ---
     await go('#/sheet');

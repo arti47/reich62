@@ -5,7 +5,7 @@ import { Settings, FLAGS, theme, cycleTheme } from './settings.js';
 import { modal, showToast, confirmModal, panel, subTabs, emptyState } from './ui.js';
 import { PANELS, MODES, TERMS, label as termLabel } from './help.js';
 import { listCharacters, activeCharacter, getCell, exportAll, importAll, setActiveCharacter } from './store.js';
-import { buildIndex, search } from './rules-index.js';
+import { buildIndex, search, SECTIONS } from './rules-index.js';
 import { BASE_WOUND_THRESHOLD, BASE_STRAIN_THRESHOLD, CREATION_RULES, DIE_FACES } from '../data.js';
 
 export function renderHome(mount) {
@@ -25,7 +25,7 @@ export function renderHome(mount) {
   const list = el('ol', { class: 'checklist' });
   steps.forEach((step, index) => {
     list.append(el('li', {}, [
-      el('span', { class: 'tick', text: step.done ? '✓' : `${index + 1}.` }),
+      el('span', { class: 'tick', 'aria-hidden': 'true', text: step.done ? '✓' : `${index + 1}.` }),
       el('span', { class: step.done ? 'done' : '' }, [
         el('a', { href: step.href, text: step.label }),
         el('span', { class: 'toggle-desc', text: step.hint })
@@ -117,23 +117,52 @@ export function renderRules(mount, params = {}) {
     'aria-label': 'Search the rules library'
   });
 
-  const PAGE = 25;
+  const PAGE = 40;
   let shown = PAGE;
   const draw = (query) => {
     clear(results);
     const group = RULE_GROUPS.find((g) => g.id === ruleGroup) || RULE_GROUPS[0];
     const hits = search(index, query).filter(group.match);
     results.append(el('p', { class: 'small muted', text: `${hits.length} of ${index.length} entries` }));
-    hits.slice(0, shown).forEach((entry) => {
-      results.append(el('div', { class: 'result' }, [
-        el('div', { class: 'result-head' }, [
-          el('span', { class: 'result-title', text: entry.title }),
-          el('span', { class: 'cite', text: entry.cite || '' })
+
+    if (!hits.length) {
+      results.append(el('p', { class: 'muted', text: 'Nothing matches. Try a shorter word, or a section number such as §17.' }));
+      return;
+    }
+
+    // Grouped by the part of the books they come from, so the list reads as a contents
+    // page rather than 547 rows in a run.
+    let rendered = 0;
+    let opened = 0;
+    SECTIONS.forEach((section) => {
+      const inSection = hits.filter((e) => e.section === section.id);
+      if (!inSection.length) return;
+      if (rendered >= shown) return;
+      const slice = inSection.slice(0, Math.max(0, shown - rendered));
+      rendered += slice.length;
+
+      const body = el('div', {});
+      slice.forEach((item) => {
+        body.append(el('article', { class: 'rule-entry' }, [
+          el('h4', { text: item.title }),
+          el('p', { text: item.body }),
+          el('a', { class: 'cite', href: `#/rules?q=${encodeURIComponent(item.cite || '')}`, text: item.cite || '' }),
+          item.badge ? el('span', { class: `badge ${item.badgeClass || ''}`, text: item.badge }) : null
+        ]));
+      });
+
+      // The first group is open so the screen never looks empty; the rest wait for a tap.
+      const open = !!query || opened === 0;
+      opened += 1;
+      results.append(el('details', { class: 'accordion rule-section', open }, [
+        el('summary', {}, [
+          el('span', { class: 'accordion-title', text: section.label }),
+          el('span', { class: 'accordion-summary', text: `${inSection.length}` })
         ]),
-        el('div', { class: 'result-body', text: entry.body }),
-        entry.badge ? el('span', { class: `badge ${entry.badgeClass || ''}`, text: entry.badge }) : null
+        body
       ]));
     });
+
     if (hits.length > shown) {
       results.append(el('button', {
         type: 'button', class: 'secondary', id: 'rules-more',

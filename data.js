@@ -67,12 +67,12 @@ export const SYMBOLS = [
 ];
 
 export const DICE = [
-  { id: 'ability',     name: 'Ability',     sides: 8,  colour: 'green',  polarity: 'positive', role: 'skill/characteristic', symbols: ['success', 'advantage'] },
-  { id: 'proficiency', name: 'Proficiency', sides: 12, colour: 'yellow', polarity: 'positive', role: 'upgraded Ability',     symbols: ['success', 'advantage', 'triumph'] },
-  { id: 'difficulty',  name: 'Difficulty',  sides: 8,  colour: 'purple', polarity: 'negative', role: 'the task itself',      symbols: ['failure', 'threat'] },
-  { id: 'challenge',   name: 'Challenge',   sides: 12, colour: 'red',    polarity: 'negative', role: 'upgraded Difficulty',  symbols: ['failure', 'threat', 'despair'] },
-  { id: 'boost',       name: 'Boost',       sides: 6,  colour: 'blue',   polarity: 'positive', role: 'situational edge',     symbols: ['success', 'advantage', 'blank'] },
-  { id: 'setback',     name: 'Setback',     sides: 6,  colour: 'black',  polarity: 'negative', role: 'situational hindrance', symbols: ['failure', 'threat', 'blank'] }
+  { id: 'ability',     name: 'Ability',     sides: 8,  colour: 'green',  polarity: 'positive', role: 'a skill and its governing characteristic', symbols: ['success', 'advantage'] },
+  { id: 'proficiency', name: 'Proficiency', sides: 12, colour: 'yellow', polarity: 'positive', role: 'an upgraded Ability die',  symbols: ['success', 'advantage', 'triumph'] },
+  { id: 'difficulty',  name: 'Difficulty',  sides: 8,  colour: 'purple', polarity: 'negative', role: 'the difficulty of the task itself', symbols: ['failure', 'threat'] },
+  { id: 'challenge',   name: 'Challenge',   sides: 12, colour: 'red',    polarity: 'negative', role: 'an upgraded Difficulty die', symbols: ['failure', 'threat', 'despair'] },
+  { id: 'boost',       name: 'Boost',       sides: 6,  colour: 'blue',   polarity: 'positive', role: 'a situational advantage', symbols: ['success', 'advantage', 'blank'] },
+  { id: 'setback',     name: 'Setback',     sides: 6,  colour: 'black',  polarity: 'negative', role: 'a situational hindrance', symbols: ['failure', 'threat', 'blank'] }
 ];
 
 export const UPGRADE_MAP = { ability: 'proficiency', difficulty: 'challenge' };

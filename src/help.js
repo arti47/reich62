@@ -39,7 +39,7 @@ export function gloss(key) {
 /** One line saying what a panel is for, plus a longer "how this works" for the expander. */
 export const PANELS = {
   homeChecklist: {
-    lede: 'Start here. Work down the list once and the app is set up for your table.',
+    lede: 'Work down this list once and the app is set up for your table.',
     detail: 'Nothing is stored anywhere but this device, so there is no account to make. You can export a backup from Settings at any point.'
   },
   homeCharacters: { lede: 'Your characters live here. Tap one to make it the active sheet.', detail: 'The active character is the one the Sheet, Roll and Combat screens work on. You can keep as many as you like.' },

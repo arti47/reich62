@@ -4,7 +4,7 @@
 // cancels symbols, applies spends, damage, Critical Injuries and Heat, and writes the log.
 
 import { el, clear, titleCase, newTally, cancel, outcome, rollDie, rollFace, clamp } from './core.js';
-import { showToast, renderTally, modal, panel, accordion, outcomeBox, numberStepper, emptyState } from './ui.js';
+import { showToast, renderTally, modal, panel, accordion, outcomeBox, numberStepper, emptyState, symbolGlyph } from './ui.js';
 import { PANELS, label as termLabel, gloss } from './help.js';
 import {
   SKILLS, DIFFICULTIES, SPEND_TABLES, STORY_POINTS, CRITICAL_INJURY_RULES, DIE_FACES,
@@ -20,6 +20,16 @@ import { encumbranceState } from './derived.js';
 import { heatFromCheck, applyPersonalHeat, heatSetbackDice } from './heat.js';
 import { Settings } from './settings.js';
 import { STORAGE_PREFIX } from './core.js';
+
+/** One line per symbol, so the entry pad doubles as the legend. */
+const SYMBOL_HELP = {
+  success: 'Cancels a failure. One left over means the check works.',
+  advantage: 'Cancels a threat. Left over, you spend it on something good.',
+  triumph: 'Never cancels, always happens. The best result on the dice.',
+  failure: 'Cancels a success.',
+  threat: 'Cancels an advantage. Left over, the GM spends it against you.',
+  despair: 'Never cancels, always happens. In public it draws attention.'
+};
 
 const LOG_KEY = STORAGE_PREFIX + 'rollLog';
 const LOG_CAP = 100;
@@ -427,7 +437,10 @@ export function renderRoller(mount) {
   }
   ['success', 'advantage', 'triumph', 'failure', 'threat', 'despair'].forEach((sym) => {
     entry.append(el('div', { class: 'toggle-row' }, [
-      el('label', { for: `sym-${sym}` }, [el('span', { text: titleCase(sym) })]),
+      el('label', { for: `sym-${sym}` }, [
+        symbolGlyph(sym, state.entered[sym]),
+        el('span', { class: 'toggle-desc', text: SYMBOL_HELP[sym] })
+      ]),
       el('button', { type: 'button', class: 'secondary', text: '−', 'aria-label': `One less ${sym}`, onclick: () => { state.entered[sym] = Math.max(0, state.entered[sym] - 1); rerender(); } }),
       el('span', { id: `sym-${sym}`, class: 'stat-value', text: String(state.entered[sym]) }),
       el('button', { type: 'button', class: 'secondary', text: '+', 'aria-label': `One more ${sym}`, onclick: () => { state.entered[sym] += 1; rerender(); } })
@@ -438,9 +451,13 @@ export function renderRoller(mount) {
   const { result, heat } = resolve(character);
   if (state.lastOutcome) mount.append(outcomeBox(state.lastOutcome, { title: 'Last check' }));
 
-  const resultCard = panel(result.success ? 'It worked' : 'It failed', PANELS.rollResult, [], { id: 'roll-result' });
+  const resultCard = panel('Outcome', PANELS.rollResult, [], { id: 'roll-result' });
+  resultCard.querySelector('h2').append(el('span', {
+    class: `status-chip status-${result.success ? 'success' : 'failure'}`,
+    text: result.success ? 'Success' : 'Failure'
+  }));
   resultCard.append(
-    el('p', { class: 'small muted', text: result.success ? 'At least one success survived cancellation.' : 'No success survived cancellation.' }),
+    el('p', { class: 'small', text: explainCancellation(state.entered, result) }),
     el('p', {}, [renderTally(result.net)]),
     heat.reasons.length ? el('ul', { class: 'small' }, heat.reasons.map((r) => el('li', { text: r }))) : el('span', {})
   );
@@ -505,6 +522,27 @@ export function renderRoller(mount) {
     ]));
   });
   mount.append(logCard);
+}
+
+/** Say why the check landed where it did, in one line: what cancelled what, and what
+ *  survived (§1). */
+export function explainCancellation(entered, result) {
+  const parts = [];
+  const cancelledSuccess = Math.min(entered.success, entered.failure);
+  const cancelledAdvantage = Math.min(entered.advantage, entered.threat);
+
+  if (cancelledSuccess) parts.push(`${cancelledSuccess} success cancelled against ${cancelledSuccess} failure`);
+  if (result.netSuccess) parts.push(`${result.netSuccess} success left over, so the check succeeds`);
+  else if (result.netFailure) parts.push(`${result.netFailure} failure left over, so the check fails`);
+  else parts.push('nothing left on either side, and a check needs at least one success, so it fails');
+
+  if (cancelledAdvantage) parts.push(`${cancelledAdvantage} advantage cancelled against ${cancelledAdvantage} threat`);
+  if (result.netAdvantage) parts.push(`${result.netAdvantage} advantage to spend`);
+  if (result.netThreat) parts.push(`${result.netThreat} threat for the GM to spend`);
+  if (result.triumph) parts.push(`${result.triumph} triumph, which never cancels and always happens`);
+  if (result.despair) parts.push(`${result.despair} despair, which never cancels and always happens`);
+
+  return `${parts.join('; ')}.`;
 }
 
 function describePool(pool) {
