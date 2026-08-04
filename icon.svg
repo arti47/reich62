@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="REICH '62 Player">
+  <rect width="192" height="192" fill="#12100E"/>
+  <rect x="16" y="16" width="160" height="160" fill="none" stroke="#A98B4F" stroke-width="3"/>
+  <path d="M40 148 L96 40 L152 148 Z" fill="none" stroke="#8C2F2A" stroke-width="8" stroke-linejoin="round"/>
+  <circle cx="96" cy="112" r="16" fill="#E8E2D4"/>
+</svg>

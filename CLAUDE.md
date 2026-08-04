@@ -11,8 +11,9 @@
 > the same change** — features, data model, file tables, roadmap checkboxes, ledger ticks,
 > changelog.
 
-**Status: Stage B signed off — all blockers and ambiguities resolved (§4, confirmed
-2026-08-04). Ready for Phase 0. No application code written yet.**
+**Status: Phase 0 complete — app shell, theme, PWA, the full core data library (T1–T54a,
+T61–T67) and the regression harness are built and verified headless (150 checks, zero
+console errors). Phase 1 (creation wizard) is next.**
 
 ---
 
@@ -244,7 +245,7 @@ Not a statted entity with its own dice, but genuine campaign-level shared state 
 ### 3.9 Conditions & statuses — *no unified list; assembled from six sources*
 
 The manual has **no condition chapter**. The app's condition registry is assembled from:
-1. **Critical Injury results (§9)** — 22 entries, most of which *are* conditions with exact
+1. **Critical Injury results (§9)** — 29 rows, most of which *are* conditions with exact
    mechanical effects and "until healed" durations. These auto-apply.
 2. **Postures/states referenced in rules:** prone, staggered, disoriented, immobilised,
    incapacitated, blinded, encumbered, suffocating.
@@ -565,7 +566,7 @@ later edit cannot drift away from it.
 | Derived-stat formulas | 12 | §6 |
 | XP cost rules | 4 + gates | §7 |
 | Story Point spends | 4 player / 4 GM | §8 |
-| **Critical Injury results** | **22 rows** (01–150+, 4 severities) | §9 |
+| **Critical Injury results** | **29 rows** (01–151+; 8 Easy · 10 Average · 7 Hard · 3 Daunting · Dead). *Plan-stage estimate was 22; the real count is 29 (ledger rule: real counts win).* | §9 |
 | **Item qualities** | **27** | §10 |
 | **Talents** | **71** (T1 24 · T2 15 · T3 16 · T4 11 · T5 5) | §12A |
 | Motivation entries | 40 (4 tables × 10) | §12B |
@@ -613,19 +614,19 @@ day one; fantasy-phrase join codes; themed `modal()`/`showToast`/`confirmModal`/
 
 | File | Purpose | Status |
 |---|---|---|
-| `index.html` | App shell: header, bottom nav, screen mount, module entry | planned |
-| `styles.css` | Theme (§1.2) light + dark + components | planned |
-| `data.js` | Core rules library — every §3 list/table/formula | planned |
-| `data-npcs.js` | Adversary recipes, the 7 §12D abilities + 14 bestiary abilities, quick-gen tables, encounter sizing | planned |
-| `data-monsters.js` | **Bestiary compendium** — 10 minion groups, 12 rivals, 4 nemeses, 2 animals, 4 encounter blocks, random encounter table | planned |
+| `index.html` | App shell: header, bottom nav, screen mount, module entry | **present** |
+| `styles.css` | Theme (§1.2) light + dark + components | **present** |
+| `data.js` | Core rules library — every §3 list/table/formula | **present** |
+| `data-npcs.js` | Adversary recipes, the 7 §12D abilities + 14 bestiary abilities, quick-gen tables, encounter sizing | **present** |
+| `data-monsters.js` | **Bestiary compendium** — 10 minion groups, 12 rivals, 4 nemeses, 2 animals, 4 encounter blocks, random encounter table | **present** |
 | `data-pregens.js` | 3 published pregens | planned |
 | `data-solo.js` | Oracle, Random Event, Meaning, Element tables | planned |
 | ~~`data-<expansion>.js`~~ | **Omitted — no expansion books; the bestiary is committed core content, untoggled** | n/a |
-| `firebase-config.js` | Placeholder config + `FIREBASE_ENABLED` | planned |
-| `database.rules.json` | RTDB rules (player/GM roles; Cell write rules) | planned |
-| `manifest.json`, `service-worker.js`, `icon.svg` | PWA | planned |
-| `tests/`, `package.json` | Headless regression harness (`npm test`), dev-only `playwright-core` | planned |
-| `README.md` | Setup + Firebase steps + personal-use licensing note | planned |
+| `firebase-config.js` | Placeholder config + `FIREBASE_ENABLED` | **present** |
+| `database.rules.json` | RTDB rules (player/GM roles; Cell write rules) | **present** |
+| `manifest.json`, `service-worker.js`, `icon.svg` | PWA | **present** |
+| `tests/`, `package.json` | Headless regression harness (`npm test`), dev-only `playwright-core` | **present** |
+| `README.md` | Setup + Firebase steps + personal-use licensing note | **present** |
 | `CLAUDE.md` | This file | **live** |
 | `source/reich62_manual.md` | Source of record — core rules (`§x` citations) | present |
 | `source/reich62_bestiary.md` | Source of record — adversary compendium (`B§x` citations) | present |
@@ -649,6 +650,7 @@ day one; fantasy-phrase join codes; themed `modal()`/`showToast`/`confirmModal`/
 | `heat.js` | **New module (game-specific):** Heat generation (§17.1), Personal/Cell thresholds and their auto-applied effects, decay, surveilled-context flag | — |
 | `solo.js` | Oracle, Random Event, Meaning/Element tables, solo loop | enabled (official rules) |
 | `gm.js` | GM dashboard + rollable §3.21 reference tables | bestiary browser, random encounter roll (B§7), one-tap encounter blocks (B§6) |
+| `rules-index.js` | Builds the searchable rules library over every extracted table | flat cited entries, §/B§ searchable |
 | `screens.js` | Home/rules/about renderers, party banner, roll-log view | rules library with §-anchored search |
 | `router.js` | Bottom-nav routing, conditional tab gating | — |
 | `main.js` | Entry / boot | — |
@@ -737,74 +739,74 @@ against an unticked table.** If a row's source turns out to be silent or contrad
 not guess: add it to §4 as a new ruling and mark the row blocked.
 
 ### `data.js` — core (Phase 0)
-- [ ] **T1** Die types, symbols, cancellation rules — §1
-- [ ] **T2** Pool-build algorithm + modification order — §2
-- [ ] **T3** Difficulty ladder (7 levels) — §3
-- [ ] **T4** Per-skill difficulty guidance (7 skills × 4) — §3
-- [ ] **T5** Opposed / competitive / assisted procedures — §3A
-- [ ] **T6** Characteristics (6) — §4
-- [ ] **T7** Skills (26) with linked characteristics + category — §4
-- [ ] **T8** Excluded-skill list (7) — §4
-- [ ] **T9** Combat sequence + initiative slot-filling — §5, §5A'
-- [ ] **T10** Maneuvers (9) — §5A
-- [ ] **T11** Actions (4 types) + combat-check procedure — §5B
-- [ ] **T12** Ranged difficulty by range band — §5B Table 5B-1
-- [ ] **T13** Combat spend table (🔺/☀️ and 🔻/⚡) — §5C
-- [ ] **T14** Generic non-combat spend table — §5C'
-- [ ] **T15** Multiple attackers/defenders guidance — §5C''
-- [ ] **T16** Range bands (5) + movement costs — §5D
-- [ ] **T17** Environmental effects (6) incl. concealment dice ladder — §5E
-- [ ] **T18** Encumbrance rules + lifting ladder — §5F
-- [ ] **T19** Recovery & healing (all 7 methods + limits + modifiers) — §5G
-- [ ] **T20** Two-weapon, unarmed, improvised-weapon rules — §5H
-- [ ] **T21** Falling table + suffocation — §5I
-- [ ] **T22** Silhouette table + size difficulty rule — §5J
-- [ ] **T23** Derived-stat formulas (12) + `BASE_WOUND_THRESHOLD` 8 / `BASE_STRAIN_THRESHOLD` 10 — §6, R-1
-- [ ] **T24** XP costs + gates (pyramid, creation caps) — §7
-- [ ] **T25** Story Point economy (spends, flow, carry-over) — §8
-- [ ] **T26** **Critical Injury table (22 rows, severities, modifiers)** — §9
-- [ ] **T27** **Item qualities (27)** with active/passive + cost — §10
-- [ ] **T28** Called shots & disabling attacks — §10A
-- [ ] **T29** Social encounter rules + group-influence difficulty ladder — §11
-- [ ] **T30** Social spend table — §11
-- [ ] **T31** Vehicle characteristics, maneuvers, actions, crashes — §12
-- [ ] **T32** Vehicle spend table — §12
-- [ ] **T33** **Talents (71)** — id, tier, ranked, activation type, mechanical hook, `settingApplicable` (R-11) — §12A
-- [ ] **T34** Motivation tables (4 × 10) — §12B
-- [ ] **T35** Creation procedure (5 steps) — §13
-- [ ] **T36** **Careers (11 × 8 skills + suggested motivations)** — §14
-- [ ] **T37** Rarity ladder + location modifiers + buy/sell procedure — §14A
-- [ ] **T38** Item damage/repair ladder — §14B
-- [ ] **T39** Hard points + attachments (3 examples) — §14C
-- [ ] **T40** **Gear list (17)** — §15 *(R-13)*
-- [ ] **T41** **Weapons (10)** with qualities — §15C
-- [ ] **T42** **Armour (6)** — §15D
-- [ ] **T43** **Vehicles (17)** — §15E
-- [ ] **T44** Character-sheet field reference — §16A
-- [ ] **T45** **Heat system**: generation triggers, Personal/Cell thresholds (5×2), decay — §17
-- [ ] **T46** Encounter-sizing table + adventure-sizing guidance — §20B
-- [ ] **T47** Session/scene/adventure lifecycle bundles — §21–§24 *(synthesised, cited)*
-- [ ] **T48** XP award guidance — §27
-- [ ] **T49** Dread/fear check ladder + outcomes — §29
-- [ ] **T50** Rules-library quick-reference content — §30 + §26 skill usage examples (14)
+- [x] **T1** Die types, symbols, cancellation rules — §1
+- [x] **T2** Pool-build algorithm + modification order — §2
+- [x] **T3** Difficulty ladder (7 levels) — §3
+- [x] **T4** Per-skill difficulty guidance (7 skills × 4) — §3
+- [x] **T5** Opposed / competitive / assisted procedures — §3A
+- [x] **T6** Characteristics (6) — §4
+- [x] **T7** Skills (26) with linked characteristics + category — §4
+- [x] **T8** Excluded-skill list (7) — §4
+- [x] **T9** Combat sequence + initiative slot-filling — §5, §5A'
+- [x] **T10** Maneuvers (9) — §5A
+- [x] **T11** Actions (4 types) + combat-check procedure — §5B
+- [x] **T12** Ranged difficulty by range band — §5B Table 5B-1
+- [x] **T13** Combat spend table (🔺/☀️ and 🔻/⚡) — §5C
+- [x] **T14** Generic non-combat spend table — §5C'
+- [x] **T15** Multiple attackers/defenders guidance — §5C''
+- [x] **T16** Range bands (5) + movement costs — §5D
+- [x] **T17** Environmental effects (6) incl. concealment dice ladder — §5E
+- [x] **T18** Encumbrance rules + lifting ladder — §5F
+- [x] **T19** Recovery & healing (all 7 methods + limits + modifiers) — §5G
+- [x] **T20** Two-weapon, unarmed, improvised-weapon rules — §5H
+- [x] **T21** Falling table + suffocation — §5I
+- [x] **T22** Silhouette table + size difficulty rule — §5J
+- [x] **T23** Derived-stat formulas (12) + `BASE_WOUND_THRESHOLD` 8 / `BASE_STRAIN_THRESHOLD` 10 — §6, R-1
+- [x] **T24** XP costs + gates (pyramid, creation caps) — §7
+- [x] **T25** Story Point economy (spends, flow, carry-over) — §8
+- [x] **T26** **Critical Injury table (22 rows, severities, modifiers)** — §9
+- [x] **T27** **Item qualities (27)** with active/passive + cost — §10
+- [x] **T28** Called shots & disabling attacks — §10A
+- [x] **T29** Social encounter rules + group-influence difficulty ladder — §11
+- [x] **T30** Social spend table — §11
+- [x] **T31** Vehicle characteristics, maneuvers, actions, crashes — §12
+- [x] **T32** Vehicle spend table — §12
+- [x] **T33** **Talents (71)** — id, tier, ranked, activation type, mechanical hook, `settingApplicable` (R-11) — §12A
+- [x] **T34** Motivation tables (4 × 10) — §12B
+- [x] **T35** Creation procedure (5 steps) — §13
+- [x] **T36** **Careers (11 × 8 skills + suggested motivations)** — §14
+- [x] **T37** Rarity ladder + location modifiers + buy/sell procedure — §14A
+- [x] **T38** Item damage/repair ladder — §14B
+- [x] **T39** Hard points + attachments (3 examples) — §14C
+- [x] **T40** **Gear list (17)** — §15 *(R-13)*
+- [x] **T41** **Weapons (10)** with qualities — §15C
+- [x] **T42** **Armour (6)** — §15D
+- [x] **T43** **Vehicles (17)** — §15E
+- [x] **T44** Character-sheet field reference — §16A
+- [x] **T45** **Heat system**: generation triggers, Personal/Cell thresholds (5×2), decay — §17
+- [x] **T46** Encounter-sizing table + adventure-sizing guidance — §20B
+- [x] **T47** Session/scene/adventure lifecycle bundles — §21–§24 *(synthesised, cited)*
+- [x] **T48** XP award guidance — §27
+- [x] **T49** Dread/fear check ladder + outcomes — §29
+- [x] **T50** Rules-library quick-reference content — §30 + §26 skill usage examples (14)
 
 ### `data-npcs.js` (Phase 0)
-- [ ] **T51** Minion / Rival / Nemesis build recipes + threat guidance — §12C
-- [ ] **T52** Adversary talent — §12C
-- [ ] **T53** Adversary special abilities (7) — §12D
-- [ ] **T54** NPC quick-gen archetype + disposition tables + tier mapping — §20
-- [ ] **T54a** **14 bestiary-only NPC abilities** (Papers-Check Reflex, Beat Familiarity, Disciplined, Manifest Cross-Check, Quota Pressure, Terrain-Wise, Everywhere, Shoot on Sight, Reinforcements, Passive Watch, Environmental Affinity — Wilderness, Keen Senses, Bite, Mount) — B§2–B§5 *(R-19: `Disciplined` ≠ `Hardened`)*
+- [x] **T51** Minion / Rival / Nemesis build recipes + threat guidance — §12C
+- [x] **T52** Adversary talent — §12C
+- [x] **T53** Adversary special abilities (7) — §12D
+- [x] **T54** NPC quick-gen archetype + disposition tables + tier mapping — §20
+- [x] **T54a** **14 bestiary-only NPC abilities** (Papers-Check Reflex, Beat Familiarity, Disciplined, Manifest Cross-Check, Quota Pressure, Terrain-Wise, Everywhere, Shoot on Sight, Reinforcements, Passive Watch, Environmental Affinity — Wilderness, Keen Senses, Bite, Mount) — B§2–B§5 *(R-19: `Disciplined` ≠ `Hardened`)*
 
 ### `data-monsters.js` — bestiary compendium (Phase 0)
 *(numbered T61+ because it was added after the original ledger; it is a **Phase 0** file and
 is worked in this position, immediately after `data-npcs.js`.)*
-- [ ] **T61** **Minion groups (10)** — characteristics, group skills, **per-member Wound Threshold** (R-18), equipment, unique ability; Informant Network flagged `abstract: true` — B§2
-- [ ] **T62** **Rivals (12)** — characteristics, Soak, Defense melee/ranged (R-17), WT, skills, abilities, equipment, `veryChallenging` flag per §12C threat guidance — B§3
-- [ ] **T63** **Nemeses (4)** — as rivals plus Strain Threshold, Adversary 2, narrative-use note; Hartmann Voss's Cell-Heat-4 escalation hook — B§4
-- [ ] **T64** **Animals (2)** — Guard Dog (R-16 minion default, promotable), Patrol Horse; attack profiles — B§5
-- [ ] **T65** **Encounter blocks (4)** — opposed skills, opposition pool size, Heat consequence; Dragnet's escalating 2→4 dice + per-round Heat (§3.13) — B§6
-- [ ] **T66** **Random encounter table (d10, 10 rows)** incl. the Cell-Heat-4 escalation row — B§7
-- [ ] **T67** Bestiary usage conventions: stat-block field order, minion/rival/nemesis mapping, printed-stats-are-authoritative note (R-15) — B§1
+- [x] **T61** **Minion groups (10)** — characteristics, group skills, **per-member Wound Threshold** (R-18), equipment, unique ability; Informant Network flagged `abstract: true` — B§2
+- [x] **T62** **Rivals (12)** — characteristics, Soak, Defense melee/ranged (R-17), WT, skills, abilities, equipment, `veryChallenging` flag per §12C threat guidance — B§3
+- [x] **T63** **Nemeses (4)** — as rivals plus Strain Threshold, Adversary 2, narrative-use note; Hartmann Voss's Cell-Heat-4 escalation hook — B§4
+- [x] **T64** **Animals (2)** — Guard Dog (R-16 minion default, promotable), Patrol Horse; attack profiles — B§5
+- [x] **T65** **Encounter blocks (4)** — opposed skills, opposition pool size, Heat consequence; Dragnet's escalating 2→4 dice + per-round Heat (§3.13) — B§6
+- [x] **T66** **Random encounter table (d10, 10 rows)** incl. the Cell-Heat-4 escalation row — B§7
+- [x] **T67** Bestiary usage conventions: stat-block field order, minion/rival/nemesis mapping, printed-stats-are-authoritative note (R-15) — B§1
 
 ### `data-pregens.js` (Phase 1)
 - [ ] **T55** 3 pregens (characteristics, skills, thresholds, gear; 70 XP unspent, no talents/motivation) — §16
@@ -818,15 +820,15 @@ is worked in this position, immediately after `data-npcs.js`.)*
 
 ## 11. Build roadmap
 
-### Phase 0 — Foundations
-- [ ] Scaffold every §7 file; `index.html` shell, router, bottom nav, local storage
-- [ ] Theme §1.2 (light + dark, system default, in-app toggle); dice-symbol SVG set
-- [ ] PWA: manifest, service worker (network-first, versioned `CACHE_VERSION`), icon, update toast
-- [ ] **Ledger T1–T50 (`data.js`) — complete and verified**
-- [ ] **Ledger T51–T54a (`data-npcs.js`)**
-- [ ] **Ledger T61–T67 (`data-monsters.js`) — the full bestiary compendium**
-- [ ] Rules library screen with §/B§-anchored search over all extracted data
-- [ ] `npm test` harness scaffold: boot smoke, zero console errors, 360px overflow check
+### Phase 0 — Foundations — **COMPLETE**
+- [x] Scaffold every §7 file; `index.html` shell, router, bottom nav, local storage
+- [x] Theme §1.2 (light + dark, system default, in-app toggle); dice-symbol glyph renderer in `ui.js`
+- [x] PWA: manifest, service worker (network-first, `CACHE_VERSION = reich62-v1`), icon, update toast
+- [x] **Ledger T1–T50 (`data.js`) — complete and verified**
+- [x] **Ledger T51–T54a (`data-npcs.js`)**
+- [x] **Ledger T61–T67 (`data-monsters.js`) — the full bestiary compendium**
+- [x] Rules library screen with §/B§-anchored search over all extracted data
+- [x] `npm test` harness: boot smoke, zero console errors, 360/390px overflow, a11y basics, every §4 ruling pinned
 
 ### Phase 1 — Creation Wizard
 - [ ] Career step (11 careers, pick 4 of 8 → rank 1)
@@ -908,6 +910,7 @@ verification).
 
 | Date | Change | Why | Verification | Cache |
 |---|---|---|---|---|
+| 2026-08-04 | **Phase 0 built.** App shell (`index.html`, `styles.css`, `src/` core · ui · settings · rules · rules-index · derived · store · screens · router · main), theme with system default, PWA (manifest, versioned service worker, icon, update toast), local-only persistence with export/import, and the rules library with §/B§ search. **Data extraction complete for Phase 0:** `data.js` T1–T50, `data-npcs.js` T51–T54a, `data-monsters.js` T61–T67. Added `src/rules-index.js` to the module map and the service-worker shell. Corrected the Critical Injury row count from the plan-stage estimate of 22 to the real 29. | Phase 0 of the §11 roadmap | `npm test`: 150 checks pass — headless Chromium at 360px and 390px, Firebase routes aborted, **zero console errors**; every ruling R-B1 and R-1…R-19 pinned; engine invariants (cancellation, pool build, opposed difficulty side, modification order, pyramid, encumbrance, Critical Injury stacking) asserted against the data layer | `reich62-v1` |
 | 2026-08-04 | **Bestiary companion added as a second source of record.** §3.18 rewritten: `data-monsters.js` is reinstated (28 stat blocks + 4 encounter templates) and the app now ships a bestiary browser alongside the NPC builder. §3.13 gains its first published extended task (the Manhunt/Dragnet escalating opposed check). New rulings R-15…R-19 (printed NPC stats authoritative; Guard Dog tier; Defense notation; minion per-member WT; Disciplined ≠ Hardened). Ledger gains T54a + T61–T67; §5 gains 8 bestiary rows; data model gains combatant provenance and the dragnet task kind; book commitment decision updated. | Second book supplied by the user | Bestiary read in full (303 lines); all 28 blocks and 14 new abilities tallied against their sections; every mechanic it reuses traced back to the manual § it cites | n/a |
 | 2026-08-04 | **All 15 rulings confirmed (§4 rewritten as a closed ruling table).** Blockers B-1…B-4 retired: R-B1 makes manual symbol entry the primary dice input with the digital roller force-disabled until `DIE_FACES` exists; R-1 fixes base WT 8 / ST 10 as named constants and records Anna Voss's Wound 11 as an erratum; R-8 sets the "credits" label and a 500-credit house-aid budget; R-6/R-7 define staggered and disoriented. Product decisions marked confirmed; dependent §3/§7/§9/§10/§11 references updated; every ruling added to the §13.5 harness as a pinned assertion. | Stage B sign-off — unblocks Phase 0 | Every ruling traced to its manual § and to the file/module that implements it; substitutions carry an in-app badge so no inferred value can pass as printed | n/a |
 | 2026-08-04 | Instantiated project spec from template v2: completed System Profile (§3), blockers/rulings (§4), content inventory (§5), file + module tables (§7), data model (§8), toggles (§9), 60-row Data Extraction Ledger (§10), 7-phase roadmap (§11). Source manual and template committed under `source/`. | Stage B deliverable — plan before any code | Manual read in full (1116 lines); all §3 slots populated from source only; talent count 71 verified by tier tally (24+15+16+11+5) | n/a |

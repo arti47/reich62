@@ -1,0 +1,14 @@
+{
+  "name": "reich62-player",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Player-character companion PWA for REICH '62.",
+  "scripts": {
+    "test": "node tests/run.js",
+    "serve": "node tests/serve.js"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.49.0"
+  }
+}

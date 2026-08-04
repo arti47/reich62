@@ -1,0 +1,14 @@
+{
+  "name": "REICH '62 Player",
+  "short_name": "REICH '62",
+  "description": "Player-character companion for REICH '62: creation, tracking, narrative dice and Heat.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#12100E",
+  "theme_color": "#12100E",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

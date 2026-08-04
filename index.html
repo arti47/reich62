@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Player-character companion for REICH '62 — creation, tracking, narrative dice, Heat.">
+<meta name="theme-color" content="#12100E">
+<title>REICH '62 Player</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip-link" href="#screen">Skip to content</a>
+
+<header class="app-header">
+  <h1 class="app-title" id="app-title">REICH&nbsp;'62</h1>
+  <div class="header-actions">
+    <button type="button" id="theme-toggle" class="icon-button" aria-label="Switch colour theme">◐</button>
+  </div>
+</header>
+
+<div id="resource-header" class="resource-header" hidden aria-live="polite"></div>
+
+<main id="screen" class="screen" tabindex="-1" aria-labelledby="app-title"></main>
+
+<nav class="bottom-nav" id="bottom-nav" aria-label="Main"></nav>
+
+<div id="toast-region" class="toast-region" role="status" aria-live="polite"></div>
+<div id="modal-root"></div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

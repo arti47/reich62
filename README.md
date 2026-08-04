@@ -4,7 +4,28 @@ An installable PWA player-character companion for **REICH '62**, a Genesys narra
 system: character creation wizard, in-play tracker, dice engine, Heat system, solo oracle,
 bestiary, and an opt-in GM screen.
 
-**Status: planning complete and signed off — all rulings confirmed. No application code yet.**
+**Status: Phase 0 complete** — app shell, theme, PWA, the complete core data library and the
+regression harness are built and verified headless (150 checks, zero console errors).
+
+## Running it
+
+No build step. Serve the folder and open it:
+
+```
+npm install          # dev-only: playwright-core for the test harness
+npm run serve        # http://127.0.0.1:8080
+npm test             # headless regression harness
+```
+
+Opening `index.html` over `file://` will not work — ES modules need a real origin. Everything
+is stored in `localStorage`; there is nothing to configure.
+
+### Firebase (Phase 5, optional)
+
+Multiplayer is architected but not yet built. When it lands: create a Firebase project, enable
+Realtime Database and Storage, turn on anonymous auth, paste the config into
+`firebase-config.js` and set `FIREBASE_ENABLED = true`, then deploy `database.rules.json`.
+Never commit real keys.
 
 | File | What it is |
 |---|---|
