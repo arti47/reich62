@@ -9,7 +9,8 @@
 > the same change** — features, data model, file tables, roadmap checkboxes, ledger ticks,
 > changelog.
 
-**Status: Stage B deliverable produced (plan only). No application code written yet.**
+**Status: Stage B signed off — all blockers and ambiguities resolved (§4, confirmed
+2026-08-04). Ready for Phase 0. No application code written yet.**
 
 ---
 
@@ -35,17 +36,18 @@ paraphrased). All effect text is **paraphrased**, never copied.
 
 ### 1.1 Product Decisions
 
-Recorded per template §4.2. Defaults applied where the user has not yet specified;
-**PENDING** items may be changed before Phase 0 without rework.
+Recorded per template §4.2 and **confirmed 2026-08-04**. Template defaults were applied
+where the user expressed no preference; all six are now settled and the roadmap in §11 is
+instantiated to match.
 
 | # | Decision | Value | State |
 |---|---|---|---|
-| 1 | Usage mode | Local-first, sync later (Phase 5 gated on First Session Playable) | default |
-| 2 | User's seat | Rotates — solo + GM + player all supported; solo loop is first-class because the manual publishes official solo rules (§18–§20, §23) | default |
-| 3 | Dice input | **Digital + manual symbol entry.** Manual entry is *mandatory and built first* — see BLOCKER B-1: the manual never prints die face distributions, so a faithful digital roller cannot be built from the source alone | forced by B-1 |
+| 1 | Usage mode | Local-first, sync later (Phase 5 gated on First Session Playable) | confirmed |
+| 2 | User's seat | Rotates — solo + GM + player all supported; solo loop is first-class because the manual publishes official solo rules (§18–§20, §23) | confirmed |
+| 3 | Dice input | **Manual symbol entry, primary and built first** (R-B1). The manual never prints die face distributions, so a faithful digital roller is not buildable from the source; the digital roller ships behind `digitalRoller`, blocked until face data is supplied | confirmed |
 | 4 | Expansion commitment | None — one book supplied. No `data-<expansion>.js`, no expansion toggles | fixed |
-| 5 | Table device | Mixed; phone-first baseline, 360px zero-overflow requirement holds | default |
-| 6 | Theme default | Follow system (`prefers-color-scheme`), in-app override | default |
+| 5 | Table device | Mixed; phone-first baseline, 360px zero-overflow requirement holds | confirmed |
+| 6 | Theme default | Follow system (`prefers-color-scheme`), in-app override | confirmed |
 
 ### 1.2 Visual theme proposal
 
@@ -95,8 +97,13 @@ Where the manual is silent, the slot says so and the gap is logged in §4.
 - **Push/re-roll economy:** none general. Re-roll exists only via the `Natural` talent
   (1/session, 2 chosen skills) and the NPC `Ruthless` ability (1/encounter). Story Points
   (§3.3) are the die-modification economy.
-- **BLOCKER B-1:** die **face distributions are not printed anywhere in the manual.** A
-  native digital roller is not buildable from the source. See §4.
+- **Die faces (R-B1, confirmed):** face distributions are **not printed anywhere in the
+  manual**, so no simulated roller can be faithful to this source. The engine therefore
+  takes **manual symbol entry** as its primary input — the player rolls physical dice and
+  taps symbols; the app performs cancellation, spends, damage, Critical Injuries, Heat, and
+  logging. A simulated roller exists only behind the `digitalRoller` flag and stays hard-
+  blocked (flag forced off, with an in-app explanation) until face data is supplied and
+  recorded in `data.js` as `DIE_FACES`.
 
 ### 3.2 Opposed / contested procedure — *active roller only; opposition builds the difficulty side*
 
@@ -109,7 +116,8 @@ Exact sequence (§3A, confirmed against §11 social usage):
    separate result.
 4. Resolve per §1. Notation: "opposed Skill vs. Skill".
 - **Competitive checks (§3A):** GM sets one Difficulty; all participants roll it; rank by
-  total uncancelled 🌟. Ties: **not specified** → ruling R-3.
+  total uncancelled 🌟. Ties are not specified in the manual → **R-3**: break by uncancelled
+  🔺, then ☀️, then declare simultaneous.
 - **Assisted checks (§3A/§5A):** the Assist maneuver grants an engaged ally 1 Boost on
   their next check; multiple assistants stack; unused dice expire after that next turn.
 - **Initiative ties (§5):** broken by 🔺, then PC before NPC.
@@ -118,7 +126,8 @@ Exact sequence (§3A, confirmed against §11 social usage):
 
 **Story Points (§8):**
 - Two visible pools: **Player pool** and **GM pool**. Starting Player pool = 1 per PC
-  (some tables 2 — configurable, default 1). GM pool starting size not stated → ruling R-4.
+  (some tables 2 — configurable, default 1). GM pool starting size is not stated → **R-4**:
+  the GM pool starts at **0** and fills only from player spends.
 - **Player spends:** upgrade *or* downgrade one die once on a check · add one Boost *or*
   Setback die · narrate a minor established detail · spend 1 to attempt an Impossible check
   (§3).
@@ -143,15 +152,15 @@ Range 1–5; **max 5 at creation** and `Dedication` cannot exceed 5 either.
 Generation: single method — **70 XP flat for every PC** (§13.2), characteristic increase
 costs **10 × the new rating**, purchased sequentially, **creation only** (§7). No rolled
 array, no point-buy variant, no species modifiers (all PCs human, §13).
-Starting characteristic floor is not stated → ruling R-5 (assume all start at 1 before XP,
-matching the sequential-purchase cost model).
+The starting characteristic floor is not stated → **R-5**: all six start at **1** before XP,
+which is what the sequential 10×N purchase model assumes.
 
 ### 3.5 Derived stats — *formulas exact; two base values missing*
 
 | Stat | Formula | Note |
 |---|---|---|
-| Wound Threshold | archetype base + Brawn | **fixed at creation**; raised later only by `Toughened` (+2/rank) |
-| Strain Threshold | archetype base + Willpower | fixed at creation; raised by `Grit` (+1/rank) |
+| Wound Threshold | `BASE_WOUND_THRESHOLD` (**8**) + Brawn | **fixed at creation**; raised later only by `Toughened` (+2/rank) |
+| Strain Threshold | `BASE_STRAIN_THRESHOLD` (**10**) + Willpower | fixed at creation; raised by `Grit` (+1/rank) |
 | Soak | Brawn + armour soak | **recalculates live** with Brawn, unlike thresholds |
 | Melee Defense | 0 base; armour + cover + talents (`Defensive` +1/rank) | |
 | Ranged Defense | 0 base; armour + cover (+1, more for prepared positions) + talents | |
@@ -162,9 +171,13 @@ matching the sequential-purchase cost model).
 | Unarmed damage | = Brawn; Crit 5, Engaged, Knockdown | §5H |
 | Vehicle hull/system strain | per vehicle table, not derived | §12 |
 
-**BLOCKER B-2:** the human **archetype base** for Wound and Strain Threshold is never
-printed. Pregens (§16) imply base WT 8 and base ST 10 for two of three, and WT 9 for Anna
-Voss — internally inconsistent. Proposed ruling R-1.
+**R-1 (confirmed):** the human **archetype base** is never printed (§6). Pregens (§16) imply
+base WT 8 / ST 10 for Klaus and Elise, and WT 9 for Anna Voss. Resolution: base
+**WT 8, ST 10**; Anna Voss's printed Wound 11 is an **erratum**, recomputed to 10
+(`data-pregens.js` stores the recomputed value plus an `erratum` note, and the sheet shows
+the correction inline). Both bases live in `data.js` as the two named constants above and
+are referenced nowhere else, so a single edit corrects the whole app if the user later
+supplies official values.
 
 ### 3.6 Skills — *26 skills, flat rank 0–5, career/non-career pricing*
 
@@ -180,8 +193,8 @@ Voss — internally inconsistent. Proposed ruling R-1.
   Divine, Primal.
 - No trained/untrained gate — rank 0 is legal and simply yields 0 upgrades.
 - No specialisation/focus mechanism beyond Knowledge free-text.
-- **Ambiguity R-2:** talent `Basic Military Training` grants "Ranged (Heavy)", a split that
-  does not exist in this manual's skill list.
+- **R-2:** talent `Basic Military Training` grants "Ranged (Heavy)", a split that does not
+  exist in this manual's skill list → it grants **Athletics, Ranged, Resilience** instead.
 
 ### 3.7 Creation options — *career → 4 skills → 70 XP → derived → motivation → gear*
 
@@ -193,8 +206,10 @@ Rule-legal order (§13):
 3. **Derived attributes** computed after XP spend.
 4. **Motivation** — one each of Desire / Fear / Strength / Flaw (§12B, 10 entries each,
    rolled d100/d10 or chosen).
-5. **Gear** — "standard starting budget or select from §15". **BLOCKER B-3:** the budget
-   figure and the currency name are never stated.
+5. **Gear** — "standard starting budget or select from §15". The budget figure and the
+   currency name are never stated (**R-8, confirmed**): the UI labels the unit **"credits"**
+   (relabellable in Settings) and the starting budget is a Settings field defaulting to
+   **500 credits**, rendered everywhere with a **"house aid — not a rule"** badge.
 
 Careers (§14): Resistance Runner · SD/Gestapo Agent · Wehrmacht Veteran · Black-Market
 Fixer · Party Bureaucrat · Displaced Survivor · Forger · Field Medic · Smuggler-Pilot ·
@@ -232,8 +247,13 @@ The manual has **no condition chapter**. The app's condition registry is assembl
    maneuver when over by ≥ Brawn.
 6. **Environmental effects (§5E)** — concealment/cover/terrain dice.
 
-**BLOCKER B-4:** "staggered" and "disoriented" are used but **never defined** in the manual.
-Proposed rulings R-6/R-7.
+**R-6/R-7 (confirmed):** "staggered" and "disoriented" are used (§9, §10, §12A, §12D) but
+**never defined** in the manual. **Staggered = cannot perform actions** (maneuvers and
+incidentals still allowed). **Disoriented = adds 1 Setback die to all checks.** Both carry
+`inferred: true` in the condition registry and render an "inferred definition" badge in the
+app. They drive 3 Critical Injury results (Stunned, Slightly Dazed, Knocked Senseless), the
+Concussive X and Disorient X qualities, the `Counteroffer` talent, and the `Hardened`
+adversary ability, and the §29 dread-check failure effect.
 **Removal:** Critical Injuries persist until treated (§5G) and each untreated one adds **+10
 to future Critical Injury rolls** — the app must track the cumulative modifier.
 
@@ -339,7 +359,8 @@ social-encounter attack surfaces (§11).
   **≥ Brawn**: lose the free maneuver (each maneuver costs 2 strain). Enforced, not warned.
 - **Lifting over threshold:** Athletics, Easy at 1 over, +1 difficulty per additional point,
   capped Daunting at 4+. Helpers add their Brawn to the effective threshold.
-- **Wealth:** concrete integer prices (§15, §15C–E). **Currency is unnamed** → ruling R-8.
+- **Wealth:** concrete integer prices (§15, §15C–E). The currency is unnamed in the manual;
+  R-8 labels it **credits** (relabellable) with a 500-credit starting budget as a house aid.
 - **Rarity 0–10** (§14A) with a difficulty ladder and **location modifiers** (−1 major city /
   +0 mid-size / +1 rural / +2 frontier or restricted item / +3 crackdown / +4 lockdown).
   Acquisition = Negotiation (legal) or Streetwise (illegal) at the rarity difficulty.
@@ -414,7 +435,9 @@ Anna Voss (Resistance Runner) · Klaus Reiniger (SD Agent, defecting) · Elise B
 (Black-Market Fixer). Each has 6 characteristics, 4 skill ranks, WT/ST/Soak, and gear.
 **Each has 70 XP explicitly unspent** and **no Motivation and no talents assigned** — so
 one-tap instantiation must drop the player into the wizard's XP-spend and Motivation steps,
-not a finished sheet. They run on **PC rules**. Note their thresholds feed BLOCKER B-2.
+not a finished sheet. They run on **PC rules**. Their printed thresholds are the evidence
+behind ruling R-1: Klaus and Elise match base WT 8 / ST 10 exactly, Anna Voss's Wound 11
+does not and is stored as a corrected 10 with an `erratum` note.
 
 ### 3.20 Solo rules — **PRESENT, official → solo tab enabled**
 
@@ -439,27 +462,33 @@ silhouette (§5J) · GM one-page quick reference (§30).
 
 ---
 
-## 4. Blockers, ambiguities & proposed rulings
+## 4. Rulings — **ALL CONFIRMED 2026-08-04**
 
-**Blockers** stop a feature from being built faithfully. **Rulings** are proposals the user
-confirms or corrects; confirmed rulings are recorded here and cited in code comments.
+Every gap the manual left is resolved. Nothing below is open; **no ruling may be silently
+re-litigated during the build** — cite the ruling ID in a `// R-x` code comment wherever it
+is implemented, and surface an in-app badge wherever it is a *substitution* for a printed
+rule (R-B1, R-1, R-6, R-7, R-8, R-9 — see "Badge" column).
 
-| ID | Type | Issue (manual §) | Proposed resolution | Impact if unresolved |
+Every ruling is also a **regression assertion** (§13.5): the harness pins the value so a
+later edit cannot drift away from it.
+
+| ID | Issue (manual §) | Confirmed ruling | Badge | Implemented in |
 |---|---|---|---|---|
-| **B-1** | **Blocker** | Die **face distributions** never printed (§1 lists symbols per die type only) | Ship **manual symbol entry as the primary input** (user rolls physical dice, taps symbols; app does all cancellation, spends, damage, Heat, logging). Add a digital roller **only** once the user supplies face data; keep it behind a settings toggle | Native digital roller cannot be built. **Everything else in the app still works.** |
-| **B-2** | **Blocker** | Human **archetype base** WT/ST absent (§6); pregens imply WT 8/9 and ST 10 inconsistently (§16) | **R-1:** base **WT 8, ST 10**; treat Anna Voss's printed WT 11 as an erratum (recompute to 10). Store bases as single named constants in `data.js` so one edit corrects the whole app | Wizard cannot compute thresholds |
-| **B-3** | **Blocker** | Starting **gear budget** and **currency name** absent (§13.5, prices are bare integers) | **R-8:** label the unit "credits" generically in UI, configurable; expose starting budget as a settings field with a **house-aid default of 500** (explicitly labelled a house aid, not a rule) | Wizard gear step cannot validate |
-| **B-4** | **Blocker** | "**Staggered**" and "**disoriented**" used (§9, §10, §12A) but never defined | **R-6:** staggered = cannot perform actions. **R-7:** disoriented = adds Setback to all checks. Both flagged in-app as inferred definitions pending confirmation | 6 Critical Injury results and 4 item qualities have no mechanical effect |
-| R-2 | Ambiguity | `Basic Military Training` grants "Ranged (Heavy)" (§12A T2); this manual has one undivided `Ranged` skill (§4) | Grant **Athletics, Ranged, Resilience** as career skills | — |
-| R-3 | Ambiguity | Competitive-check **ties** unspecified (§3A) | Tie broken by uncancelled 🔺, then by ☀️, then simultaneous | — |
-| R-4 | Ambiguity | **GM Story Point pool** starting size unstated (§8) | GM pool starts at **0**; points arrive only by player spends (players start at 1/PC) | — |
-| R-5 | Ambiguity | Characteristic **starting floor** before XP unstated (§13) | All six start at **1**; the 10×N sequential cost then reproduces standard totals | — |
-| R-9 | Ambiguity | Week-rest Critical healing says "**on ⚡** an additional Critical Injury heals" (§5G) — a Despair granting a benefit contradicts §1 | Read as **☀️ (Triumph)**; implement as Triumph, flagged in-app | — |
-| R-10 | Ambiguity | Oracle/event/quick-gen tables say "roll 1🎲" and §15A says "Ability die read 1–10", but §1 defines the Ability die as **d8** (§15A, §19, §20) | Use a **d10** for all oracle/meaning/element/event/NPC tables | — |
-| R-11 | Ambiguity | 12 talents reference content absent from this setting (Computers hacking pages, bows, starfighters, cybernetics, animal companions, cross-book page refs) | Keep all 71 (completeness), tag `settingApplicable: false` on the 12, hide behind a "show non-setting talents" toggle, default **off** | — |
-| R-12 | Ambiguity | §5C lists "🔺🔺 **or** ☀️" style rows — whether one ☀️ substitutes for 2/3 🔺 or is an independent option | Treat ☀️ as able to purchase any listed effect at any listed cost tier (the plain reading), and 🔺 costs as literal | — |
-| R-13 | Ambiguity | TOC advertises "**18 items**" in §15; the section lists **17** | Ship 17, note the discrepancy in the ledger | — |
-| R-14 | Ambiguity | Critical Injury table rolls to **150+** but a d100 with modifiers is the stated roll (§9) | Correct as written — modifiers (+10/injury, Vicious, falls) carry rolls past 100; the app sums roll + modifiers | — |
+| **R-B1** | Die **face distributions** never printed (§1 lists only which symbols each die can show) | **Manual symbol entry is the primary and default dice input** — the app performs cancellation, spends, damage, Critical Injuries, Heat, and logging on entered symbols. The simulated roller stays behind `digitalRoller`, force-disabled with an in-app explanation, until `DIE_FACES` is supplied in `data.js` | yes — roller footer | `roller.js`, `settings.js`, `data.js` |
+| **R-1** | Human **archetype base** WT/ST absent (§6); pregens imply WT 8/9, ST 10 (§16) | Base **WT 8** / **ST 10**, as the two named constants `BASE_WOUND_THRESHOLD` / `BASE_STRAIN_THRESHOLD`. **Anna Voss's printed Wound 11 is an erratum → 10** | yes — wizard derived step + Anna's sheet | `data.js`, `derived.js`, `data-pregens.js` |
+| **R-2** | `Basic Military Training` grants "Ranged (Heavy)" (§12A T2); this manual has one undivided `Ranged` skill (§4) | The talent grants **Athletics, Ranged, Resilience** as career skills | no | `data.js` T33 |
+| **R-3** | Competitive-check **ties** unspecified (§3A) | Rank by uncancelled 🌟; ties broken by uncancelled 🔺, then by ☀️, then declared **simultaneous** | no | `roller.js` comparator |
+| **R-4** | **GM Story Point pool** starting size unstated (§8) | GM pool starts at **0**. Player pool starts at **1 per PC** (Settings allows 2 per §8's "some tables"). Points enter the GM pool only by player spends | no | `data.js` T25, `store.js` |
+| **R-5** | Characteristic **starting floor** before XP unstated (§13) | All six characteristics start at **1**; the sequential 10×N cost then reproduces standard totals | no | `wizard.js` |
+| **R-6** | "**Staggered**" used but never defined (§9, §10, §12A, §12D) | **Staggered = cannot perform actions**; maneuvers and incidentals are unaffected | yes — condition chip | `data.js` condition registry |
+| **R-7** | "**Disoriented**" used but never defined (§9, §10, §29) | **Disoriented = adds 1 Setback die to all checks** | yes — condition chip | `data.js` condition registry |
+| **R-8** | Starting **gear budget** and **currency name** absent (§13.5; §15 prices are bare integers) | Currency labelled **"credits"** (relabellable in Settings); starting budget a Settings field, default **500** | yes — wizard gear step | `settings.js`, `wizard.js` |
+| **R-9** | Week-rest Critical healing says "on **⚡** an additional Critical Injury heals" (§5G) — a Despair granting a benefit contradicts §1 | Read as **☀️ Triumph**; the extra heal triggers on an uncancelled Triumph | yes — recovery screen | `data.js` T19 |
+| **R-10** | Oracle/event/quick-gen tables say "roll 1🎲" and §15A calls it "an Ability die read 1–10", but §1 defines the Ability die as a **d8** (§15A, §19, §20) | Use a **d10** for every oracle, meaning, element, random-event, and NPC quick-gen table. (These are table lookups, not symbol rolls, so R-B1 does not apply — the app rolls them digitally) | no | `data-solo.js`, `data-npcs.js` |
+| **R-11** | 12 talents reference content absent from this setting (hacking-rule page refs, bows, starfighters, cybernetics, animal companions) | Keep **all 71** for completeness; tag the 12 `settingApplicable: false`; hide them behind `showNonSettingTalents`, default **off**. Affected: Defensive Sysops, Defensive Sysops (Improved), Distinctive Style, Animal Companion, Rapid Archery, Barrel Roll, Full Throttle, Daring Aviator, Defensive Driving, Overcharge, Overcharge (Improved), Mad Inventor | no | `data.js` T33, `settings.js` |
+| **R-12** | §5C lists "🔺🔺 **or** ☀️" rows — ambiguous whether one ☀️ substitutes for 2–3 🔺 | Plain reading: **one ☀️ purchases any listed effect at any cost tier**; 🔺 costs are literal. ☀️ is never consumed by cancellation and each ☀️ buys one effect | no | `roller.js` spend tables |
+| **R-13** | TOC advertises "18 items" in §15; the section lists **17** | Ship **17**; the count is recorded as 17 in §5 and in the T40 ledger row | no | `data.js` T40 |
+| **R-14** | Critical Injury table runs to **151+** but the stated roll is a d100 (§9) | Correct as written: the app sums **roll + modifiers** (+10 per untreated injury, Vicious 10×X, falls +50/+75, Durable −10/rank floored at 01) and indexes the summed value, which is how results past 100 are reached | no | `roller.js`, `derived.js` |
 
 ---
 
@@ -546,7 +575,7 @@ day one; fantasy-phrase join codes; themed `modal()`/`showToast`/`confirmModal`/
 | `ui.js` | Themed modals/toasts/confirm/prompt | dice-symbol glyph renderer |
 | `rules.js` | Pure lookups over data files | talent lookup, pyramid legality, rarity resolution, difficulty ladder |
 | `derived.js` | Derived calculations + data normalisation/migration | WT/ST/Soak/Defense/encumbrance, cumulative Critical-Injury modifier |
-| `settings.js` | Feature toggles | solo · GM screen · digital roller (B-1 gated) · non-setting talents (R-11) · GM discretionary dice (§5C'') |
+| `settings.js` | Feature toggles | solo · GM screen · digital roller (R-B1 gated) · non-setting talents (R-11) · currency label + starting budget (R-8) · GM discretionary dice (§5C'') |
 | `store.js` | Local/cloud persistence, Cell entity, combat mirroring, JSON export/import | Cell + Heat persistence |
 | `sync.js` | Firebase auth, campaigns, join codes, presence, theme | Phase 5 |
 | `wizard.js` | Creation wizard + pregens | career → 4 skills → 70 XP → derived → Motivation → gear |
@@ -622,7 +651,7 @@ description, every related UI checks the flag, router hides gated tabs.
 |---|---|---|
 | `soloMode` | off | Solo tab (Oracle, events, tables) |
 | `gmScreen` | off | GM tab + reference tables |
-| `digitalRoller` | **off (B-1)** | Enables simulated rolling once face data is supplied; manual symbol entry always available |
+| `digitalRoller` | **off, force-disabled (R-B1)** | Unlocks simulated rolling once `DIE_FACES` is supplied in `data.js`; manual symbol entry is always available and always the default |
 | `showNonSettingTalents` | off | Reveals the 12 R-11 talents |
 | `gmDiscretionaryDice` | off | Exposes §5C'' outnumbered/ganging-up dice controls |
 | `advancedAutomation` | off | Auto-apply environmental dice, encumbrance penalties, Heat setbacks without prompting |
@@ -660,7 +689,7 @@ not guess: add it to §4 as a new ruling and mark the row blocked.
 - [ ] **T20** Two-weapon, unarmed, improvised-weapon rules — §5H
 - [ ] **T21** Falling table + suffocation — §5I
 - [ ] **T22** Silhouette table + size difficulty rule — §5J
-- [ ] **T23** Derived-stat formulas (12) — §6 *(depends on ruling R-1 / blocker B-2)*
+- [ ] **T23** Derived-stat formulas (12) + `BASE_WOUND_THRESHOLD` 8 / `BASE_STRAIN_THRESHOLD` 10 — §6, R-1
 - [ ] **T24** XP costs + gates (pyramid, creation caps) — §7
 - [ ] **T25** Story Point economy (spends, flow, carry-over) — §8
 - [ ] **T26** **Critical Injury table (22 rows, severities, modifiers)** — §9
@@ -720,9 +749,9 @@ not guess: add it to §4 as a new ruling and mark the row blocked.
 - [ ] Career step (11 careers, pick 4 of 8 → rank 1)
 - [ ] XP step: 70 XP, live cost engine (10×N characteristics · 5×N career · 5×N+5 non-career · 5×tier talents), **creation caps enforced** (skill ≤ 2, characteristic ≤ 5, characteristics creation-only)
 - [ ] Talent picker with **pyramid legality** enforced live (R-11 toggle respected)
-- [ ] Derived-stat computation (§3.5) — gated on B-2/R-1
+- [ ] Derived-stat computation (§3.5) from the R-1 constants, with the inferred-base badge
 - [ ] Motivation step (roll or choose, 4 × 10)
-- [ ] Gear step (rarity-aware, budget per B-3/R-8)
+- [ ] Gear step (rarity-aware; R-8 currency label + 500-credit default, house-aid badge)
 - [ ] Cell creation (name, Heat 0) — §3.8
 - [ ] Pregens (T55) → instantiate into the XP/Motivation steps, not a finished sheet
 - [ ] Legality validation at every step; no illegal character can be saved
@@ -739,8 +768,8 @@ not guess: add it to §4 as a new ruling and mark the row blocked.
 
 ### Phase 3 — Dice Engine
 - [ ] Pool builder from skill+characteristic with **modification order enforced**
-- [ ] **Manual symbol-entry roller (primary, per B-1)** + cancellation + net outcome
-- [ ] Digital roller behind `digitalRoller` flag, blocked until face data supplied
+- [ ] **Manual symbol-entry roller (primary and default, per R-B1)** + cancellation + net outcome
+- [ ] Digital roller behind `digitalRoller`, force-disabled until `DIE_FACES` exists (R-B1)
 - [ ] Difficulty picker (7 levels) + upgrade/downgrade controls
 - [ ] Auto-applied dice: conditions, encumbrance, Heat thresholds, environment, silhouette, cover/concealment
 - [ ] **Opposed-check builder** (§3.2 exact sequence) and competitive-check comparator (R-3)
@@ -793,6 +822,7 @@ verification).
 
 | Date | Change | Why | Verification | Cache |
 |---|---|---|---|---|
+| 2026-08-04 | **All 15 rulings confirmed (§4 rewritten as a closed ruling table).** Blockers B-1…B-4 retired: R-B1 makes manual symbol entry the primary dice input with the digital roller force-disabled until `DIE_FACES` exists; R-1 fixes base WT 8 / ST 10 as named constants and records Anna Voss's Wound 11 as an erratum; R-8 sets the "credits" label and a 500-credit house-aid budget; R-6/R-7 define staggered and disoriented. Product decisions marked confirmed; dependent §3/§7/§9/§10/§11 references updated; every ruling added to the §13.5 harness as a pinned assertion. | Stage B sign-off — unblocks Phase 0 | Every ruling traced to its manual § and to the file/module that implements it; substitutions carry an in-app badge so no inferred value can pass as printed | n/a |
 | 2026-08-04 | Instantiated project spec from template v2: completed System Profile (§3), blockers/rulings (§4), content inventory (§5), file + module tables (§7), data model (§8), toggles (§9), 60-row Data Extraction Ledger (§10), 7-phase roadmap (§11). Source manual and template committed under `source/`. | Stage B deliverable — plan before any code | Manual read in full (1116 lines); all §3 slots populated from source only; talent count 71 verified by tier tally (24+15+16+11+5) | n/a |
 
 ## 13. Process rules — LOCKED
@@ -811,6 +841,20 @@ verification).
    resolution · encumbrance math · lifecycle bundles fire completely and undo cleanly ·
    Critical Injury modifier stacking · zero horizontal overflow at 360/390px · a11y basics ·
    every closed audit finding. Every bug fix adds a check that would catch its return.
+   **Ruling pins (§4):** the harness asserts each confirmed ruling so no later edit can
+   drift off it — `BASE_WOUND_THRESHOLD === 8` and `BASE_STRAIN_THRESHOLD === 10` (R-1);
+   Anna Voss's stored Wound Threshold is 10 with an `erratum` note (R-1); `digitalRoller`
+   cannot be enabled while `DIE_FACES` is absent (R-B1); `Basic Military Training` grants
+   exactly Athletics/Ranged/Resilience (R-2); the competitive comparator's tie chain is
+   🌟 → 🔺 → ☀️ → simultaneous (R-3); a new campaign has `storyPointsGM === 0` (R-4); a fresh
+   wizard character has all six characteristics at 1 (R-5); staggered blocks actions but not
+   maneuvers and disoriented adds exactly 1 Setback (R-6/R-7); the gear step defaults to 500
+   credits and renders the house-aid badge (R-8); week-rest extra Critical healing fires on
+   Triumph and never on Despair (R-9); every solo/quick-gen table is a d10 with 10 entries
+   (R-10); exactly 12 talents carry `settingApplicable: false` and are hidden by default out
+   of 71 total (R-11); one ☀️ satisfies any spend-table row (R-12); the gear list has 17
+   entries (R-13); Critical Injury lookup indexes roll + modifiers and resolves past 100
+   (R-14).
 6. **Cache discipline.** Any shipped-file change bumps `CACHE_VERSION`.
 7. **Root-cause fixes.** No symptom-patching; record cause + fix.
 8. **Scope guard.** Rules only (§1). Nothing invented is presented as official; house aids
