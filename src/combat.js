@@ -7,6 +7,7 @@ import {
   MANEUVER_RULES, COMBAT_SEQUENCE, LIFECYCLE, RECOVERY, HEAT, XP_AWARDS, RANGE_BANDS
 } from '../data.js';
 import { BESTIARY, ENCOUNTER_BLOCKS } from '../data-monsters.js';
+import { VEHICLES, VEHICLE_RULES } from '../data.js';
 import { minionGroupWoundThreshold, minionGroupSkillRanks, bestiaryEntry, encounterBlock } from './rules.js';
 import { woundThreshold, strainThreshold, soak, derivedFor } from './derived.js';
 import {
@@ -248,11 +249,141 @@ export function damageCombatant(combatantId, { wounds = 0, strain = 0, critical 
   return { ok: true, combatant: c, notes };
 }
 
+/** Papers-Check Reflex (B§2): a PC who fails a Deception or Cool check against this group
+ *  takes a Personal Heat check automatically. */
+export function papersCheckReflex(combatantId, character, { failed }) {
+  const combat = getCombat();
+  const c = combat.combatants[combatantId];
+  if (!c || !(c.abilities || []).includes('papersCheckReflex')) {
+    return { ok: false, reason: 'This combatant does not have Papers-Check Reflex.' };
+  }
+  if (!failed) return { ok: true, triggered: false, note: 'The check held up; no Heat (B§2).' };
+  const applied = applyPersonalHeat(character, 1);
+  return {
+    ok: true, triggered: true, applied,
+    note: `Papers-Check Reflex: Personal Heat ${applied.before} → ${applied.after} (B§2, §17.1).`
+  };
+}
+
+/** Hartmann Voss escalates personally once Cell Heat reaches 4 (B§4). */
+export function nemesisEscalation() {
+  const cell = getCell();
+  const escalating = Object.values(getCombat().combatants)
+    .filter((c) => c.sourceId === 'hartmannVoss');
+  const source = BESTIARY.find((e) => e.id === 'hartmannVoss');
+  const threshold = source.heatHook.cellHeat;
+  if (cell.cellHeat < threshold) return { triggered: false, threshold, cellHeat: cell.cellHeat };
+  return {
+    triggered: true, threshold, cellHeat: cell.cellHeat,
+    inPlay: escalating.length > 0,
+    note: `Cell Heat is ${cell.cellHeat}: ${source.name} escalates personally (B§4).`
+  };
+}
+
 export function removeCombatant(combatantId) {
   const combat = getCombat();
   delete combat.combatants[combatantId];
   combat.slots.forEach((s) => { if (s.filledBy === combatantId) s.filledBy = null; });
   saveCombat(combat);
+}
+
+// ---------------------------------------------------------------------------
+// Vehicle scale (§12) — the same engine, personal-scale damage, five range bands.
+// ---------------------------------------------------------------------------
+
+export function addVehicle(vehicleId, { pilotCombatantId = null } = {}) {
+  const source = VEHICLES.find((v) => v.id === vehicleId);
+  if (!source) return { ok: false, reason: 'Unknown vehicle.' };
+  const combat = getCombat();
+  const id = uid();
+  combat.vehicles = combat.vehicles || {};
+  combat.vehicles[id] = {
+    id, sourceId: source.id, name: source.name,
+    silhouette: source.silhouette, handling: source.handling,
+    speed: 0, maxSpeed: source.speed,
+    defense: source.defense, armour: source.armour,
+    hullTrauma: 0, hullThreshold: source.hull,
+    systemStrain: 0, systemStrainThreshold: source.systemStrain,
+    pilotCombatantId, disabled: false
+  };
+  saveCombat(combat);
+  return { ok: true, vehicle: combat.vehicles[id] };
+}
+
+export function changeSpeed(vehicleId, delta) {
+  const combat = getCombat();
+  const v = combat.vehicles[vehicleId];
+  if (!v) return { ok: false, reason: 'Unknown vehicle.' };
+  v.speed = clamp(v.speed + delta, 0, v.maxSpeed);
+  saveCombat(combat);
+  return { ok: true, speed: v.speed };
+}
+
+export function vehicleDamage(vehicleId, { hull = 0, systemStrain = 0 }) {
+  const combat = getCombat();
+  const v = combat.vehicles[vehicleId];
+  if (!v) return { ok: false, reason: 'Unknown vehicle.' };
+  v.hullTrauma = clamp(v.hullTrauma + hull, 0, 999);
+  v.systemStrain = clamp(v.systemStrain + systemStrain, 0, 999);
+  v.disabled = v.hullTrauma >= v.hullThreshold || v.systemStrain >= v.systemStrainThreshold;
+  saveCombat(combat);
+  return { ok: true, vehicle: v };
+}
+
+/** A crash inflicts hull trauma equal to current speed (§12). */
+export function crashVehicle(vehicleId) {
+  const combat = getCombat();
+  const v = combat.vehicles[vehicleId];
+  if (!v) return { ok: false, reason: 'Unknown vehicle.' };
+  const trauma = v.speed;
+  const result = vehicleDamage(vehicleId, { hull: trauma });
+  return {
+    ok: true, trauma, vehicle: result.vehicle,
+    note: `Lost control at speed ${trauma}: ${trauma} hull trauma, and occupants may take wounds or a Critical Injury roll as though from a fall (§12).`
+  };
+}
+
+export function repairSystemStrain(vehicleId) {
+  const combat = getCombat();
+  const v = combat.vehicles[vehicleId];
+  if (!v) return { ok: false, reason: 'Unknown vehicle.' };
+  v.systemStrain = Math.max(0, v.systemStrain - 1);
+  saveCombat(combat);
+  return { ok: true, systemStrain: v.systemStrain, note: 'One system strain recovered — a day undamaged, or the Damage Control action (§12).' };
+}
+
+export function removeVehicle(vehicleId) {
+  const combat = getCombat();
+  delete combat.vehicles[vehicleId];
+  saveCombat(combat);
+}
+
+/** Save an NPC built from the §12C recipes. Recipe-built NPCs derive, so they stay
+ *  distinguishable from the printed blocks that never do (R-15). */
+export function addRecipeNpc({ name, tier, characteristics, skills = {}, soak = null, woundThreshold = null, strainThreshold = null, abilities = [], adversary = 0, minionCount = 1, woundThresholdPerMember = null }) {
+  const combat = getCombat();
+  const id = uid();
+  const brawn = (characteristics && characteristics.brawn) || 2;
+  const willpower = (characteristics && characteristics.willpower) || 2;
+  const derivedSoak = soak ?? brawn;
+  const derivedWt = tier === 'minion'
+    ? minionGroupWoundThreshold(woundThresholdPerMember ?? (5 + brawn), minionCount)
+    : woundThreshold ?? (10 + brawn);
+  combat.combatants[id] = {
+    id, name, side: 'npc', tier, kind: tier,
+    sourceId: null, sourceBook: 'manual', derivedFrom: 'recipe', // R-15
+    characteristics, skills,
+    soak: derivedSoak, meleeDef: 0, rangedDef: 0, silhouette: 1,
+    abilities, adversary,
+    wounds: 0, strain: 0,
+    woundThreshold: derivedWt,
+    strainThreshold: tier === 'nemesis' ? (strainThreshold ?? (10 + willpower)) : null,
+    woundThresholdPerMember: tier === 'minion' ? (woundThresholdPerMember ?? (5 + brawn)) : null,
+    minionCount: tier === 'minion' ? minionCount : null,
+    conditions: {}, criticalInjuries: [], actedThisRound: false, maneuversUsed: 0, actionUsed: false
+  };
+  saveCombat(combat);
+  return { ok: true, combatant: combat.combatants[id] };
 }
 
 // ---------------------------------------------------------------------------
@@ -595,6 +726,43 @@ export function renderCombat(mount) {
     roster.append(card);
   });
   mount.append(roster);
+
+  // --- vehicles (§12) ---
+  const vehicleCard = el('div', { class: 'card' }, [
+    el('h3', { text: 'Vehicles' }),
+    el('p', { class: 'small muted', text: `${VEHICLE_RULES.scale} ${VEHICLE_RULES.turnOrder}` })
+  ]);
+  const vehiclePick = el('select', { id: 'vehicle-pick', 'aria-label': 'Vehicle' });
+  VEHICLES.forEach((v) => vehiclePick.append(el('option', { value: v.id, text: `${v.name} (sil ${v.silhouette})` })));
+  vehicleCard.append(vehiclePick, el('button', {
+    type: 'button', class: 'secondary', text: 'Add vehicle',
+    onclick: () => { addVehicle(vehiclePick.value); rerender(); }
+  }));
+  Object.values(combat.vehicles || {}).forEach((v) => {
+    vehicleCard.append(el('div', { class: 'result' }, [
+      el('div', { class: 'result-head' }, [
+        el('span', { class: 'result-title', text: v.name }),
+        el('span', { class: 'cite', text: `sil ${v.silhouette} · handling ${v.handling >= 0 ? '+' : ''}${v.handling}` })
+      ]),
+      el('div', { class: 'result-body', text: `Speed ${v.speed}/${v.maxSpeed} · hull ${v.hullTrauma}/${v.hullThreshold} · system strain ${v.systemStrain}/${v.systemStrainThreshold} · armour ${v.armour}${v.disabled ? ' · disabled' : ''}` }),
+      el('button', { type: 'button', class: 'secondary', text: 'Accelerate', onclick: () => { changeSpeed(v.id, 1); rerender(); } }),
+      el('button', { type: 'button', class: 'secondary', text: 'Decelerate', onclick: () => { changeSpeed(v.id, -1); rerender(); } }),
+      el('button', { type: 'button', class: 'secondary', text: '+1 system strain', onclick: () => { vehicleDamage(v.id, { systemStrain: 1 }); rerender(); } }),
+      el('button', { type: 'button', class: 'secondary', text: 'Damage Control', onclick: () => { const r = repairSystemStrain(v.id); showToast(r.note); rerender(); } }),
+      el('button', { type: 'button', class: 'secondary', text: 'Crash', onclick: () => { const r = crashVehicle(v.id); showToast(r.note); rerender(); } }),
+      el('button', { type: 'button', class: 'secondary', text: 'Remove', onclick: () => { removeVehicle(v.id); rerender(); } })
+    ]));
+  });
+  mount.append(vehicleCard);
+
+  // --- nemesis escalation hook (B§4) ---
+  const escalation = nemesisEscalation();
+  if (escalation.triggered) {
+    mount.append(el('div', { class: 'card' }, [
+      el('h3', { text: 'Nemesis escalation' }),
+      el('p', { class: 'small', text: escalation.note })
+    ]));
+  }
 
   // --- progress tasks ---
   const tasks = listTasks();

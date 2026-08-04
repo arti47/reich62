@@ -161,6 +161,67 @@ export async function dataChecks({ check, equal }) {
   check('200 Challenge dice produce no positive symbols',
     challengeOnly.tally.success === 0 && challengeOnly.tally.advantage === 0 && challengeOnly.tally.triumph === 0);
 
+  // --- situational dice, upgrades and spends (§5E, §5J, §2.4, §5C) ---
+  const R2 = await import('../src/roller.js');
+  const C = await import('../src/combat.js');
+  const base = { ...R2.state };
+  Object.assign(R2.state, {
+    skillId: 'stealth', difficultyId: 'average', opposed: false, surveilled: false,
+    publicCheck: false, concealment: 2, concealmentRole: 'hiding', cover: true,
+    silhouetteDelta: 0, upgradeAbility: 0, upgradeDifficulty: 0, downgradeAbility: 0, downgradeDifficulty: 0,
+    autoDice: { conditions: true, encumbrance: true, heat: true }
+  });
+  const conc = R2.assemblePool(null);
+  equal('§5E: concealment adds Boost dice to the hiding character', conc.pool.boost, 3); // 2 concealment + 1 cover
+  Object.assign(R2.state, { concealmentRole: 'observing', cover: false });
+  const obs = R2.assemblePool(null);
+  equal('§5E: concealment adds Setback against a concealed target', obs.pool.setback, 2);
+  Object.assign(R2.state, { concealment: 0, concealmentRole: 'none', silhouetteDelta: 2 });
+  equal('§5J: a target 2 silhouettes larger is one difficulty easier', R2.assemblePool(null).pool.difficulty, 1);
+  Object.assign(R2.state, { silhouetteDelta: -2 });
+  equal('§5J: a target 2 silhouettes smaller is one difficulty harder', R2.assemblePool(null).pool.difficulty, 3);
+  Object.assign(R2.state, { silhouetteDelta: 0, upgradeDifficulty: 1 });
+  const upgraded = R2.assemblePool(null);
+  equal('§2.4: upgrading a Difficulty die yields a Challenge', upgraded.pool.challenge, 1);
+  equal('§2.4: the upgraded Difficulty die is consumed', upgraded.pool.difficulty, 1);
+  Object.assign(R2.state, base);
+
+  // Audit A-2: the Adversary talent upgrades checks against that NPC (§12C).
+  Object.assign(R2.state, { targetAdversary: 2, difficultyId: 'average' });
+  const adversaryPool = R2.assemblePool(null);
+  equal('§12C: Adversary 2 upgrades the difficulty twice', adversaryPool.pool.challenge, 2);
+  equal('§12C: the upgraded Difficulty dice are consumed', adversaryPool.pool.difficulty, 0);
+  Object.assign(R2.state, { targetAdversary: 0 });
+
+  // Audit A-1: a Triumph can be spent to reduce Personal Heat (§17.1).
+  const H = await import('../src/heat.js');
+  equal('§17.1: a Triumph spent on Heat reduces it by 1',
+    H.heatFromCheck({ triumph: 1, surveilled: true, spendTriumphOnHeat: true }).personalHeat, -1);
+  equal('§17.1: an unspent Triumph changes nothing',
+    H.heatFromCheck({ triumph: 1, surveilled: true, spendTriumphOnHeat: false }).personalHeat, 0);
+  equal('§17.1: Despair on an evasion check is +2',
+    H.heatFromCheck({ despair: 1, surveilled: true, skillId: 'deception' }).personalHeat, 2);
+  equal('§17.1: outside a surveilled context nothing is generated',
+    H.heatFromCheck({ despair: 1, surveilled: false, skillId: 'deception' }).personalHeat, 0);
+
+  // --- vehicle scale (§12) ---
+  C.addVehicle('motorcycle');
+  const combatState = (await import('../src/store.js')).getCombat();
+  const vehicleId = Object.keys(combatState.vehicles)[0];
+  C.changeSpeed(vehicleId, 3);
+  const crashed = C.crashVehicle(vehicleId);
+  equal('§12: a crash inflicts hull trauma equal to current speed', crashed.trauma, 3);
+  equal('§12: the trauma lands on the hull', crashed.vehicle.hullTrauma, 3);
+  const capped = C.changeSpeed(vehicleId, 99);
+  equal('§12: speed is capped at the vehicle maximum', capped.speed, 5);
+  C.removeVehicle(vehicleId);
+
+  // --- recipe-built NPCs derive and stay distinguishable from printed blocks (R-15) ---
+  const recipe = C.addRecipeNpc({ name: 'Test Rival', tier: 'rival', characteristics: { brawn: 3, willpower: 2 } });
+  equal('R-15: a recipe NPC is marked as derived, not printed', recipe.combatant.derivedFrom, 'recipe');
+  equal('R-15: a recipe rival derives soak from Brawn', recipe.combatant.soak, 3);
+  C.removeCombatant(recipe.combatant.id);
+
   // --- solo tables (§18–§20, §23) ---
   equal('3 Oracle likelihoods', S.ORACLE.likelihoods.length, 3);
   equal('Likely is 2 Ability against 1 Difficulty', `${S.ORACLE.likelihoods[0].ability}v${S.ORACLE.likelihoods[0].difficulty}`, '2v1');

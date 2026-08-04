@@ -233,6 +233,10 @@ export const COMBAT_SEQUENCE = {
 // T10 — Maneuvers — §5A
 export const MANEUVER_RULES = {
   cite: '§5A',
+  // R-21 — §5's turn-budget summary says "1 action + 2 maneuvers, or 2 maneuvers and strain
+  // for a third", while §5A gives the detailed rule: one free maneuver, a second for 2
+  // strain, never more than two. The detailed rule governs.
+  ruling: 'R-21',
   freePerTurn: 1,
   maxPerTurn: 2,
   secondManeuverStrainCost: 2,

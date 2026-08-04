@@ -3,7 +3,7 @@
 import { $, el, clear } from './core.js';
 import { Settings } from './settings.js';
 import { activeCharacterId } from './store.js';
-import { renderHome, renderRules, renderSettings } from './screens.js';
+import { renderHome, renderRules, renderSettings, renderSafety } from './screens.js';
 import { renderWizard } from './wizard.js';
 import { renderSheet, renderResourceHeader } from './sheet.js';
 import { renderRoller } from './roller.js';
@@ -20,7 +20,8 @@ const ROUTES = [
   { id: 'rules',    path: '#/rules',    label: 'Rules',    glyph: '§', render: renderRules },
   { id: 'solo',     path: '#/solo',     label: 'Solo',     glyph: '◇', render: renderSolo, gate: () => Settings.soloMode() },
   { id: 'gm',       path: '#/gm',       label: 'GM',       glyph: '◈', render: renderGm, gate: () => Settings.gmScreen() },
-  { id: 'settings', path: '#/settings', label: 'Settings', glyph: '⚙', render: renderSettings }
+  { id: 'settings', path: '#/settings', label: 'Settings', glyph: '⚙', render: renderSettings },
+  { id: 'safety',   path: '#/safety',   label: 'Safety',   glyph: '⚑', render: renderSafety, hideInNav: () => true }
 ];
 
 function placeholder(title, body) {
@@ -40,8 +41,17 @@ export function routableRoutes() {
 }
 
 export function currentRoute() {
-  const hash = location.hash || '#/';
+  const hash = (location.hash || '#/').split('?')[0];
   return routableRoutes().find((r) => r.path === hash) || ROUTES[0];
+}
+
+/** Query parameters carried on the hash, e.g. #/rules?q=§17.3 from a citation link. */
+export function currentParams() {
+  const query = (location.hash || '').split('?')[1];
+  if (!query) return {};
+  const params = {};
+  new URLSearchParams(query).forEach((value, key) => { params[key] = value; });
+  return params;
 }
 
 export function renderNav() {
@@ -64,7 +74,7 @@ export function renderScreen() {
   const mount = $('#screen');
   if (!mount) return;
   const route = currentRoute();
-  route.render(mount);
+  route.render(mount, currentParams());
   renderResourceHeader();
   renderNav();
   mount.focus({ preventScroll: true });

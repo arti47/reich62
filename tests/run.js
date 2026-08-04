@@ -5,6 +5,25 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
+
+// The pure data and engine checks import real app modules, some of which persist through
+// localStorage and announce changes on `document`. Both are shimmed so those modules can be
+// exercised outside a browser; the browser section below runs against the real thing.
+if (typeof globalThis.localStorage === 'undefined') {
+  const store = new Map();
+  globalThis.localStorage = {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+    clear: () => store.clear()
+  };
+}
+if (typeof globalThis.document === 'undefined') {
+  globalThis.document = { addEventListener() {}, dispatchEvent() { return true; } };
+}
+if (typeof globalThis.CustomEvent === 'undefined') {
+  globalThis.CustomEvent = class CustomEvent { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } };
+}
 import { createServer, listen } from './serve.js';
 import { pinChecks } from './rulings.test.js';
 import { dataChecks } from './data.test.js';
@@ -335,6 +354,39 @@ async function main() {
     check('the meaning table produces a phrase', (await page.locator('#solo-output').innerText()).length > 8);
     await page.getByRole('button', { name: 'Random encounter (B§7)' }).click();
     check('the random encounter table rolls', /\(\d+\)/.test(await page.locator('#solo-output').innerText()));
+
+    // --- citation links land in the rules library on the cited entry ---
+    await page.getByRole('link', { name: 'Roll', exact: true }).click();
+    await page.waitForSelector('#roller-skill');
+    await page.getByRole('link', { name: 'Look up §5E in the rules library' }).click();
+    await page.waitForSelector('#rules-search');
+    equal('a citation link carries its section into the search box', await page.inputValue('#rules-search'), '§5E');
+    check('the cited section is found', (await page.locator('#rules-results .result').count()) >= 5);
+
+    // --- item damage ladder and attachments (§14B, §14C) ---
+    await page.getByRole('link', { name: 'Sheet', exact: true }).click();
+    const firstItem = page.locator('.result', { hasText: 'P38 pistol' }).first();
+    if (await firstItem.count()) {
+      await firstItem.getByRole('button', { name: 'Damage a step' }).click();
+      await page.waitForTimeout(60);
+      check('an item damaged one step shows its penalty and repair difficulty (§14B)',
+        /Minor — One Setback on use/.test(await page.locator('.result', { hasText: 'P38 pistol' }).first().innerText()));
+      await page.locator('.result', { hasText: 'P38 pistol' }).first().getByRole('button', { name: /^Repair/ }).click();
+      await page.waitForTimeout(60);
+      check('repairing walks the ladder back (§14B)',
+        /Undamaged/.test(await page.locator('.result', { hasText: 'P38 pistol' }).first().innerText()));
+      await page.locator('.result', { hasText: 'P38 pistol' }).first().getByRole('button', { name: 'Install' }).click();
+      await page.waitForTimeout(60);
+      check('an attachment consumes a hard point (§14C)',
+        /1 of 1 hard points used/.test(await page.locator('.result', { hasText: 'P38 pistol' }).first().innerText()));
+    }
+
+    // --- safety-tools note (§20A) ---
+    await page.getByRole('link', { name: 'Settings', exact: true }).click();
+    await page.getByRole('link', { name: 'Open the safety-tools note' }).click();
+    await page.waitForSelector('#screen .card');
+    check('the safety-tools note paraphrases session zero and rule zero (§20A)',
+      /Rule zero/.test(await page.locator('#screen').innerText()));
 
     // 390px as well as 360px.
     await page.setViewportSize({ width: 390, height: 780 });

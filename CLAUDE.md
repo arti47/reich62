@@ -547,6 +547,7 @@ later edit cannot drift away from it.
 | **R-16** | The Guard Dog is printed as "Wound Threshold 4 (Minion-equivalent single unit, or run as a lone Rival-lite …)" (B§5) — two tiers offered, none chosen | Default **minion tier, group size 1**; the combatant card offers a one-tap "promote to Rival" that grants Criticals-resolve-normally and keeps WT 4. Stored as `tier: "minion"`, `promotable: true` | no | `data-monsters.js`, `combat.js` |
 | **R-17** | The bestiary writes Defense as `X/Y` (e.g. "Defense: 0/1") without naming the order (B§3–B§5) | Read as **melee/ranged**, matching the §16A character-sheet field order (Melee Defense then Ranged Defense) | no | `data-monsters.js` |
 | **R-18** | Minion groups print a **per-member** Wound Threshold ("4 per member"), while §12C defines the group threshold as the sum of members' thresholds | Consistent, not contradictory: store the printed **per-member** value and let `combat.js` compute group WT = per-member × group size, so resizing a group recomputes correctly and the "one minion drops per member's share" rule stays exact | no | `data-monsters.js`, `combat.js` |
+| **R-21** | §5's turn-budget summary reads "1 action + 2 maneuvers, or 2 maneuvers and strain for a third", while §5A gives one free maneuver, a second for 2 strain, and never more than two | **§5A's detailed rule governs**: one free maneuver, a second costing 2 strain, hard cap of two. Out-of-turn maneuvers granted by the GM do not count against the cap | no | `data.js` `MANEUVER_RULES`, `combat.js` |
 | **R-20** | The supplied face table (D§) prints the Proficiency 12 face as **Triumph alone** and the Challenge 12 face as **Despair alone**; no supplied source says a Triumph also counts as a Success or a Despair as a Failure | Store both **exactly as printed** — Triumph and Despair are their own symbols, never cancelled (§1), and they do not add a Success or Failure to the tally. Nothing is inferred from outside the supplied sources | no | `data.js` `DIE_FACES` |
 | **R-19** | The bestiary's minion abilities `Disciplined` (immune to Disorient) and §12D's `Hardened` (immune to Disorient **and** Stagger) overlap but differ (B§2 vs §12D) | Keep both as distinct entries; `Disciplined` is the narrower one. Neither is a rename of the other | no | `data-npcs.js` |
 
@@ -848,54 +849,54 @@ is worked in this position, immediately after `data-npcs.js`.)*
 - [x] Pregens (T55) → instantiate into the XP/Motivation steps, not a finished sheet
 - [x] Legality validation at every step; no illegal character can be saved
 
-### Phase 2 — Core Tracker — *partially complete*
+### Phase 2 — Core Tracker — **COMPLETE except the portrait**
 - [x] Live sheet: characteristics, 26 skills with pool preview, talents, inventory
 - [x] **Persistent resource header on every in-play screen:** wounds · strain · Story Points · Personal Heat · encumbrance
 - [x] Vitals steppers clamped to true maxima; incapacitation state
 - [x] Conditions registry (§3.9) — disoriented, encumbrance and Heat auto-apply their dice in the roller; the remaining condition effects are wired as the systems that consume them land
 - [x] Inventory: encumbrance enforced (Setback per point over; free-maneuver loss at ≥ Brawn over), equipped state
-- [ ] Inventory: item damage ladder, attachments and hard points
+- [x] Inventory: item damage ladder, attachments and hard points (§14B, §14C)
 - [x] Critical Injury list with **cumulative +10 modifier** tracked
 - [x] Notes, JSON **export/import** in Settings
 - [ ] Portrait (canvas-compressed) — lands with Phase 5 storage
 - [x] Persistence + normalisation/migration path
 
-### Phase 3 — Dice Engine — *partially complete*
+### Phase 3 — Dice Engine — **COMPLETE**
 - [x] Pool builder from skill+characteristic with **modification order enforced**
 - [x] **Manual symbol-entry roller (primary and default, per R-B1)** + cancellation + net outcome
 - [x] Digital roller behind `digitalRoller` — unblocked once `DIE_FACES` was supplied (D§); rolls the assembled pool, reports each die and face, and fills the symbol entry (R-B1)
 - [x] Difficulty picker (7 levels)
-- [ ] Upgrade/downgrade controls in the roller UI (the engine enforces them; the controls are not yet exposed)
+- [x] Upgrade/downgrade controls in the roller UI, including spending a Story Point to upgrade (§2.4, §8)
 - [x] Auto-applied dice: conditions, encumbrance, Heat thresholds
-- [ ] Auto-applied dice: environment, silhouette, cover/concealment
+- [x] Auto-applied dice: environment, silhouette, cover/concealment (§5E, §5J), plus the Adversary talent's upgrades (§12C)
 - [x] **Opposed-check builder** (§3.2 exact sequence) and competitive-check comparator (R-3)
 - [x] **Four context spend tables** (combat / generic / social / vehicle) surfaced by affordability (R-12)
-- [ ] One-tap application of a chosen spend to the character's state
+- [x] One-tap application of a chosen spend to the character's state (§5C)
 - [x] **Story Point spends** with two-pool flow enforced (`spendStoryPoint`) — pool UI lands with the GM tab
 - [x] Damage applier: base + net 🌟 − Soak → wounds; strain path; Pierce handling
 - [x] **Critical Injury roller** with all modifiers (+10/injury, Vicious, Durable, falls) and effect auto-application
-- [ ] **Talent "tap to use"** for the ~40 mechanically-hooked talents
+- [x] **Talent "tap to use"** for the mechanically-hooked talents — strain and Story Point costs deducted, once-per-X flags set
 - [x] **Roll log** (local; capped at 100; `aria-live`; enough detail to re-derive)
-- [ ] **Rules citations:** every automated surface links to its rules-library entry
+- [x] **Rules citations:** automated surfaces link into the rules library on their cited section
 - [x] `heat.js`: Despair → Personal Heat +1 (+2 on evasion checks), Triumph → optional −1, surveilled-context flag, threshold effects auto-applied, Cell Heat escalation
 
 ### 🏁 Milestone — First Session Playable — **REACHED**
 - [x] Create character → live sheet → resolve checks → track wounds/strain/Story Points/Heat, end to end, verified headless with zero console errors *(Phase 5 gated on this)*
 
-### Phase 4 — In-Play Systems — *complete except vehicle scale and two Heat hooks*
+### Phase 4 — In-Play Systems — **COMPLETE**
 - [x] **Guided death procedure** (§3.10): The End Is Nigh countdown, Bleeding Out per-turn ticks + threshold-overflow extra roll, suffocation escalation, Indomitable escape hatch, 151+ terminal state
 - [x] Rest & recovery with **all once-per-X limits enforced** (§3.11)
 - [x] **Lifecycle engine** (§3.12): End Encounter / Scene / Session / Day / Week / Adventure with confirmation summary + one-step undo
 - [x] **Generic progress tracker** (§3.13) reused by Heat, repairs, ad-hoc clocks and the Dragnet
 - [x] Advancement loop (§3.15) with pyramid + creation-only gates, Dedication handling, advancement log
 - [x] Local combat helper: **initiative slot model (§5A')**, turn/maneuver budget with strain cost, combatant cards, minion-group wound pooling from the per-member value (R-18)
-- [ ] Combat helper: vehicle scale (§12) — the schema carries `vehicles`; no UI yet
+- [x] Combat helper: vehicle scale (§12) — speed, hull trauma, system strain, Damage Control, and crashes inflicting hull trauma equal to speed
 - [x] NPC builder surface: the §12C recipes, all 21 special abilities, and the quick-gen tables, rollable on the GM screen
-- [ ] NPC builder: save a generated stat block as a reusable combatant
+- [x] NPC builder: builds from the §12C recipes and saves into the combat tracker as `derivedFrom: "recipe"` (R-15)
 - [x] **Bestiary browser** (T61–T67): filter by tier / Heat relevance / `veryChallenging`, one-tap drop-in to the combat tracker, printed stats loaded verbatim (R-15), Guard Dog promote-to-Rival control (R-16)
 - [x] **Encounter blocks (B§6)** deployable as pre-built opposed checks, incl. the **Manhunt/Dragnet extended check** on the generic progress tracker (escalating 2→4 opposition dice, +1 Personal *and* Cell Heat per failed round)
 - [x] Bestiary Heat hooks wired to `heat.js`: the Dragnet block, the B§7 Cell-Heat-4 escalation row, and Passive Watch as a scene-start Oracle roll
-- [ ] Bestiary Heat hooks: Papers-Check Reflex and Hartmann Voss's Cell-Heat-4 escalation (flagged in the data, not yet automated)
+- [x] Bestiary Heat hooks: Papers-Check Reflex on the GM screen and Hartmann Voss's Cell-Heat-4 escalation surfaced in the combat tracker
 
 ### Phase 5 — Multiplayer & Sync *(gated on the milestone)*
 - [ ] Firebase init, anonymous auth, optional Google linking
@@ -906,17 +907,36 @@ is worked in this position, immediately after `data-npcs.js`.)*
 - [ ] Shared tasks + synced roll log; portraits (canvas-compressed ~400px)
 - [ ] PWA update toast
 
-### Phase 6 — Conditional surfaces — *solo complete; GM screen partial*
+### Phase 6 — Conditional surfaces — *solo, automation and safety complete; GM party panel awaits Phase 5*
 - [x] **Solo mode** (`data-solo.js` T56–T60): Oracle, Random Event chaining, Meaning/Element tables, solo loop, Heat-4/5 raid resolution via Oracle, random encounter table (B§7), Informant Network Passive Watch as a scene-start Oracle roll (B§2)
 - [x] **GM screen**: Cell panel with Heat controls, bestiary browser with drop-in, encounter blocks, the NPC recipes and abilities, encounter sizing, and the §3.21 rollable tables incl. the **random encounter table (B§7)**
 - [ ] GM screen: party panel with peek sheets, handing out damage/conditions/Heat, broadcast feed *(these need the Phase 5 sync layer to be useful beyond one device)*
-- [ ] Advanced automation toggle
-- [ ] Safety-tools note (§20A, paraphrased, one screen)
+- [x] Advanced automation toggle — off, the automatic condition, encumbrance and Heat dice are confirmable rows; on, they apply without prompting
+- [x] Safety-tools note (§20A, paraphrased, one screen, linked from Settings)
 
 ### Hardening (always)
-- [ ] Regression harness per §13.5 assertions
-- [ ] Accessibility pass
-- [ ] **Rules-accuracy audit (§13.6)** with every finding closed
+- [x] Regression harness per §13.5 assertions — 271 checks, every ruling pinned
+- [ ] Accessibility pass (labels, `aria-live` and focus are in place; a full pass is outstanding)
+- [x] **Rules-accuracy audit, pass 1** — findings below, each closed with a regression check
+- [ ] Rules-accuracy audit, pass 2 (after Phase 5)
+
+#### Audit pass 1 — findings (Rule · Target · Fix · Why)
+
+| # | Rule | Target | Fix | Why |
+|---|---|---|---|---|
+| **A-1** | An uncancelled Triumph lets the player reduce Personal Heat by 1 (§17.1) | `roller.js` | The rule was implemented in `heat.js` but no control ever set `spendTriumphOnHeat`, so the reduction was unreachable. Added the toggle to the check setup | A printed player option was inert in the UI |
+| **A-2** | The Adversary talent upgrades the difficulty of every combat check against that NPC, once per rank (§12C) | `roller.js` | The roller had no notion of the target, so Adversary was never applied. Added a target Adversary rank that upgrades the difficulty in the modification order | Every published Rival has Adversary 1 and every Nemesis Adversary 2, so this affected nearly every combat check against the bestiary |
+| **A-3** | §5 and §5A disagree on the turn budget | `data.js`, `combat.js` | Recorded as **R-21**: §5A's detailed rule governs — one free maneuver, a second for 2 strain, cap of two | A contradiction inside the source needed a recorded ruling rather than a silent choice |
+| **A-4** | Environmental and size modifiers are properties of the situation, not the character (§5E, §5J) | `roller.js` | They were nested inside the character branch, so they vanished with no sheet loaded. Moved out of that branch | GM-side and sheetless rolls silently lost cover, concealment and silhouette |
+
+Verified clean in this pass, so later audits need not re-litigate them: symbol cancellation and
+the uncancellable Triumph and Despair (§1); pool building and the modification order (§2, §2.4);
+the opposed difficulty side and the competitive tie chain (§3A, R-3); Story Point two-pool flow
+(§8); Critical Injury modifier stacking, the Durable floor and results past 100 (§9, §5G, R-14);
+encumbrance thresholds and penalties (§5F); the talent pyramid including ranked purchases (§7);
+XP costs (§7); rarity difficulty and location modifiers (§14A); minion group thresholds and skill
+ranks (§12C, R-18); Heat generation, thresholds and decay (§17); the painkiller ladder and the
+once-per-X recovery limits (§5G); the Dragnet's escalation and dual Heat cost (B§6).
 
 **Per-feature spec format (mandatory):** Rule (cited) · Target (file · module · function) ·
 Behavior/UI · Schema (name · type · default · location, §8 updated) · Acceptance (browser
@@ -926,6 +946,7 @@ verification).
 
 | Date | Change | Why | Verification | Cache |
 |---|---|---|---|---|
+| 2026-08-04 | **Remaining Phase 2/3/4/6 items closed, plus the first rules-accuracy audit.** Sheet gains the item damage ladder and attachments against hard points (§14B, §14C). Roller gains concealment, cover and silhouette dice (§5E, §5J), the Adversary upgrade (§12C), manual upgrade and downgrade controls with a Story-Point-funded upgrade (§2.4, §8), one-tap spend application (§5C), and citation links that open the rules library on the cited section. Combat gains vehicle scale (§12: speed, hull, system strain, Damage Control, crash trauma equal to speed) and recipe-built NPCs stored as `derivedFrom: "recipe"` (R-15). GM screen gains the NPC builder and Papers-Check Reflex; the combat tracker surfaces Hartmann Voss's Cell-Heat-4 escalation. `advancedAutomation` now governs whether automatic dice are confirmed or applied silently. Safety-tools note added (§20A). Audit findings A-1…A-4 fixed, new ruling **R-21** for the §5 vs §5A turn-budget contradiction. | Closing the roadmap's remaining local items before Phase 5 | `npm test`: 271 checks pass, **zero console errors** — situational dice with and without a loaded sheet, Adversary upgrades consuming Difficulty dice, Triumph-to-Heat, crash trauma equal to speed, recipe NPCs deriving, item damage and attachment hard points, citation links landing on the cited section, and the safety-tools note | `reich62-v6` |
 | 2026-08-04 | **Die face distributions supplied → R-B1 retired.** `source/genesys_dice_breakdown.md` added as a third source of record, cited `D§`. `data.js` gains `DIE_FACES` (ledger T68: 56 faces across the six dice, stored exactly as printed) and `DIE_FACES_SOURCE`. `core.js` gains `rollFace`; `roller.js` gains `rollPool`, which rolls the assembled pool, fills the symbol entry and reports each die and face. `settings.js` no longer force-disables `digitalRoller`, which is now opt-in and off by default — manual symbol entry stays the default input everywhere. New ruling **R-20**: the Proficiency 12 and Challenge 12 faces are stored as Triumph and Despair alone, since no supplied source says either also counts as a Success or Failure. | The user supplied the face data R-B1 was waiting on | `npm test`: 248 checks pass, **zero console errors** — face-table shape and symbol polarity pinned per die, Triumph confined to Proficiency and Despair to Challenge, 200-die rolls of each producing no opposite-polarity symbols, every rolled face traced back to the table, and the toggle verified unblocked, off by default, and reverting cleanly to manual entry | `reich62-v5` |
 | 2026-08-04 | **Phase 4 in-play systems, plus solo mode.** `combat.js` (initiative slots with fixed ownership and per-round slot filling, turn budget with the 2-strain second maneuver and the minion no-strain rule, bestiary drop-in loading printed stats verbatim, minion-group wound pooling and live resizing, Guard Dog promotion, the generic progress tracker with the Dragnet's escalating 2→4 opposition and dual Heat cost, and the six lifecycle boundaries with a delta preview and one-step undo). `sheet.js` gains the guided death procedure (Bleeding Out, The End Is Nigh countdown, suffocation escalation, Indomitable), rest and recovery with every once-per-X limit enforced, the advancement loop with Dedication, and talent tap-to-use. `gm.js` (Cell panel, bestiary browser with tier/Heat/threat filters, encounter blocks, NPC recipes and all 21 abilities, rollable §3.21 tables). `data-solo.js` T56–T60 and `solo.js` (Oracle with Random Event chaining, meaning and element tables, Passive Watch, Heat-4 raid timing). `store.js` gains combat, task and undo-snapshot persistence. | Phase 4 and the solo half of Phase 6 | `npm test`: 224 checks pass — the Phase 4 flow driven headless (bestiary drop-in, R-18 group thresholds recomputing on resize, R-16 promotion, initiative slots, a failed dragnet round advancing both Heat tracks, End Session awarding XP and decaying Heat, one-step undo restoring state, Bleeding Out ticking, the night-rest limit locking out, the Oracle chaining a Random Event and feeding Heat) at 360px and 390px, Firebase aborted, **zero console errors** | `reich62-v4` |
 | 2026-08-04 | **Phases 1–3 to the First Session Playable milestone.** `wizard.js` (career → four career skills → 70 XP with the live cost engine and pyramid gate → derived → Motivation → gear → review, every step validated), `data-pregens.js` (T55, with Anna Voss's R-1 erratum stored and surfaced), `sheet.js` (live sheet, vitals steppers clamped to true maxima, conditions, Critical Injury list with the cumulative +10, inventory with enforced encumbrance, and the persistent resource header), `roller.js` (pool build in the §2.4 modification order, manual symbol entry, cancellation, opposed difficulty side, the four spend tables by affordability, damage applier, Critical Injury roller, Story Point two-pool flow, roll log capped at 100), `heat.js` (Despair → +1 or +2 on evasion, Triumph → −1, threshold effects, Cell escalation at Personal 3+, safehouse status). Router gains Sheet, Roll and Create tabs. | Phases 1–3 of the §11 roadmap | `npm test`: 181 checks pass — the full create → sheet → roll → track flow driven headless at 360px and 390px, Firebase aborted, **zero console errors**; wizard legality gates, the pyramid gate, R-1 derived values, the R-8 badge and Heat generation all asserted through the real UI | `reich62-v2` |

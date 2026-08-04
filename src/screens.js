@@ -63,14 +63,16 @@ function stat(label, value) {
 
 let index = null;
 
-export function renderRules(mount) {
+export function renderRules(mount, params = {}) {
   clear(mount);
   if (!index) index = buildIndex();
+  const initialQuery = params.q || '';
 
   const results = el('div', { class: 'card', id: 'rules-results' });
   const input = el('input', {
     type: 'search',
     id: 'rules-search',
+    value: initialQuery,
     placeholder: 'Search rules, tables, talents, gear, adversaries, §17.3, B§6…',
     'aria-label': 'Search the rules library'
   });
@@ -100,7 +102,27 @@ export function renderRules(mount) {
     el('p', { class: 'small muted', text: 'Every entry is cited: §x is the manual, B§x the bestiary. Search by section number, name or effect.' })
   ]));
   mount.append(results);
-  draw('');
+  draw(initialQuery);
+}
+
+/** Safety tools, paraphrased from §20A. One screen, linked from Settings. */
+export function renderSafety(mount) {
+  clear(mount);
+  mount.append(el('div', { class: 'card' }, [
+    el('h2', { text: 'Session zero and safety tools' }),
+    el('p', { class: 'small muted', text: 'Paraphrased from §20A. This is a summary of the rulebook\'s own guidance, not setting or adventure content.' }),
+    el('h3', { text: 'Before the first session' }),
+    el('ul', { class: 'small' }, [
+      el('li', { text: 'Agree as a group on content boundaries. This setting has a real-world atrocity backdrop, so decide explicitly how far depictions of violence go.' }),
+      el('li', { text: 'Give everyone a private way to flag a topic as off-limits or as "warn me first".' }),
+      el('li', { text: 'Name the real-world-sensitive themes — genocide, persecution, collaboration — the group wants softened, spotlighted, or left out entirely.' }),
+      el('li', { text: 'Settle table logistics: breaks, food, devices.' }),
+      el('li', { text: 'Revisit the conversation whenever the campaign\'s tone shifts.' })
+    ]),
+    el('h3', { text: 'Rule zero' }),
+    el('p', { class: 'small', text: 'The GM may override, skip or reinterpret any rule — including everything this app automates — when it serves the table better. Use it sparingly and say so out loud rather than reinterpreting silently, so trust in the system holds.' }),
+    el('p', { class: 'small' }, [el('span', { class: 'badge', text: '§20A' })])
+  ]));
 }
 
 export function renderSettings(mount) {
@@ -183,6 +205,12 @@ export function renderSettings(mount) {
         input.click();
       }
     })
+  ]));
+
+  mount.append(el('div', { class: 'card' }, [
+    el('h2', { text: 'Safety tools' }),
+    el('p', { class: 'small muted', text: 'Session zero and rule zero, paraphrased from §20A.' }),
+    el('a', { href: '#/safety', class: 'small', text: 'Open the safety-tools note' })
   ]));
 
   mount.append(el('div', { class: 'card' }, [

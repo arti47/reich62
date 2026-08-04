@@ -8,6 +8,8 @@ import {
   XP_COSTS, SKILL_RANK_MAX
 } from '../data.js';
 import { talent, buildPool, canBuyTalent, visibleTalents, xpCost, skill as skillById } from './rules.js';
+import { ITEM_DAMAGE, ATTACHMENTS, DIFFICULTIES } from '../data.js';
+import { hardPoints } from './derived.js';
 import { Settings } from './settings.js';
 import { rollCriticalInjury } from './roller.js';
 import {
@@ -332,16 +334,74 @@ export function renderSheet(mount) {
     ]));
   }
   (character.inventory.items || []).forEach((item, index) => {
-    invCard.append(el('div', { class: 'result' }, [
+    const level = ITEM_DAMAGE.levels.find((l) => l.id === (item.damageLevel || 'undamaged'));
+    const points = hardPoints(item.encumbrance || 0);
+    const used = (item.attachments || []).reduce((sum, a) => sum + a.hardPoints, 0);
+    const card = el('div', { class: 'result' }, [
       el('div', { class: 'result-head' }, [
         el('span', { class: 'result-title', text: item.name || item.id }),
-        el('span', { class: 'cite', text: `enc ${item.encumbrance || 0}` })
+        el('span', { class: 'cite', text: `enc ${item.encumbrance || 0} · ${points} hard point${points === 1 ? '' : 's'}` })
       ]),
-      item.kind === 'armour' ? el('button', {
+      el('div', { class: 'result-body', text: `${level.name}${level.penalty !== 'None' ? ` — ${level.penalty}` : ''}${used ? ` · ${used} of ${points} hard points used` : ''}` })
+    ]);
+    if (item.kind === 'armour') {
+      card.append(el('button', {
         type: 'button', class: 'secondary', text: item.equipped ? 'Unequip' : 'Equip',
         onclick: () => { character.inventory.items[index].equipped = !item.equipped; saveCharacter(character); rerender(); }
-      }) : null
-    ]));
+      }));
+    }
+    // Item damage ladder (§10 Sunder, §14B): one step each way, with the repair cost shown.
+    card.append(el('button', {
+      type: 'button', class: 'secondary', text: 'Damage a step',
+      onclick: () => {
+        const order = ITEM_DAMAGE.levels.map((l) => l.id);
+        const at = order.indexOf(item.damageLevel || 'undamaged');
+        character.inventory.items[index].damageLevel = order[Math.min(order.length - 1, at + 1)];
+        saveCharacter(character); rerender();
+      }
+    }));
+    if (level.repairDifficulty) {
+      const price = Number(item.price) || 0;
+      card.append(el('button', {
+        type: 'button', class: 'secondary',
+        text: `Repair (${level.repairDifficulty} Mechanics${price ? `, ${Math.round(level.repairCostFraction * price)} ${Settings.currencyLabel()}` : ''})`,
+        onclick: () => {
+          const order = ITEM_DAMAGE.levels.map((l) => l.id);
+          const at = order.indexOf(item.damageLevel);
+          character.inventory.items[index].damageLevel = order[Math.max(0, at - 1)];
+          saveCharacter(character);
+          showToast(`Repaired one step — ${ITEM_DAMAGE.repair.time} at ${level.repairDifficulty} (§14B)`);
+          rerender();
+        }
+      }));
+    }
+    // Attachments and hard points (§14C).
+    if (points > 0) {
+      const select = el('select', { 'aria-label': `Attachment for ${item.name || item.id}` });
+      ATTACHMENTS.examples.forEach((a) => select.append(el('option', { value: a.id, text: `${a.name} (${a.hardPoints} hp)` })));
+      card.append(select, el('button', {
+        type: 'button', class: 'secondary', text: 'Install',
+        onclick: () => {
+          const attachment = ATTACHMENTS.examples.find((a) => a.id === select.value);
+          if (used + attachment.hardPoints > points) { showToast(`Only ${points - used} hard point(s) free (§14C).`); return; }
+          character.inventory.items[index].attachments = [...(item.attachments || []), { ...attachment }];
+          saveCharacter(character);
+          showToast(`${attachment.name} installed — about an hour plus an Average Mechanics check (§14C)`);
+          rerender();
+        }
+      }));
+      (item.attachments || []).forEach((a, ai) => {
+        card.append(el('p', { class: 'small muted', text: `${a.name}: ${a.effect}` }));
+        card.append(el('button', {
+          type: 'button', class: 'secondary', text: `Remove ${a.name}`,
+          onclick: () => {
+            character.inventory.items[index].attachments.splice(ai, 1);
+            saveCharacter(character); rerender();
+          }
+        }));
+      });
+    }
+    invCard.append(card);
   });
   if (!(character.inventory.items || []).length) invCard.append(el('p', { class: 'small muted', text: 'Empty.' }));
   mount.append(invCard);

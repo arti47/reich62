@@ -4,12 +4,12 @@ An installable PWA player-character companion for **REICH '62**, a Genesys narra
 system: character creation wizard, in-play tracker, dice engine, Heat system, solo oracle,
 bestiary, and an opt-in GM screen.
 
-**Status: Phases 0–4 and solo mode built.** Character creation, the live sheet, the
+**Status: everything except multiplayer is built.** Character creation, the live sheet, the
 symbol-entry dice engine, Heat, the combat tracker with initiative slots, the guided death
 procedure, enforced rest limits, the lifecycle engine with one-step undo, the progress
 tracker, advancement, the bestiary browser and the solo Oracle loop all work — verified
-headless (248 checks, zero console errors), and the simulated roller is live now that the
-die face distributions have been supplied. Multiplayer sync and the rest of the GM screen
+headless (271 checks, zero console errors), alongside vehicle scale, the item damage ladder,
+situational dice, the GM screen, solo mode and the simulated roller. Multiplayer sync and the rest of the GM screen
 are still to come; see the roadmap in `CLAUDE.md` §11.
 
 ## Running it
@@ -42,7 +42,7 @@ Never commit real keys.
 
 ## Where the books are silent
 
-The sources leave 21 gaps between them. All are resolved — the confirmed rulings are in `CLAUDE.md` §4,
+The sources leave 22 gaps between them. All are resolved — the confirmed rulings are in `CLAUDE.md` §4,
 each one cited in code, pinned by a regression assertion, and (where it substitutes for a
 printed rule) badged in the app so an inferred value never passes as printed. The four that
 change how the app behaves:
@@ -58,7 +58,7 @@ change how the app behaves:
   no actions** (maneuvers and incidentals still allowed); **disoriented = +1 Setback die on
   all checks.**
 
-The remaining seventeen (R-2 … R-20) settle smaller conflicts: a talent naming a skill split
+The remaining eighteen (R-2 … R-21) settle smaller conflicts: a talent naming a skill split
 this manual doesn't have, competitive-check ties, the GM Story Point starting pool, the
 characteristic floor, a Despair that should read Triumph, the d8-vs-d10 oracle die, twelve
 talents referencing content absent from this setting, Triumph's cost in the spend tables, a

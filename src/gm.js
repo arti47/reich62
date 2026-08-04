@@ -10,11 +10,19 @@ import {
 import { ADVERSARY_TIERS, ADVERSARY_ABILITIES, NPC_QUICKGEN, ADVERSARY_TALENT } from '../data-npcs.js';
 import { BESTIARY, ENCOUNTER_BLOCKS, RANDOM_ENCOUNTERS, MINION_GROUPS } from '../data-monsters.js';
 import { isVeryChallenging, minionGroupWoundThreshold, adversaryAbility } from './rules.js';
-import { addFromBestiary, createTask } from './combat.js';
+import { addFromBestiary, createTask, addRecipeNpc, papersCheckReflex } from './combat.js';
+import { activeCharacter } from './store.js';
 import { getCell, saveCell } from './store.js';
-import { applyCellHeat } from './heat.js';
+import { applyCellHeat, applyPersonalHeat } from './heat.js';
 
 const filters = { tier: 'all', heatOnly: false, challengingOnly: false, query: '' };
+
+/** Papers-Check Reflex outside a running encounter: the ability's Heat effect applies even
+ *  when the guards are not on the combat tracker (B§2). */
+function applyCellHeatless(character) {
+  const applied = applyPersonalHeat(character, 1);
+  return { applied, note: `Papers-Check Reflex: Personal Heat ${applied.before} → ${applied.after} (B§2, §17.1).` };
+}
 
 export function renderGm(mount) {
   clear(mount);
@@ -182,8 +190,54 @@ export function renderGm(mount) {
       el('div', { class: 'result-body', text: ability.summary })
     ]));
   });
+  // Build and save a stat block from the recipes. Recipe-built NPCs derive their stats and
+  // are stored as such, so they stay distinguishable from printed blocks (R-15).
+  builder.append(el('h3', { text: 'Build one' }));
+  const npcName = el('input', { type: 'text', id: 'npc-name', placeholder: 'Name', 'aria-label': 'NPC name' });
+  const npcTier = el('select', { id: 'npc-tier', 'aria-label': 'NPC tier' });
+  ADVERSARY_TIERS.forEach((t) => npcTier.append(el('option', { value: t.id, text: t.name })));
+  const npcChar = {};
+  const charGrid = el('div', { class: 'stat-grid' });
+  CHARACTERISTICS.forEach((c) => {
+    npcChar[c.id] = 2;
+    const input = el('input', {
+      type: 'number', min: '1', max: '6', value: '2', id: `npc-${c.id}`, 'aria-label': c.name,
+      onchange: (e) => { npcChar[c.id] = Number(e.target.value); }
+    });
+    charGrid.append(el('div', { class: 'stat' }, [el('span', { class: 'stat-label', text: c.abbr }), input]));
+  });
+  const npcCount = el('input', { type: 'number', id: 'npc-count', min: '1', value: '3', 'aria-label': 'Minion group size' });
+  builder.append(npcName, npcTier, charGrid, el('label', { class: 'small', for: 'npc-count', text: 'Minion group size' }), npcCount);
+  builder.append(el('button', {
+    type: 'button', class: 'secondary', id: 'npc-save', text: 'Save to the combat tracker',
+    onclick: () => {
+      const result = addRecipeNpc({
+        name: npcName.value || 'Unnamed NPC', tier: npcTier.value,
+        characteristics: { ...npcChar }, minionCount: Number(npcCount.value)
+      });
+      showToast(result.ok ? `${result.combatant.name} built from the §12C recipe and added` : result.reason);
+    }
+  }));
   builder.append(el('h3', { text: `Special abilities (${ADVERSARY_ABILITIES.length})` }), abilityList);
   mount.append(builder);
+
+  // --- Papers-Check Reflex (B§2), driven from the GM screen ---
+  const reflexCard = el('div', { class: 'card' }, [
+    el('h3', { text: 'Papers-Check Reflex' }),
+    el('p', { class: 'small muted', text: 'A PC who fails a Deception or Cool check against a group with this ability takes a Personal Heat check automatically (B§2, §17.1).' }),
+    el('button', {
+      type: 'button', class: 'secondary', id: 'papers-check-failed', text: 'The check failed',
+      onclick: () => {
+        const character = activeCharacter();
+        if (!character) { showToast('No active character.'); return; }
+        const guards = MINION_GROUPS.find((m) => m.id === 'checkpointGuards');
+        const applied = applyCellHeatless(character);
+        showToast(applied.note);
+        document.dispatchEvent(new CustomEvent('resource:refresh'));
+      }
+    })
+  ]);
+  mount.append(reflexCard);
 
   // --- encounter sizing ---
   const sizing = el('div', { class: 'card' }, [el('h2', { text: 'Encounter sizing (§20B)' })]);

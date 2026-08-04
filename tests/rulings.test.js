@@ -141,6 +141,11 @@ export async function pinChecks({ check, equal }) {
   equal('R-19: Disciplined covers Disorient only', disciplined.immunities.join(','), 'disoriented');
   equal('R-19: Hardened covers Disorient and Stagger', hardened.immunities.join(','), 'disoriented,staggered');
 
+  // R-21 — §5A's detailed turn budget governs over §5's summary.
+  equal('R-21: one free maneuver per turn', D.MANEUVER_RULES.freePerTurn, 1);
+  equal('R-21: never more than two maneuvers', D.MANEUVER_RULES.maxPerTurn, 2);
+  equal('R-21: the second maneuver costs 2 strain', D.MANEUVER_RULES.secondManeuverStrainCost, 2);
+
   // Compendium inventory (CLAUDE.md §13.5).
   equal('bestiary: 10 minion groups', M.MINION_GROUPS.length, 10);
   equal('bestiary: 12 rivals', M.RIVALS.length, 12);
