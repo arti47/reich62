@@ -8,8 +8,32 @@ import * as S from '../data-solo.js';
 import * as R from '../src/rules.js';
 
 export async function pinChecks({ check, equal }) {
-  // R-B1 — no face data, so no simulated roller.
-  equal('R-B1: DIE_FACES is absent', D.DIE_FACES, null);
+  // R-B1 — face data was supplied separately (D§), which is what unblocks the simulated
+  // roller. Manual symbol entry stays the default input.
+  check('R-B1: DIE_FACES is loaded', D.DIE_FACES !== null);
+  equal('D§: Boost is a d6', D.DIE_FACES.boost.length, 6);
+  equal('D§: Setback is a d6', D.DIE_FACES.setback.length, 6);
+  equal('D§: Ability is a d8', D.DIE_FACES.ability.length, 8);
+  equal('D§: Difficulty is a d8', D.DIE_FACES.difficulty.length, 8);
+  equal('D§: Proficiency is a d12', D.DIE_FACES.proficiency.length, 12);
+  equal('D§: Challenge is a d12', D.DIE_FACES.challenge.length, 12);
+  equal('§1: Triumph appears only on the Proficiency die',
+    Object.entries(D.DIE_FACES).filter(([, faces]) => faces.some((f) => f.includes('triumph'))).map(([k]) => k).join(','), 'proficiency');
+  equal('§1: Despair appears only on the Challenge die',
+    Object.entries(D.DIE_FACES).filter(([, faces]) => faces.some((f) => f.includes('despair'))).map(([k]) => k).join(','), 'challenge');
+  equal('D§: exactly one Triumph face', D.DIE_FACES.proficiency.filter((f) => f.includes('triumph')).length, 1);
+  equal('D§: exactly one Despair face', D.DIE_FACES.challenge.filter((f) => f.includes('despair')).length, 1);
+  check('D§: every positive die shows only positive symbols',
+    ['boost', 'ability', 'proficiency'].every((die) => D.DIE_FACES[die].every((f) => f.every((sym) => ['success', 'advantage', 'triumph'].includes(sym)))));
+  check('D§: every negative die shows only negative symbols',
+    ['setback', 'difficulty', 'challenge'].every((die) => D.DIE_FACES[die].every((f) => f.every((sym) => ['failure', 'threat', 'despair'].includes(sym)))));
+  check('D§: the d6s have two blank faces each',
+    ['boost', 'setback'].every((die) => D.DIE_FACES[die].filter((f) => f.length === 0).length === 2));
+  check('D§: the d8s and d12s have one blank face each',
+    ['ability', 'difficulty', 'proficiency', 'challenge'].every((die) => D.DIE_FACES[die].filter((f) => f.length === 0).length === 1));
+  // R-20 — stored exactly as printed: the Triumph face carries no Success with it.
+  equal('R-20: the Proficiency 12 face is Triumph alone', D.DIE_FACES.proficiency[11].join(','), 'triumph');
+  equal('R-20: the Challenge 12 face is Despair alone', D.DIE_FACES.challenge[11].join(','), 'despair');
 
   // R-1 — base thresholds.
   equal('R-1: BASE_WOUND_THRESHOLD is 8', D.BASE_WOUND_THRESHOLD, 8);

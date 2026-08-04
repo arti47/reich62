@@ -8,7 +8,8 @@ bestiary, and an opt-in GM screen.
 symbol-entry dice engine, Heat, the combat tracker with initiative slots, the guided death
 procedure, enforced rest limits, the lifecycle engine with one-step undo, the progress
 tracker, advancement, the bestiary browser and the solo Oracle loop all work — verified
-headless (224 checks, zero console errors). Multiplayer sync and the rest of the GM screen
+headless (248 checks, zero console errors), and the simulated roller is live now that the
+die face distributions have been supplied. Multiplayer sync and the rest of the GM screen
 are still to come; see the roadmap in `CLAUDE.md` §11.
 
 ## Running it
@@ -36,19 +37,19 @@ Never commit real keys.
 | [`CLAUDE.md`](CLAUDE.md) | The canonical project spec — completed System Profile, the 20 confirmed rulings, content inventory, data model, 68-row Data Extraction Ledger, and the 7-phase build roadmap |
 | `source/reich62_manual.md` | The core rulebook — source of record for every rules value (cited `§x`) |
 | `source/reich62_bestiary.md` | The Bestiary & Adversary Compendium — 28 stat blocks, 4 encounter templates, 14 NPC abilities (cited `B§x`) |
+| `source/genesys_dice_breakdown.md` | The die face distributions the manual omits — 56 faces across the six dice (cited `D§`) |
 | `source/BUILD_TEMPLATE_v2.md` | The build template `CLAUDE.md` instantiates |
 
 ## Where the books are silent
 
-The two books leave 20 gaps between them. All are resolved — the confirmed rulings are in `CLAUDE.md` §4,
+The sources leave 21 gaps between them. All are resolved — the confirmed rulings are in `CLAUDE.md` §4,
 each one cited in code, pinned by a regression assertion, and (where it substitutes for a
 printed rule) badged in the app so an inferred value never passes as printed. The four that
 change how the app behaves:
 
-- **R-B1** — die face distributions are not printed, so no simulated roller can be faithful
-  to this source. **Manual symbol entry is the primary dice input**; the app does all
-  cancellation, spends, damage, Critical Injuries, Heat, and logging. The digital roller is
-  force-disabled until face data is supplied.
+- **R-B1** *(resolved)* — the manual never prints die face distributions, so **manual symbol
+  entry is the primary dice input** and always works. The distributions were supplied
+  separately (D§), so the simulated roller is now unblocked and opt-in in Settings.
 - **R-1** — the human base Wound/Strain Threshold is not printed. Base **WT 8 / ST 10**;
   Anna Voss's printed Wound 11 is recorded as an erratum and corrected to 10.
 - **R-8** — no gear budget or currency name. Unit labelled **"credits"**, starting budget
@@ -57,7 +58,7 @@ change how the app behaves:
   no actions** (maneuvers and incidentals still allowed); **disoriented = +1 Setback die on
   all checks.**
 
-The remaining sixteen (R-2 … R-19) settle smaller conflicts: a talent naming a skill split
+The remaining seventeen (R-2 … R-20) settle smaller conflicts: a talent naming a skill split
 this manual doesn't have, competitive-check ties, the GM Story Point starting pool, the
 characteristic floor, a Despair that should read Triumph, the d8-vs-d10 oracle die, twelve
 talents referencing content absent from this setting, Triumph's cost in the spend tables, a

@@ -1,11 +1,12 @@
 # REICH '62 Player — Project Spec (canonical)
 
 > Instantiated from `source/BUILD_TEMPLATE_v2.md` (RPG Player-Character App — Autonomous
-> Build Instructions v2). Two sources of record, both self-contained:
-> `source/reich62_manual.md` (1116 lines — core rules) and
-> `source/reich62_bestiary.md` (303 lines — Bestiary & Adversary Compendium).
-> **Citations use `§x` for the manual and `B§x` for the bestiary**, in this file and in every
-> `data*.js` comment.
+> Build Instructions v2). Three sources of record:
+> `source/reich62_manual.md` (1116 lines — core rules),
+> `source/reich62_bestiary.md` (303 lines — Bestiary & Adversary Compendium) and
+> `source/genesys_dice_breakdown.md` (the die face distributions the manual omits).
+> **Citations use `§x` for the manual, `B§x` for the bestiary and `D§` for the face table**,
+> in this file and in every `data*.js` comment.
 >
 > This file is the project's living spec. Per §10, **every code change updates this file in
 > the same change** — features, data model, file tables, roadmap checkboxes, ledger ticks,
@@ -23,7 +24,7 @@ checks, zero console errors. Remaining Phase 2/3 items and Phases 4–6 are unti
 | | |
 |---|---|
 | **Game** | REICH '62 — Genesys narrative-dice system, alt-history 1962 occupied Europe |
-| **Source** | `source/reich62_manual.md` (core rules + setting) · `source/reich62_bestiary.md` (adversary compendium — companion volume, same framework) |
+| **Source** | `source/reich62_manual.md` (core rules + setting) · `source/reich62_bestiary.md` (adversary compendium) · `source/genesys_dice_breakdown.md` (die face distributions, D§) |
 | **Audience** | Players; opt-in GM screen; official solo rules present → solo tab enabled |
 | **Platforms** | Phone / browser / desktop — one installable PWA |
 | **Core job** | Creation wizard + in-play tracker + native narrative-dice engine + Heat engine |
@@ -48,7 +49,7 @@ instantiated to match.
 |---|---|---|---|
 | 1 | Usage mode | Local-first, sync later (Phase 5 gated on First Session Playable) | confirmed |
 | 2 | User's seat | Rotates — solo + GM + player all supported; solo loop is first-class because the manual publishes official solo rules (§18–§20, §23) | confirmed |
-| 3 | Dice input | **Manual symbol entry, primary and built first** (R-B1). The manual never prints die face distributions, so a faithful digital roller is not buildable from the source; the digital roller ships behind `digitalRoller`, blocked until face data is supplied | confirmed |
+| 3 | Dice input | **Manual symbol entry, primary and built first** (R-B1) — it remains the default and always works. The face distributions arrived separately (D§), so the simulated roller behind `digitalRoller` is now unblocked and opt-in | confirmed; roller unblocked 2026-08-04 |
 | 4 | Book commitment | **Both supplied books committed.** The bestiary is a companion volume filling the template's mandatory bestiary slot, not an optional expansion — its stat blocks populate `data-monsters.js` and ship **untoggled**. No `data-<expansion>.js`, no content toggles | confirmed |
 | 5 | Table device | Mixed; phone-first baseline, 360px zero-overflow requirement holds | confirmed |
 | 6 | Theme default | Follow system (`prefers-color-scheme`), in-app override | confirmed |
@@ -108,13 +109,14 @@ reinstated.
 - **Push/re-roll economy:** none general. Re-roll exists only via the `Natural` talent
   (1/session, 2 chosen skills) and the NPC `Ruthless` ability (1/encounter). Story Points
   (§3.3) are the die-modification economy.
-- **Die faces (R-B1, confirmed):** face distributions are **not printed anywhere in the
-  manual**, so no simulated roller can be faithful to this source. The engine therefore
-  takes **manual symbol entry** as its primary input — the player rolls physical dice and
-  taps symbols; the app performs cancellation, spends, damage, Critical Injuries, Heat, and
-  logging. A simulated roller exists only behind the `digitalRoller` flag and stays hard-
-  blocked (flag forced off, with an in-app explanation) until face data is supplied and
-  recorded in `data.js` as `DIE_FACES`.
+- **Die faces (R-B1, resolved):** face distributions are **not printed anywhere in the
+  manual**, so for Phases 0–4 no simulated roller could be faithful and the app took
+  **manual symbol entry** as its primary input. The distributions were then supplied as
+  `source/genesys_dice_breakdown.md` (D§) and recorded in `data.js` as `DIE_FACES`, which
+  unblocks `digitalRoller`. Manual entry stays the default and always works; the simulated
+  roller is opt-in. Per-die faces: Boost and Setback d6 (two blanks each), Ability and
+  Difficulty d8, Proficiency and Challenge d12 (one blank each). Triumph appears only on the
+  Proficiency die and Despair only on the Challenge die, matching §1.
 
 ### 3.2 Opposed / contested procedure — *active roller only; opposition builds the difficulty side*
 
@@ -526,7 +528,7 @@ later edit cannot drift away from it.
 
 | ID | Issue (manual §) | Confirmed ruling | Badge | Implemented in |
 |---|---|---|---|---|
-| **R-B1** | Die **face distributions** never printed (§1 lists only which symbols each die can show) | **Manual symbol entry is the primary and default dice input** — the app performs cancellation, spends, damage, Critical Injuries, Heat, and logging on entered symbols. The simulated roller stays behind `digitalRoller`, force-disabled with an in-app explanation, until `DIE_FACES` is supplied in `data.js` | yes — roller footer | `roller.js`, `settings.js`, `data.js` |
+| **R-B1** | Die **face distributions** never printed (§1 lists only which symbols each die can show) | **Manual symbol entry is the primary and default dice input** — the app performs cancellation, spends, damage, Critical Injuries, Heat, and logging on entered symbols. The simulated roller stayed behind `digitalRoller`, force-disabled, until `DIE_FACES` was supplied. **Face data supplied 2026-08-04 as D§ → the toggle is unblocked and opt-in; manual entry remains the default** | yes — roller footer | `roller.js`, `settings.js`, `data.js` |
 | **R-1** | Human **archetype base** WT/ST absent (§6); pregens imply WT 8/9, ST 10 (§16) | Base **WT 8** / **ST 10**, as the two named constants `BASE_WOUND_THRESHOLD` / `BASE_STRAIN_THRESHOLD`. **Anna Voss's printed Wound 11 is an erratum → 10** | yes — wizard derived step + Anna's sheet | `data.js`, `derived.js`, `data-pregens.js` |
 | **R-2** | `Basic Military Training` grants "Ranged (Heavy)" (§12A T2); this manual has one undivided `Ranged` skill (§4) | The talent grants **Athletics, Ranged, Resilience** as career skills | no | `data.js` T33 |
 | **R-3** | Competitive-check **ties** unspecified (§3A) | Rank by uncancelled 🌟; ties broken by uncancelled 🔺, then by ☀️, then declared **simultaneous** | no | `roller.js` comparator |
@@ -545,6 +547,7 @@ later edit cannot drift away from it.
 | **R-16** | The Guard Dog is printed as "Wound Threshold 4 (Minion-equivalent single unit, or run as a lone Rival-lite …)" (B§5) — two tiers offered, none chosen | Default **minion tier, group size 1**; the combatant card offers a one-tap "promote to Rival" that grants Criticals-resolve-normally and keeps WT 4. Stored as `tier: "minion"`, `promotable: true` | no | `data-monsters.js`, `combat.js` |
 | **R-17** | The bestiary writes Defense as `X/Y` (e.g. "Defense: 0/1") without naming the order (B§3–B§5) | Read as **melee/ranged**, matching the §16A character-sheet field order (Melee Defense then Ranged Defense) | no | `data-monsters.js` |
 | **R-18** | Minion groups print a **per-member** Wound Threshold ("4 per member"), while §12C defines the group threshold as the sum of members' thresholds | Consistent, not contradictory: store the printed **per-member** value and let `combat.js` compute group WT = per-member × group size, so resizing a group recomputes correctly and the "one minion drops per member's share" rule stays exact | no | `data-monsters.js`, `combat.js` |
+| **R-20** | The supplied face table (D§) prints the Proficiency 12 face as **Triumph alone** and the Challenge 12 face as **Despair alone**; no supplied source says a Triumph also counts as a Success or a Despair as a Failure | Store both **exactly as printed** — Triumph and Despair are their own symbols, never cancelled (§1), and they do not add a Success or Failure to the tally. Nothing is inferred from outside the supplied sources | no | `data.js` `DIE_FACES` |
 | **R-19** | The bestiary's minion abilities `Disciplined` (immune to Disorient) and §12D's `Hardened` (immune to Disorient **and** Stagger) overlap but differ (B§2 vs §12D) | Keep both as distinct entries; `Disciplined` is the narrower one. Neither is a rename of the other | no | `data-npcs.js` |
 
 ---
@@ -554,6 +557,7 @@ later edit cannot drift away from it.
 | Category | Count | Manual § |
 |---|---|---|
 | Die types / symbols | 6 / 6 | §1 |
+| **Die faces** | **56** (Boost 6 · Setback 6 · Ability 8 · Difficulty 8 · Proficiency 12 · Challenge 12) | D§ |
 | Difficulty levels | 7 (+ per-skill guidance: 7 skills × 4 tiers) | §3 |
 | Characteristics | 6 | §4 |
 | Skills | 26 (16 general · 5 social · 1 knowledge · 4 combat) | §4 |
@@ -631,6 +635,7 @@ day one; fantasy-phrase join codes; themed `modal()`/`showToast`/`confirmModal`/
 | `CLAUDE.md` | This file | **live** |
 | `source/reich62_manual.md` | Source of record — core rules (`§x` citations) | present |
 | `source/reich62_bestiary.md` | Source of record — adversary compendium (`B§x` citations) | present |
+| `source/genesys_dice_breakdown.md` | Source of record — die face distributions (`D§` citations) | present |
 | `source/BUILD_TEMPLATE_v2.md` | The build template this spec instantiates | present |
 
 ### 7.1 `src/` module map — LOCKED
@@ -723,7 +728,7 @@ description, every related UI checks the flag, router hides gated tabs.
 |---|---|---|
 | `soloMode` | off | Solo tab (Oracle, events, tables) |
 | `gmScreen` | off | GM tab + reference tables |
-| `digitalRoller` | **off, force-disabled (R-B1)** | Unlocks simulated rolling once `DIE_FACES` is supplied in `data.js`; manual symbol entry is always available and always the default |
+| `digitalRoller` | off (unblocked — R-B1) | Rolls the pool from the supplied face distributions (D§). Manual symbol entry is always available and remains the default |
 | `showNonSettingTalents` | off | Reveals the 12 R-11 talents |
 | `gmDiscretionaryDice` | off | Exposes §5C'' outnumbered/ganging-up dice controls |
 | `advancedAutomation` | off | Auto-apply environmental dice, encumbrance penalties, Heat setbacks without prompting |
@@ -790,6 +795,7 @@ not guess: add it to §4 as a new ruling and mark the row blocked.
 - [x] **T48** XP award guidance — §27
 - [x] **T49** Dread/fear check ladder + outcomes — §29
 - [x] **T50** Rules-library quick-reference content — §30 + §26 skill usage examples (14)
+- [x] **T68** **Die face distributions** (6 dice, 56 faces) — D§ *(R-B1 retired, R-20 records the as-printed Triumph and Despair faces)*
 
 ### `data-npcs.js` (Phase 0)
 - [x] **T51** Minion / Rival / Nemesis build recipes + threat guidance — §12C
@@ -857,7 +863,7 @@ is worked in this position, immediately after `data-npcs.js`.)*
 ### Phase 3 — Dice Engine — *partially complete*
 - [x] Pool builder from skill+characteristic with **modification order enforced**
 - [x] **Manual symbol-entry roller (primary and default, per R-B1)** + cancellation + net outcome
-- [x] Digital roller behind `digitalRoller`, force-disabled until `DIE_FACES` exists (R-B1)
+- [x] Digital roller behind `digitalRoller` — unblocked once `DIE_FACES` was supplied (D§); rolls the assembled pool, reports each die and face, and fills the symbol entry (R-B1)
 - [x] Difficulty picker (7 levels)
 - [ ] Upgrade/downgrade controls in the roller UI (the engine enforces them; the controls are not yet exposed)
 - [x] Auto-applied dice: conditions, encumbrance, Heat thresholds
@@ -920,6 +926,7 @@ verification).
 
 | Date | Change | Why | Verification | Cache |
 |---|---|---|---|---|
+| 2026-08-04 | **Die face distributions supplied → R-B1 retired.** `source/genesys_dice_breakdown.md` added as a third source of record, cited `D§`. `data.js` gains `DIE_FACES` (ledger T68: 56 faces across the six dice, stored exactly as printed) and `DIE_FACES_SOURCE`. `core.js` gains `rollFace`; `roller.js` gains `rollPool`, which rolls the assembled pool, fills the symbol entry and reports each die and face. `settings.js` no longer force-disables `digitalRoller`, which is now opt-in and off by default — manual symbol entry stays the default input everywhere. New ruling **R-20**: the Proficiency 12 and Challenge 12 faces are stored as Triumph and Despair alone, since no supplied source says either also counts as a Success or Failure. | The user supplied the face data R-B1 was waiting on | `npm test`: 248 checks pass, **zero console errors** — face-table shape and symbol polarity pinned per die, Triumph confined to Proficiency and Despair to Challenge, 200-die rolls of each producing no opposite-polarity symbols, every rolled face traced back to the table, and the toggle verified unblocked, off by default, and reverting cleanly to manual entry | `reich62-v5` |
 | 2026-08-04 | **Phase 4 in-play systems, plus solo mode.** `combat.js` (initiative slots with fixed ownership and per-round slot filling, turn budget with the 2-strain second maneuver and the minion no-strain rule, bestiary drop-in loading printed stats verbatim, minion-group wound pooling and live resizing, Guard Dog promotion, the generic progress tracker with the Dragnet's escalating 2→4 opposition and dual Heat cost, and the six lifecycle boundaries with a delta preview and one-step undo). `sheet.js` gains the guided death procedure (Bleeding Out, The End Is Nigh countdown, suffocation escalation, Indomitable), rest and recovery with every once-per-X limit enforced, the advancement loop with Dedication, and talent tap-to-use. `gm.js` (Cell panel, bestiary browser with tier/Heat/threat filters, encounter blocks, NPC recipes and all 21 abilities, rollable §3.21 tables). `data-solo.js` T56–T60 and `solo.js` (Oracle with Random Event chaining, meaning and element tables, Passive Watch, Heat-4 raid timing). `store.js` gains combat, task and undo-snapshot persistence. | Phase 4 and the solo half of Phase 6 | `npm test`: 224 checks pass — the Phase 4 flow driven headless (bestiary drop-in, R-18 group thresholds recomputing on resize, R-16 promotion, initiative slots, a failed dragnet round advancing both Heat tracks, End Session awarding XP and decaying Heat, one-step undo restoring state, Bleeding Out ticking, the night-rest limit locking out, the Oracle chaining a Random Event and feeding Heat) at 360px and 390px, Firebase aborted, **zero console errors** | `reich62-v4` |
 | 2026-08-04 | **Phases 1–3 to the First Session Playable milestone.** `wizard.js` (career → four career skills → 70 XP with the live cost engine and pyramid gate → derived → Motivation → gear → review, every step validated), `data-pregens.js` (T55, with Anna Voss's R-1 erratum stored and surfaced), `sheet.js` (live sheet, vitals steppers clamped to true maxima, conditions, Critical Injury list with the cumulative +10, inventory with enforced encumbrance, and the persistent resource header), `roller.js` (pool build in the §2.4 modification order, manual symbol entry, cancellation, opposed difficulty side, the four spend tables by affordability, damage applier, Critical Injury roller, Story Point two-pool flow, roll log capped at 100), `heat.js` (Despair → +1 or +2 on evasion, Triumph → −1, threshold effects, Cell escalation at Personal 3+, safehouse status). Router gains Sheet, Roll and Create tabs. | Phases 1–3 of the §11 roadmap | `npm test`: 181 checks pass — the full create → sheet → roll → track flow driven headless at 360px and 390px, Firebase aborted, **zero console errors**; wizard legality gates, the pyramid gate, R-1 derived values, the R-8 badge and Heat generation all asserted through the real UI | `reich62-v2` |
 | 2026-08-04 | **Phase 0 built.** App shell (`index.html`, `styles.css`, `src/` core · ui · settings · rules · rules-index · derived · store · screens · router · main), theme with system default, PWA (manifest, versioned service worker, icon, update toast), local-only persistence with export/import, and the rules library with §/B§ search. **Data extraction complete for Phase 0:** `data.js` T1–T50, `data-npcs.js` T51–T54a, `data-monsters.js` T61–T67. Added `src/rules-index.js` to the module map and the service-worker shell. Corrected the Critical Injury row count from the plan-stage estimate of 22 to the real 29. | Phase 0 of the §11 roadmap | `npm test`: 150 checks pass — headless Chromium at 360px and 390px, Firebase routes aborted, **zero console errors**; every ruling R-B1 and R-1…R-19 pinned; engine invariants (cancellation, pool build, opposed difficulty side, modification order, pyramid, encumbrance, Critical Injury stacking) asserted against the data layer | `reich62-v1` |

@@ -84,7 +84,10 @@ async function main() {
 
     // R-B1 — the digital roller toggle is present but blocked.
     await page.getByRole('link', { name: 'Settings', exact: true }).click();
-    check('R-B1: digital roller toggle is disabled', await page.locator('#flag-digitalRoller').isDisabled());
+    check('R-B1: the digital roller toggle unblocks once face data is loaded (D§)',
+      !(await page.locator('#flag-digitalRoller').isDisabled()));
+    check('R-B1: the simulated roller is still off by default',
+      !(await page.locator('#flag-digitalRoller').isChecked()));
     // R-8 — the house-aid budget defaults to 500 and is badged.
     equal('R-8: starting budget defaults to 500', await page.inputValue('#starting-budget'), '500');
     check('R-8: house-aid badge is shown', await page.getByText('not a printed rule').first().isVisible());
@@ -178,6 +181,26 @@ async function main() {
     const resultText = await page.locator('#roll-result').innerText();
     check('an uncancelled Despair on an evasion check reads +2 Personal Heat (§17.1)',
       /Personal Heat \+2/.test(resultText), resultText);
+    // The simulated roller fills the symbol entry from the supplied face table (D§).
+    await page.getByRole('link', { name: 'Settings', exact: true }).click();
+    await page.locator('#flag-digitalRoller').check();
+    await page.getByRole('link', { name: 'Roll', exact: true }).click();
+    await page.waitForSelector('#roll-digitally');
+    await page.getByRole('button', { name: 'Roll this pool' }).click();
+    await page.waitForTimeout(80);
+    const rolledText = await page.locator('#screen').innerText();
+    check('a digital roll reports each die and its face (D§)', /Ability \d+:|Proficiency \d+:|Difficulty \d+:/.test(rolledText), rolledText.slice(0, 160));
+    await page.getByRole('button', { name: 'Clear symbols' }).click();
+    await page.getByRole('link', { name: 'Settings', exact: true }).click();
+    await page.locator('#flag-digitalRoller').uncheck();
+    await page.getByRole('link', { name: 'Roll', exact: true }).click();
+    await page.waitForTimeout(60);
+    check('manual entry remains available with the simulated roller off',
+      (await page.locator('#roll-digitally').count()) === 0);
+
+    await page.locator('#roller-surveilled').check();
+    await page.getByRole('button', { name: 'One more success' }).click();
+    await page.getByRole('button', { name: 'One more despair' }).click();
     await page.getByRole('button', { name: 'Log this check' }).click();
     await page.waitForTimeout(80);
     const headerAfter = await page.locator('#resource-header').innerText();

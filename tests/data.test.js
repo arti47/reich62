@@ -146,6 +146,21 @@ export async function dataChecks({ check, equal }) {
   equal('6 lifecycle boundaries', D.LIFECYCLE.boundaries.length, 6);
   check('every boundary lists its effects', D.LIFECYCLE.boundaries.every((b) => b.effects.length > 0));
 
+  // --- digital roller over the supplied face table (D§) ---
+  const Roller = await import('../src/roller.js');
+  const rolled = Roller.rollPool({ ability: 2, proficiency: 1, difficulty: 2, challenge: 1, boost: 1, setback: 1 });
+  equal('a digital roll rolls one result per die', rolled.dice.length, 8);
+  check('every rolled face comes from the supplied table',
+    rolled.dice.every((d) => D.DIE_FACES[d.die][d.face - 1].join(',') === d.symbols.join(',')));
+  check('the tally only ever contains real symbols',
+    Object.entries(rolled.tally).every(([k, v]) => ['success', 'advantage', 'triumph', 'failure', 'threat', 'despair'].includes(k) && v >= 0));
+  const proficiencyOnly = Roller.rollPool({ proficiency: 200 });
+  check('200 Proficiency dice produce no negative symbols',
+    proficiencyOnly.tally.failure === 0 && proficiencyOnly.tally.threat === 0 && proficiencyOnly.tally.despair === 0);
+  const challengeOnly = Roller.rollPool({ challenge: 200 });
+  check('200 Challenge dice produce no positive symbols',
+    challengeOnly.tally.success === 0 && challengeOnly.tally.advantage === 0 && challengeOnly.tally.triumph === 0);
+
   // --- solo tables (§18–§20, §23) ---
   equal('3 Oracle likelihoods', S.ORACLE.likelihoods.length, 3);
   equal('Likely is 2 Ability against 1 Difficulty', `${S.ORACLE.likelihoods[0].ability}v${S.ORACLE.likelihoods[0].difficulty}`, '2v1');

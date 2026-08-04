@@ -3,7 +3,7 @@
 // primary and default input. The app builds the pool, enforces the modification order,
 // cancels symbols, applies spends, damage, Critical Injuries and Heat, and writes the log.
 
-import { el, clear, titleCase, newTally, cancel, outcome, rollDie, clamp } from './core.js';
+import { el, clear, titleCase, newTally, cancel, outcome, rollDie, rollFace, clamp } from './core.js';
 import { showToast, renderTally, modal } from './ui.js';
 import {
   SKILLS, DIFFICULTIES, SPEND_TABLES, STORY_POINTS, CRITICAL_INJURY_RULES, DIE_FACES,
@@ -47,6 +47,7 @@ export const state = {
   surveilled: false,
   publicCheck: true,
   entered: newTally(),
+  lastDice: null,
   context: 'combat',
   spendTriumphOnHeat: false
 };
@@ -135,6 +136,24 @@ export function commit(character = activeCharacter()) {
   };
   writeLog(entry);
   return { entry, result, heat, heatApplied };
+}
+
+/** Roll a pool digitally from the supplied face distributions (D§).
+ *  Only reachable while `digitalRoller` is on, which needs DIE_FACES to exist (R-B1). */
+export function rollPool(pool) {
+  if (!DIE_FACES) return { ok: false, reason: 'No die face data is loaded (R-B1).' };
+  const tally = newTally();
+  const dice = [];
+  Object.entries(pool).forEach(([dieType, count]) => {
+    const faces = DIE_FACES[dieType];
+    if (!faces) return;
+    for (let i = 0; i < count; i += 1) {
+      const rolled = rollFace(faces);
+      rolled.symbols.forEach((symbol) => { tally[symbol] += 1; });
+      dice.push({ die: dieType, face: rolled.face, symbols: rolled.symbols });
+    }
+  });
+  return { ok: true, tally, dice };
 }
 
 // --- damage and Critical Injuries ---
@@ -255,9 +274,27 @@ export function renderRoller(mount) {
       el('span', { class: 'badge badge-inferred', text: 'R-B1' }), ' ',
       DIE_FACES === null
         ? 'The manual never prints die face distributions, so the app cannot roll these dice for you. Roll them physically and tap what came up — everything after that is automatic.'
-        : 'Face data is present; the simulated roller can be enabled in Settings.'
+        : Settings.digitalRoller()
+          ? 'Face distributions are loaded (D§), so the app can roll the pool for you. Entering symbols by hand still works and stays the default.'
+          : 'Face distributions are loaded (D§) — switch on the simulated roller in Settings to have the app roll the pool for you.'
     ])
   ]);
+  if (Settings.digitalRoller()) {
+    entry.append(el('button', {
+      type: 'button', class: 'primary', id: 'roll-digitally', text: 'Roll this pool',
+      onclick: () => {
+        const rolled = rollPool(pool);
+        if (!rolled.ok) { showToast(rolled.reason); return; }
+        state.entered = rolled.tally;
+        state.lastDice = rolled.dice;
+        showToast(`Rolled ${rolled.dice.length} dice from the supplied face table (D§)`);
+        rerender();
+      }
+    }));
+    if (state.lastDice && state.lastDice.length) {
+      entry.append(el('p', { class: 'small muted', text: state.lastDice.map((d) => `${titleCase(d.die)} ${d.face}: ${d.symbols.length ? d.symbols.join(' + ') : 'blank'}`).join(' · ') }));
+    }
+  }
   ['success', 'advantage', 'triumph', 'failure', 'threat', 'despair'].forEach((sym) => {
     entry.append(el('div', { class: 'toggle-row' }, [
       el('label', { for: `sym-${sym}` }, [el('span', { text: titleCase(sym) })]),
@@ -297,11 +334,12 @@ export function renderRoller(mount) {
       if (committed.heatApplied) message += ` · Personal Heat ${committed.heatApplied.before} → ${committed.heatApplied.after}`;
       showToast(message);
       state.entered = newTally();
+      state.lastDice = null;
       rerender();
       document.dispatchEvent(new CustomEvent('resource:refresh'));
     }
   }));
-  resultCard.append(el('button', { type: 'button', class: 'secondary', text: 'Clear symbols', onclick: () => { state.entered = newTally(); rerender(); } }));
+  resultCard.append(el('button', { type: 'button', class: 'secondary', text: 'Clear symbols', onclick: () => { state.entered = newTally(); state.lastDice = null; rerender(); } }));
   mount.append(resultCard);
 
   const log = readLog().slice(0, 12);

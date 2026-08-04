@@ -44,10 +44,16 @@ export const EMPTY_TALLY = Object.freeze({ success: 0, advantage: 0, triumph: 0,
 
 export const newTally = (over = {}) => ({ ...EMPTY_TALLY, ...over });
 
-// Uniform integer in [1, sides]. Used for table lookups (d10, d100) — never for symbol
-// dice, whose faces the manual does not print (R-B1).
+// Uniform integer in [1, sides]. Used for table lookups (d10, d100) and, since the face
+// distributions were supplied (D§), for symbol dice too.
 export function rollDie(sides) {
   return Math.floor(Math.random() * sides) + 1;
+}
+
+/** Roll one symbol die from its face table and return the face index and its symbols. */
+export function rollFace(faces) {
+  const index = Math.floor(Math.random() * faces.length);
+  return { face: index + 1, symbols: faces[index] };
 }
 
 /** Cancel Success against Failure and Advantage against Threat, one for one (§1).

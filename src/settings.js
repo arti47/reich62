@@ -31,7 +31,7 @@ export function set(flag, value) {
 export const FLAGS = [
   { id: 'soloMode', label: 'Solo mode', desc: 'Adds the Solo tab: Oracle, random events, meaning and element tables (§18–§20, §23).' },
   { id: 'gmScreen', label: 'GM screen', desc: 'Adds the GM tab with the bestiary browser and every rollable reference table (§3.21).' },
-  { id: 'digitalRoller', label: 'Simulated dice roller', desc: 'Blocked: the manual never prints die face distributions (R-B1). Manual symbol entry is the primary input and is always available.', blocked: () => DIE_FACES === null },
+  { id: 'digitalRoller', label: 'Simulated dice roller', desc: 'Rolls the pool for you from the supplied face distributions (D§). Manual symbol entry stays the default and is always available (R-B1).', blocked: () => DIE_FACES === null },
   { id: 'showNonSettingTalents', label: 'Show non-setting talents', desc: 'Reveals the 12 talents referencing content this setting does not have (R-11).' },
   { id: 'gmDiscretionaryDice', label: 'GM discretionary dice', desc: 'Exposes the outnumbered and ganging-up dice controls (§5C\'\'), which the manual says not to apply automatically.' },
   { id: 'advancedAutomation', label: 'Advanced automation', desc: 'Applies environmental dice, encumbrance penalties and Heat setbacks without prompting first.' }

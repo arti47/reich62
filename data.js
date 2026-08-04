@@ -11,10 +11,50 @@
 export const BASE_WOUND_THRESHOLD = 8;   // R-1
 export const BASE_STRAIN_THRESHOLD = 10; // R-1
 
-// R-B1 — die face distributions are not printed anywhere in the manual, so no
-// simulated roller can be faithful to this source. Manual symbol entry is the
-// primary input. Supplying real face data here is what unblocks `digitalRoller`.
-export const DIE_FACES = null; // R-B1
+// R-B1 — the manual prints only which symbols each die can show (§1), never the face
+// distributions, so for the first four phases no simulated roller could be faithful to the
+// source and `digitalRoller` stayed force-disabled. The distributions were supplied
+// separately as `source/genesys_dice_breakdown.md`, cited `D§`, which is what unblocks it.
+// Manual symbol entry remains the default input.
+//
+// T68 — Die face distributions — D§. Each face lists the symbols printed on it; an empty
+// array is a blank face. R-20: the table prints the Proficiency 12 face as Triumph alone
+// and the Challenge 12 face as Despair alone, and neither book says a Triumph also counts
+// as a Success, so they are stored exactly as printed.
+export const DIE_FACES = {
+  boost: [                      // blue d6 — D§
+    [], [], ['success'], ['success', 'advantage'], ['advantage', 'advantage'], ['advantage']
+  ],
+  setback: [                    // black d6 — D§
+    [], [], ['failure'], ['failure'], ['threat'], ['threat']
+  ],
+  ability: [                    // green d8 — D§
+    [], ['success'], ['success'], ['success', 'success'], ['advantage'], ['advantage'],
+    ['success', 'advantage'], ['advantage', 'advantage']
+  ],
+  difficulty: [                 // purple d8 — D§
+    [], ['failure'], ['failure', 'failure'], ['threat'], ['threat'], ['threat', 'threat'],
+    ['threat', 'threat'], ['failure', 'threat']
+  ],
+  proficiency: [                // yellow d12 — D§
+    [], ['success'], ['success', 'success'], ['success', 'success'], ['advantage'],
+    ['success', 'advantage'], ['success', 'advantage'], ['advantage', 'advantage'],
+    ['advantage', 'advantage'], ['advantage', 'advantage'], ['advantage', 'advantage'],
+    ['triumph']
+  ],
+  challenge: [                  // red d12 — D§
+    [], ['failure'], ['failure'], ['failure', 'failure'], ['failure', 'failure'], ['threat'],
+    ['threat'], ['failure', 'threat'], ['failure', 'threat'], ['threat', 'threat'],
+    ['threat', 'threat'], ['despair']
+  ]
+};
+
+export const DIE_FACES_SOURCE = {
+  cite: 'D§',
+  file: 'source/genesys_dice_breakdown.md',
+  note: 'Supplied separately from the two books. Triumph appears only on the Proficiency die and Despair only on the Challenge die, matching §1.',
+  ruling: 'R-20'
+};
 
 // T1 — Die types, symbols, cancellation — §1
 export const SYMBOLS = [
