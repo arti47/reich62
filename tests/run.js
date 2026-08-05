@@ -590,8 +590,11 @@ async function main() {
     check('R-22: an emphatic answer chains a Random Event', /Random Event/.test(emphatic), emphatic.replace(/\n/g, ' | '));
     check('R-22: it feeds Heat in a surveilled context like a Despair would',
       (await page.locator('#resource-header').innerText()) !== heatBeforeEmphatic);
-    check('R-22: the answer is graded for how hard it landed',
-      (await page.locator('#oracle-answer .status-chip').count()) === 1,
+    check('R-22: the answer says in plain words how hard it landed',
+      (await page.locator('#oracle-answer .oracle-degree').count()) === 1,
+      (await page.locator('#oracle-answer').innerText()).replace(/\n/g, ' | '));
+    check('R-22: no bare grading word is shown',
+      !/\b(marginal|slight|clear|strong|overwhelming)\b/i.test(await page.locator('#oracle-answer').innerText()),
       (await page.locator('#oracle-answer').innerText()).replace(/\n/g, ' | '));
 
     // Three failures land harder than two, and a leftover Advantage rides along with it.
@@ -602,10 +605,16 @@ async function main() {
     await page.locator('#oracle-ask-entered').click();
     await page.waitForTimeout(140);
     const graded = await page.locator('#oracle-answer').innerText();
-    check('R-22: three net failures read as a stronger answer', /strong/i.test(graded), graded.replace(/\n/g, ' | '));
-    check('R-22: leftover Advantage on a no is stated as a rider', /upside/i.test(graded), graded.replace(/\n/g, ' | '));
+    check('R-22: three net failures read as more than you asked for',
+      /more than you asked for/i.test(graded), graded.replace(/\n/g, ' | '));
+    check('R-22: leftover Advantage on a no reads as a consolation',
+      /still goes your way/i.test(graded), graded.replace(/\n/g, ' | '));
     check('R-22: the Oracle log records how hard the answer landed',
-      /\((marginal|slight|clear|strong|overwhelming)\)/.test(await page.locator('#oracle-log').innerText()));
+      /barely|nothing attached|comes with it|more than you asked for|as certain as it gets/i
+        .test(await page.locator('#oracle-log').innerText()));
+    check('the Oracle log row leads with the answer, not the likelihood',
+      !/^(Likely|50-50|Unlikely)/.test((await page.locator('#oracle-log .result-title').first().innerText()).trim()),
+      await page.locator('#oracle-log .result-title').first().innerText());
 
     // --- the Oracle keeps its own log, separate from the Roll screen's ---
     check('answers land in the Oracle log', (await page.locator('#oracle-log .log-row').count()) >= 2,
