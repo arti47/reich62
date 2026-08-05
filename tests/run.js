@@ -551,18 +551,52 @@ async function main() {
     await page.waitForSelector('#oracle-likelihood');
     check('the Oracle offers all three likelihoods', (await page.locator('#oracle-likelihood option').count()) === 3);
 
+    // One button rolls the Oracle's dice and answers in the same tap.
+    check('the Oracle asks in one tap, with no separate roll step',
+      (await page.locator('#oracle-ask').count()) === 1 && (await page.locator('#oracle-roll').count()) === 0);
+    await page.locator('#oracle-ask').click();
+    await page.waitForTimeout(140);
+    const asked = await page.locator('#oracle-answer').innerText();
+    check('it shows what the dice showed and what it means',
+      /what the dice showed/i.test(asked) && /(Yes|No)/.test(asked), asked.replace(/\n/g, ' | '));
+
     // A Despair answer reads "No, and…", chains a Random Event, and feeds Heat when the
-    // question concerned a surveilled context (§18, §19, §17.1).
+    // question concerned a surveilled context (§18, §19, §17.1). The printed Oracle pool
+    // cannot roll a Despair, so it is entered by hand through the physical-dice pad.
     await page.locator('#oracle-surveilled').check();
     const heatBeforeOracle = await page.locator('#resource-header').innerText();
-    await page.getByRole('button', { name: 'One more oracle despair' }).click();
-    await page.getByRole('button', { name: 'Ask the Oracle' }).click();
+    await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
     await page.waitForTimeout(80);
+    await page.getByRole('button', { name: 'One more oracle despair' }).click();
+    await page.locator('#oracle-ask-entered').click();
+    await page.waitForTimeout(140);
     const oracleAnswer = await page.locator('#oracle-answer').innerText();
     check('an uncancelled Despair answers "No, and…"', /No, and/.test(oracleAnswer), oracleAnswer);
     check('a Triumph or Despair chains a Random Event (§19)', /Random Event/.test(oracleAnswer), oracleAnswer);
     check('Oracle Despair in a surveilled context raises Heat (§17.1)',
       (await page.locator('#resource-header').innerText()) !== heatBeforeOracle);
+
+    // --- the Oracle keeps its own log, separate from the Roll screen's ---
+    check('answers land in the Oracle log', (await page.locator('#oracle-log .log-row').count()) >= 2,
+      String(await page.locator('#oracle-log .log-row').count()));
+    const rollLogRows = await page.evaluate(() => {
+      try { return JSON.parse(localStorage.getItem('reich62:rollLog') || '[]').filter((e) => e.skill === 'oracle').length; }
+      catch { return -1; }
+    });
+    equal('and not in the Roll screen\'s check log', rollLogRows, 0);
+    const oracleRowsBefore = await page.locator('#oracle-log .log-row').count();
+    await page.locator('#oracle-log .log-row').first().getByRole('button', { name: /^Delete the / }).click();
+    await page.waitForTimeout(140);
+    equal('a single answer can be deleted',
+      await page.locator('#oracle-log .log-row').count(), oracleRowsBefore - 1);
+    await page.locator('#oracle-log-clear').click();
+    await page.waitForSelector('.modal-backdrop');
+    check('clearing the lot asks first',
+      /cannot be undone/i.test(await page.locator('.modal').innerText()));
+    await page.getByRole('button', { name: 'Delete them' }).click();
+    await page.waitForTimeout(140);
+    check('and empties the log', /nothing asked yet/i.test(await page.locator('#oracle-log').innerText()),
+      (await page.locator('#oracle-log').innerText()).replace(/\n/g, ' | '));
 
     await page.getByRole('button', { name: 'Meaning', exact: true }).click();
     check('the meaning table produces a phrase', (await page.locator('#solo-output').innerText()).length > 8);
@@ -987,14 +1021,11 @@ async function main() {
     check('the Oracle shows the dice it asks for',
       (await page.locator('#screen .die-count').count()) >= 6,
       String(await page.locator('#screen .die-count').count()));
-    await page.locator('#oracle-roll').click();
-    await page.waitForTimeout(160);
-    check('and rolls them when the simulated roller is on',
-      (await page.locator('#rolled-symbols').innerText()).length > 0
-      && !/nothing rolled yet/i.test(await page.locator('#rolled-symbols').innerText()),
-      (await page.locator('#rolled-symbols').innerText()).replace(/\n/g, ' | '));
     await page.locator('#oracle-ask').click();
-    await page.waitForTimeout(160);
+    await page.waitForTimeout(180);
+    check('one tap rolls and answers together',
+      /what the dice showed/i.test(await page.locator('#oracle-answer').innerText()),
+      (await page.locator('#oracle-answer').innerText()).replace(/\n/g, ' | '));
     check('the answer stays on screen',
       /Yes|No/.test(await page.locator('#oracle-answer').innerText()),
       (await page.locator('#oracle-answer').innerText()).replace(/\n/g, ' | '));

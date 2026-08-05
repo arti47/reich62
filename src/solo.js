@@ -1,8 +1,8 @@
 // solo.js — the solo assistant. Official rules only (§18–§20, §23), so this tab is real
 // rather than invented; it stays behind the soloMode flag.
 
-import { el, clear, titleCase, rollDie, newTally, outcome } from './core.js';
-import { showToast, modal, renderTally, panel, emptyState, symbolGlyph } from './ui.js';
+import { el, clear, titleCase, rollDie, newTally, outcome, uid, STORAGE_PREFIX } from './core.js';
+import { showToast, modal, confirmModal, renderTally, panel, accordion, emptyState, symbolGlyph } from './ui.js';
 import { PANELS } from './help.js';
 import { ORACLE, MEANING, ELEMENTS, RANDOM_EVENT, SOLO_LOOP } from '../data-solo.js';
 import { SYMBOLS } from '../data.js';
@@ -10,7 +10,7 @@ import { NPC_QUICKGEN } from '../data-npcs.js';
 import { RANDOM_ENCOUNTERS, MINION_GROUPS } from '../data-monsters.js';
 import { activeCharacter, getCell } from './store.js';
 import { applyPersonalHeat } from './heat.js';
-import { writeLog, rollPool, diceToRoll, rolledSymbols, SYMBOL_HELP } from './roller.js';
+import { rollPool, diceToRoll, rolledSymbols, SYMBOL_HELP } from './roller.js';
 import { Settings } from './settings.js';
 
 const ORACLE_SYMBOLS = SYMBOLS.map((s) => s.id);
@@ -18,6 +18,34 @@ const ORACLE_SYMBOLS = SYMBOLS.map((s) => s.id);
 // The entered tally lives at module scope so it survives navigation, the way the Roll
 // screen's does — an Oracle question part-way through entry is not lost by tapping Home.
 const state = { likelihood: 'fiftyFifty', surveilled: false, entered: newTally(), lastAnswer: null };
+
+// --- the Oracle's own log ---
+// Oracle answers are their own kind of record, so they live apart from the Roll screen's
+// check log rather than filling it with rows that have no skill and no difficulty.
+const ORACLE_LOG_KEY = STORAGE_PREFIX + 'oracleLog';
+const ORACLE_LOG_CAP = 100;
+const ORACLE_LOG_PAGE = 12;
+let oracleShown = ORACLE_LOG_PAGE;
+
+export function readOracleLog() {
+  try { return JSON.parse(localStorage.getItem(ORACLE_LOG_KEY) || '[]'); } catch { return []; }
+}
+
+export function writeOracleLog(entry) {
+  const log = readOracleLog();
+  const stored = { id: uid(), ...entry };
+  log.unshift(stored);
+  localStorage.setItem(ORACLE_LOG_KEY, JSON.stringify(log.slice(0, ORACLE_LOG_CAP)));
+  return stored;
+}
+
+export function deleteOracleLogEntry(id) {
+  const log = readOracleLog().filter((e) => e.id !== id);
+  localStorage.setItem(ORACLE_LOG_KEY, JSON.stringify(log));
+  return log;
+}
+
+export function clearOracleLog() { localStorage.removeItem(ORACLE_LOG_KEY); }
 
 /** The pool the chosen likelihood asks for (§18), in the same shape the roller uses. */
 export function oraclePool(likelihoodId = state.likelihood) {
@@ -92,81 +120,88 @@ export function renderSolo(mount) {
     el('label', { for: 'oracle-surveilled' }, [el('span', { text: 'The question concerns somewhere the regime is watching, so a despair draws attention' })])
   ]));
 
-  // The Oracle is a check like any other, so it shows the dice it asks for and — when the
-  // simulated roller is on — rolls them (A-21).
+  // One button: it rolls the pool, shows what came up, and gives the answer. The Oracle is
+  // the GM's die, not the character's, so the app rolls it — with a fallback below for
+  // anyone using physical dice.
   const pool = oraclePool();
-  const entered = state.entered;
   oracleCard.append(diceToRoll(pool, [`${ORACLE.likelihoods.find((l) => l.id === state.likelihood).name} asks for this pool.`]));
 
-  if (Settings.digitalRoller()) {
-    oracleCard.append(el('button', {
-      type: 'button', class: 'secondary', id: 'oracle-roll', text: 'Roll these dice',
-      onclick: () => {
-        const rolled = rollPool(pool);
-        if (!rolled.ok) { showToast(rolled.reason); return; }
-        Object.keys(entered).forEach((k) => { entered[k] = rolled.tally[k] || 0; });
-        rerender();
-      }
-    }));
-    oracleCard.append(rolledSymbols(entered));
-  } else {
-    oracleCard.append(el('p', { class: 'small', text: 'Roll the dice above and tap in what came up. Switch on the simulated roller in Settings to have the app roll them for you.' }));
-    // The same labelled pad the Roll screen uses: a symbol is never shown bare.
-    ORACLE_SYMBOLS.forEach((sym) => {
-      oracleCard.append(el('div', { class: 'toggle-row' }, [
-        el('label', { for: `oracle-${sym}` }, [
-          symbolGlyph(sym, entered[sym]),
-          el('span', { class: 'toggle-desc', text: SYMBOL_HELP[sym] })
-        ]),
-        el('button', { type: 'button', class: 'secondary', text: '−', 'aria-label': `One less oracle ${sym}`, onclick: () => { entered[sym] = Math.max(0, entered[sym] - 1); rerender(); } }),
-        el('span', { id: `oracle-${sym}`, class: 'stat-value', text: String(entered[sym]) }),
-        el('button', { type: 'button', class: 'secondary', text: '+', 'aria-label': `One more oracle ${sym}`, onclick: () => { entered[sym] += 1; rerender(); } })
-      ]));
-    });
-  }
-
   const answerNode = el('div', { id: 'oracle-answer', 'aria-live': 'polite' });
-  // The last answer stays on screen across a rerender rather than vanishing.
+  const ask = (tally, { rolled = true } = {}) => {
+    const verdict = interpretOracle(tally);
+    const lines = [];
+
+    if (state.surveilled && verdict.result.despair > 0 && character) {
+      const applied = applyPersonalHeat(character, 1, 'A despair from the Oracle in a watched place');
+      lines.push(`Despair in a surveilled context: Personal Heat ${applied.before} → ${applied.after}.`);
+      document.dispatchEvent(new CustomEvent('resource:refresh'));
+    }
+    let event = null;
+    if (verdict.event) {
+      event = rollRandomEvent();
+      lines.push(`Random Event: ${event.category} (${event.categoryRoll}) concerning ${event.subject.toLowerCase()} (${event.subjectRoll}).${event.complication ? ` Complication: ${event.complication}.` : ''} ${RANDOM_EVENT.skew}`);
+    }
+
+    writeOracleLog({
+      ts: Date.now(),
+      likelihood: state.likelihood,
+      likelihoodName: ORACLE.likelihoods.find((l) => l.id === state.likelihood).name,
+      pool: { ...pool },
+      symbols: { ...tally },
+      net: verdict.result.net,
+      answer: verdict.answer,
+      answerId: verdict.id,
+      surveilled: state.surveilled,
+      rolledByApp: rolled,
+      lines
+    });
+    state.lastAnswer = { answer: verdict.answer, net: verdict.result.net, symbols: { ...tally }, lines };
+    state.entered = newTally();
+    rerender();
+  };
+
+  oracleCard.append(el('button', {
+    type: 'button', class: 'primary', id: 'oracle-ask', text: 'Ask the Oracle',
+    onclick: () => {
+      const rolled = rollPool(pool);
+      if (!rolled.ok) { showToast(rolled.reason); return; }
+      ask(rolled.tally, { rolled: true });
+    }
+  }));
+
+  // The last answer stays on screen: what the dice showed, then what it means.
   if (state.lastAnswer) {
     answerNode.append(el('h3', { text: state.lastAnswer.answer }));
+    answerNode.append(el('p', { class: 'small muted', text: 'What the dice showed' }));
+    answerNode.append(rolledSymbols(state.lastAnswer.symbols || {}));
+    answerNode.append(el('p', { class: 'small muted', text: 'What is left after cancelling' }));
     answerNode.append(el('p', {}, [renderTally(state.lastAnswer.net)]));
     (state.lastAnswer.lines || []).forEach((line) => answerNode.append(el('p', { class: 'small', text: line })));
   }
-  oracleCard.append(el('button', {
-    type: 'button', class: 'primary', id: 'oracle-ask', text: 'Ask the Oracle',
-    disabled: !Object.values(entered).some((n) => n > 0),
-    onclick: () => {
-      const verdict = interpretOracle(entered);
-      const lines = [];
-      clear(answerNode);
-      answerNode.append(el('h3', { text: verdict.answer }));
-      answerNode.append(el('p', {}, [renderTally(verdict.result.net)]));
+  oracleCard.append(answerNode);
 
-      if (state.surveilled && verdict.result.despair > 0 && character) {
-        const applied = applyPersonalHeat(character, 1, 'A despair from the Oracle in a watched place');
-        const line = `Despair in a surveilled context: Personal Heat ${applied.before} → ${applied.after}.`;
-        lines.push(line);
-        answerNode.append(el('p', { class: 'small', text: line }));
-        document.dispatchEvent(new CustomEvent('resource:refresh'));
-      }
-      if (verdict.event) {
-        const event = rollRandomEvent();
-        const line = `Random Event: ${event.category} (${event.categoryRoll}) concerning ${event.subject.toLowerCase()} (${event.subjectRoll}).${event.complication ? ` Complication: ${event.complication}.` : ''} ${RANDOM_EVENT.skew}`;
-        lines.push(line);
-        answerNode.append(el('p', { class: 'small', text: line }));
-      }
-      writeLog({
-        ts: Date.now(), by: character ? character.id : null,
-        characterName: character ? character.identity.name : 'Solo',
-        skill: 'oracle', difficulty: state.likelihood, poolInputs: pool, symbols: { ...entered },
-        net: verdict.result.net, outcome: verdict.answer, surveilled: state.surveilled,
-        heatDelta: state.surveilled && verdict.result.despair > 0 ? 1 : 0, notes: ['Oracle']
-      });
-      state.lastAnswer = { answer: verdict.answer, net: verdict.result.net, lines };
-      Object.keys(entered).forEach((k) => { entered[k] = 0; });
-      rerender();
-    }
-  }), answerNode);
+  // Physical dice: the pad is still here for anyone who would rather roll their own (R-B1).
+  const padBody = el('div', {});
+  ORACLE_SYMBOLS.forEach((sym) => {
+    padBody.append(el('div', { class: 'toggle-row' }, [
+      el('label', { for: `oracle-${sym}` }, [
+        symbolGlyph(sym, state.entered[sym]),
+        el('span', { class: 'toggle-desc', text: SYMBOL_HELP[sym] })
+      ]),
+      el('button', { type: 'button', class: 'secondary', text: '−', 'aria-label': `One less oracle ${sym}`, onclick: () => { state.entered[sym] = Math.max(0, state.entered[sym] - 1); rerender(); } }),
+      el('span', { id: `oracle-${sym}`, class: 'stat-value', text: String(state.entered[sym]) }),
+      el('button', { type: 'button', class: 'secondary', text: '+', 'aria-label': `One more oracle ${sym}`, onclick: () => { state.entered[sym] += 1; rerender(); } })
+    ]));
+  });
+  padBody.append(el('button', {
+    type: 'button', class: 'secondary', id: 'oracle-ask-entered', text: 'Answer from these symbols',
+    disabled: !Object.values(state.entered).some((n) => n > 0),
+    onclick: () => ask(state.entered, { rolled: false })
+  }));
+  oracleCard.append(accordion('I rolled my own dice', [padBody], {
+    key: 'oracle-manual', summary: 'tap in what came up'
+  }));
+
   mount.append(oracleCard);
 
   // --- tables ---
@@ -202,6 +237,49 @@ export function renderSolo(mount) {
   }));
   tables.append(output);
   mount.append(tables);
+
+  // --- the Oracle's own log ---
+  const log = readOracleLog();
+  const shown = log.slice(0, oracleShown);
+  const logCard = panel('Questions you have asked', PANELS.soloLog, [], { id: 'oracle-log' });
+  if (!log.length) {
+    logCard.append(emptyState('Nothing asked yet — put a question to the Oracle and it lands here.'));
+  } else {
+    logCard.append(el('button', {
+      type: 'button', class: 'secondary', id: 'oracle-log-clear', text: `Clear all ${log.length}`,
+      onclick: async () => {
+        if (!(await confirmModal(`Delete all ${log.length} Oracle answers? This cannot be undone.`, { title: 'Clear the Oracle log', confirmLabel: 'Delete them' }))) return;
+        clearOracleLog();
+        oracleShown = ORACLE_LOG_PAGE;
+        rerender();
+      }
+    }));
+    shown.forEach((item) => {
+      const row = el('div', { class: 'result log-row' }, [
+        el('div', { class: 'result-head' }, [
+          el('span', { class: 'result-title', text: `${item.likelihoodName} — ${item.answer}` }),
+          el('span', { class: 'cite', text: new Date(item.ts).toLocaleTimeString() })
+        ]),
+        el('div', { class: 'log-symbols' }, [renderTally(item.net || {})])
+      ]);
+      if (item.surveilled) row.append(el('p', { class: 'small muted', text: 'Asked about somewhere the regime is watching.' }));
+      (item.lines || []).forEach((line) => row.append(el('p', { class: 'small muted', text: line })));
+      row.append(el('button', {
+        type: 'button', class: 'secondary log-delete', text: 'Delete',
+        'aria-label': `Delete the ${item.likelihoodName} question answered ${item.answer} at ${new Date(item.ts).toLocaleTimeString()}`,
+        onclick: () => { deleteOracleLogEntry(item.id); rerender(); }
+      }));
+      logCard.append(row);
+    });
+    if (log.length > shown.length) {
+      logCard.append(el('button', {
+        type: 'button', class: 'secondary', id: 'oracle-log-more',
+        text: `Show more (${log.length - shown.length} older)`,
+        onclick: () => { oracleShown += ORACLE_LOG_PAGE; rerender(); }
+      }));
+    }
+  }
+  mount.append(logCard);
 
   // --- scene start: Passive Watch (B§2) ---
   const watchLikelihood = passiveWatchLikelihood(character, cell);

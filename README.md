@@ -8,7 +8,7 @@ bestiary, and an opt-in GM screen.
 symbol-entry dice engine, Heat, the combat tracker with initiative slots, the guided death
 procedure, enforced rest limits, the lifecycle engine with one-step undo, the progress
 tracker, advancement, the bestiary browser and the solo Oracle loop all work — verified
-headless (562 checks, zero console errors), alongside vehicle scale, the item damage ladder,
+headless (569 checks, zero console errors), alongside vehicle scale, the item damage ladder,
 situational dice, the GM screen, solo mode and the simulated roller. Pick your seat — player,
 GM or solo — and the app shows only the screens that seat needs. Four audits and an automated accessibility
 sweep have been through it: two on rules accuracy and two on the whole app and its gameplay

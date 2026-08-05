@@ -75,7 +75,8 @@ export const PANELS = {
   combatVehicles: { lede: 'Cars, bikes, trucks and trains, on the same engine as everything else.', detail: 'Speed changes by one step at a time. Losing control crashes the vehicle for damage equal to its current speed.' },
   combatTasks: { lede: 'Anything that takes several rolls: a manhunt, a repair job, or a clock you invent.', detail: 'The manhunt is the one the books actually publish: the search gets stronger every hour, and each failed round raises suspicion on both you and your network.' },
 
-  soloOracle: { lede: 'Ask a yes-or-no question when nothing on your sheet decides it.', detail: 'Set how likely the answer is, roll the dice listed, and enter what came up. A best or worst result also triggers a random event.' },
+  soloOracle: { lede: 'Ask a yes-or-no question when nothing on your sheet decides it.', detail: 'Set how likely the answer is and tap Ask. The app rolls the Oracle\'s dice for you — it is the GM\'s roll, not your character\'s — and shows what came up alongside the answer. A best or worst result also triggers a random event. If you would rather roll your own dice, the pad is under "I rolled my own dice".' },
+  soloLog: { lede: 'Every question you have put to the Oracle, newest first.', detail: 'Kept apart from the Roll screen\'s log, because an Oracle answer is not a skill check. Delete any single one, or clear the lot. It holds the last hundred.' },
   soloTables: { lede: 'Prompts when you need one: a phrase, a place, a faction, a complication, a stranger, an encounter.', detail: 'These are the book\'s own tables, rolled for you.' },
 
   gmCell: { lede: 'The network\'s suspicion and its story-point bank.', detail: 'Raising cell suspicion here changes the safehouse status automatically: watched at 3, blown at 5.' },
