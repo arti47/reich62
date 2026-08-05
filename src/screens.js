@@ -4,7 +4,7 @@ import { el, clear, $ } from './core.js';
 import { Settings, FLAGS, theme, cycleTheme } from './settings.js';
 import { modal, showToast, confirmModal, panel, subTabs, emptyState } from './ui.js';
 import { PANELS, MODES, TERMS, label as termLabel } from './help.js';
-import { listCharacters, activeCharacter, getCell, exportAll, importAll, setActiveCharacter } from './store.js';
+import { listCharacters, activeCharacter, getCell, exportAll, importAll, setActiveCharacter, deleteCharacter } from './store.js';
 import { buildIndex, search, SECTIONS } from './rules-index.js';
 import { BASE_WOUND_THRESHOLD, BASE_STRAIN_THRESHOLD, CREATION_RULES, DIE_FACES } from '../data.js';
 
@@ -53,7 +53,22 @@ export function renderHome(mount) {
           : el('button', {
               type: 'button', class: 'secondary', text: 'Make active',
               onclick: () => { setActiveCharacter(c.id); renderHome(mount); }
-            })
+            }),
+        // Deleting a character cannot be undone, so it confirms by name first.
+        el('button', {
+          type: 'button', class: 'secondary', text: 'Delete',
+          'aria-label': `Delete ${c.identity.name || 'Unnamed'}`,
+          onclick: async () => {
+            const name = c.identity.name || 'this character';
+            const ok = await confirmModal(
+              `Delete ${name}? Their sheet, gear, injuries and experience go with them. This cannot be undone — export a backup from Settings first if you want to keep them.`,
+              { title: 'Delete character', confirmLabel: 'Delete' });
+            if (!ok) return;
+            deleteCharacter(c.id);
+            showToast(`${name} deleted`);
+            renderHome(mount);
+          }
+        })
       ]));
     });
   } else {

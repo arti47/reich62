@@ -153,6 +153,10 @@ a { color: var(--focus); }
 .icon-button:hover { background: var(--panel-2); }
 
 /* --- persistent resource header (CLAUDE.md §11 Phase 2) --- */
+/* `display: flex` on a class beats the browser's own `[hidden] { display: none }`, so the
+   bar has to opt out explicitly or it renders as an empty strip with no character loaded. */
+.resource-header[hidden] { display: none; }
+
 .resource-header {
   display: flex;
   flex-wrap: wrap;
