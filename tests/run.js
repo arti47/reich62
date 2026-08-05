@@ -262,13 +262,24 @@ async function main() {
     const rolledText = await page.locator('#screen').innerText();
     check('a digital roll fills the symbol entry without a per-die readout',
       !/Ability \d+:|Proficiency \d+:|Difficulty \d+:/.test(rolledText), rolledText.slice(0, 160));
+    // The app rolled them, so there is nothing to key in: read-only, non-zero symbols only.
+    check('a rolled pool shows no plus or minus buttons',
+      (await page.locator('#roll-pool button', { hasText: /^[−+]$/ }).count()) === 0);
+    const rolledRows = await page.locator('#rolled-symbols .rolled-row').allInnerTexts();
+    check('every symbol shown was actually rolled', rolledRows.every((r) => !/^\s*0\s/.test(r)), rolledRows.join(' | '));
+    check('symbols that did not come up are left out', rolledRows.length < 6, `rows ${rolledRows.length}`);
     await page.getByRole('button', { name: 'Clear symbols' }).click();
+    await page.waitForTimeout(80);
+    check('clearing a rolled pool empties the list',
+      /Nothing rolled yet/.test(await page.locator('#rolled-symbols').innerText()));
     await go('#/settings');
     await page.locator('#flag-digitalRoller').uncheck();
     await go('#/roll');
     await page.waitForTimeout(60);
     check('manual entry remains available with the simulated roller off',
       (await page.locator('#roll-digitally').count()) === 0);
+    check('the symbol pad comes back with the simulated roller off (R-B1)',
+      (await page.getByRole('button', { name: 'One more success' }).count()) === 1);
 
     await page.locator('#roller-surveilled').check();
     await page.getByRole('button', { name: 'One more success' }).click();

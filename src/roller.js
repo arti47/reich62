@@ -31,6 +31,8 @@ const SYMBOL_HELP = {
   despair: 'Never cancels, always happens. In public it draws attention.'
 };
 
+const SYMBOL_ORDER = ['success', 'advantage', 'triumph', 'failure', 'threat', 'despair'];
+
 const LOG_KEY = STORAGE_PREFIX + 'rollLog';
 const LOG_CAP = 100;
 
@@ -422,7 +424,7 @@ export function renderRoller(mount) {
       DIE_FACES === null
         ? 'The manual never prints die face distributions, so the app cannot roll these dice for you. Roll them physically and tap what came up — everything after that is automatic.'
         : Settings.digitalRoller()
-          ? 'The app can roll the pool for you. Entering symbols by hand still works and stays the default.'
+          ? 'The app rolls the pool for you. Switch the simulated roller off in Settings to tap in what your own dice showed instead.'
           : 'Switch on the simulated roller in Settings to have the app roll the pool for you.'
     ])
   ]);
@@ -438,17 +440,25 @@ export function renderRoller(mount) {
       }
     }));
   }
-  ['success', 'advantage', 'triumph', 'failure', 'threat', 'despair'].forEach((sym) => {
-    entry.append(el('div', { class: 'toggle-row' }, [
-      el('label', { for: `sym-${sym}` }, [
-        symbolGlyph(sym, state.entered[sym]),
-        el('span', { class: 'toggle-desc', text: SYMBOL_HELP[sym] })
-      ]),
-      el('button', { type: 'button', class: 'secondary', text: '−', 'aria-label': `One less ${sym}`, onclick: () => { state.entered[sym] = Math.max(0, state.entered[sym] - 1); rerender(); } }),
-      el('span', { id: `sym-${sym}`, class: 'stat-value', text: String(state.entered[sym]) }),
-      el('button', { type: 'button', class: 'secondary', text: '+', 'aria-label': `One more ${sym}`, onclick: () => { state.entered[sym] += 1; rerender(); } })
-    ]));
-  });
+  // The app rolled the dice, so there is nothing to key in: the symbols are shown as a
+  // read-only list of what came up, and a symbol that did not come up is not listed.
+  // With the simulated roller off, tapping in what your physical dice showed is the only
+  // input there is (R-B1), so the pad stays.
+  if (Settings.digitalRoller()) {
+    entry.append(rolledSymbols(state.entered));
+  } else {
+    SYMBOL_ORDER.forEach((sym) => {
+      entry.append(el('div', { class: 'toggle-row' }, [
+        el('label', { for: `sym-${sym}` }, [
+          symbolGlyph(sym, state.entered[sym]),
+          el('span', { class: 'toggle-desc', text: SYMBOL_HELP[sym] })
+        ]),
+        el('button', { type: 'button', class: 'secondary', text: '−', 'aria-label': `One less ${sym}`, onclick: () => { state.entered[sym] = Math.max(0, state.entered[sym] - 1); rerender(); } }),
+        el('span', { id: `sym-${sym}`, class: 'stat-value', text: String(state.entered[sym]) }),
+        el('button', { type: 'button', class: 'secondary', text: '+', 'aria-label': `One more ${sym}`, onclick: () => { state.entered[sym] += 1; rerender(); } })
+      ]));
+    });
+  }
   mount.append(entry);
 
   const { result, heat } = resolve(character);
@@ -599,6 +609,24 @@ function diceToRoll(pool, notes) {
     wrap.append(accordion('Why these dice', [el('ul', { class: 'small muted' }, notes.map((n) => el('li', { text: n })))],
       { key: 'roll-why', summary: `${notes.length} reason${notes.length === 1 ? '' : 's'}` }));
   }
+  return wrap;
+}
+
+/** What the app rolled, read-only: one row per symbol that actually came up, with its
+ *  count and what it does. Symbols at zero are left out entirely. */
+function rolledSymbols(entered) {
+  const wrap = el('div', { class: 'rolled-symbols', id: 'rolled-symbols', 'aria-live': 'polite' });
+  const shown = SYMBOL_ORDER.filter((sym) => entered[sym] > 0);
+  if (!shown.length) {
+    wrap.append(el('p', { class: 'small muted', text: 'Nothing rolled yet — tap "Roll this pool" above.' }));
+    return wrap;
+  }
+  shown.forEach((sym) => {
+    wrap.append(el('div', { class: 'rolled-row' }, [
+      symbolGlyph(sym, entered[sym]),
+      el('span', { class: 'toggle-desc', text: SYMBOL_HELP[sym] })
+    ]));
+  });
   return wrap;
 }
 

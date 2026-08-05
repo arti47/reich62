@@ -514,6 +514,16 @@ details.accordion > *:last-child { padding-bottom: 0.6rem; }
 .sym-positive .sym-count { color: var(--brass); }
 .sym-negative .sym-count { color: var(--oxblood); }
 
+/* --- what the app rolled: read-only, non-zero symbols only --- */
+.rolled-row {
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+.rolled-row:last-child { border-bottom: 0; }
+.rolled-row .sym { font-size: 1rem; }
+.rolled-row .sym-count { font-size: 1.15rem; }
+.rolled-row .toggle-desc { display: block; font-size: 0.8rem; color: var(--ink-soft); }
+
 /* --- outcome chip on the result panel --- */
 .status-chip {
   display: inline-block;
