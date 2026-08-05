@@ -505,8 +505,8 @@ async function main() {
     check('the result panel is headed Outcome rather than shouting a verdict',
       /OUTCOME/i.test(outcomeText) && !/IT FAILED/i.test(outcomeText), outcomeText.slice(0, 60));
     check('the verdict is a status chip', (await page.locator('#roll-result .status-chip').count()) === 1);
-    check('the panel says why the check landed as it did',
-      /cancelled against/.test(outcomeText), outcomeText.slice(0, 200));
+    check('the outcome panel carries no cancellation write-up',
+      !/cancelled against/.test(outcomeText), outcomeText.slice(0, 200));
     check('no symbol is shown bare — each carries its name',
       (await page.locator('#roll-result .sym .sym-name').count()) >= 1);
     const symText = await page.locator('#roll-result .sym').first().innerText();

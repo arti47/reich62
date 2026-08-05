@@ -473,7 +473,7 @@ export function renderRoller(mount) {
     text: anyEntered ? (result.success ? 'Success' : 'Failure') : 'Waiting for your dice'
   }));
   resultCard.append(
-    el('p', { class: 'small', text: anyEntered ? explainCancellation(state.entered, result) : 'Tap in the symbols above and the result works itself out here.' }),
+    anyEntered ? el('span', {}) : el('p', { class: 'small', text: 'Tap in the symbols above and the result works itself out here.' }),
     anyEntered ? el('p', {}, [renderTally(result.net)]) : el('span', {}),
     heat.reasons.length ? el('ul', { class: 'small' }, heat.reasons.map((r) => el('li', { text: r }))) : el('span', {})
   );
@@ -563,26 +563,6 @@ export function renderRoller(mount) {
   mount.append(logCard);
 }
 
-/** Say why the check landed where it did, in one line: what cancelled what, and what
- *  survived (§1). */
-export function explainCancellation(entered, result) {
-  const parts = [];
-  const cancelledSuccess = Math.min(entered.success, entered.failure);
-  const cancelledAdvantage = Math.min(entered.advantage, entered.threat);
-
-  if (cancelledSuccess) parts.push(`${cancelledSuccess} success cancelled against ${cancelledSuccess} failure`);
-  if (result.netSuccess) parts.push(`${result.netSuccess} success left over, so the check succeeds`);
-  else if (result.netFailure) parts.push(`${result.netFailure} failure left over, so the check fails`);
-  else parts.push('nothing left on either side, and a check needs at least one success, so it fails');
-
-  if (cancelledAdvantage) parts.push(`${cancelledAdvantage} advantage cancelled against ${cancelledAdvantage} threat`);
-  if (result.netAdvantage) parts.push(`${result.netAdvantage} advantage to spend`);
-  if (result.netThreat) parts.push(`${result.netThreat} threat for the GM to spend`);
-  if (result.triumph) parts.push(`${result.triumph} triumph, which never cancels and always happens`);
-  if (result.despair) parts.push(`${result.despair} despair, which never cancels and always happens`);
-
-  return `${parts.join('; ')}.`;
-}
 
 /** The dice this check uses, as live per-type numbers: anything that feeds the pool —
  *  skill, characteristic, difficulty, opposition, cover, concealment, size, conditions,
