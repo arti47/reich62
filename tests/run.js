@@ -77,6 +77,15 @@ async function main() {
     // current seat shows; the nav itself is asserted separately.
     const go = async (hash) => { await page.goto(base + '/index.html' + hash, { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(120); };
     const subtab = async (label) => { await page.getByRole('tab', { name: label, exact: true }).click(); await page.waitForTimeout(90); };
+    // The situational controls fold away by default; open the panel before reaching for one.
+    const openSituation = async () => {
+      await page.evaluate(() => {
+        document.querySelectorAll('#screen details').forEach((d) => {
+          if (/anything unusual/i.test(d.querySelector('summary')?.innerText || '')) d.open = true;
+        });
+      });
+      await page.waitForTimeout(60);
+    };
 
     await page.goto(base + '/index.html', { waitUntil: 'networkidle' });
     check('app boots', await page.locator('#screen .card').first().isVisible());
@@ -133,6 +142,11 @@ async function main() {
 
     // --- 🏁 First Session Playable: create → sheet → resolve a check → track resources ---
     await go('#/create');
+    // The wizard now forks first: a ready-made character, or build one from a career (C-3).
+    await page.waitForSelector('#build-from-career');
+    check('the wizard offers the three ready-made characters before the career list',
+      (await page.locator('#screen [id^="pregen-"]').count()) === 3);
+    await page.locator('#build-from-career').click();
     await page.waitForSelector('#char-name');
     await page.fill('#char-name', 'Test Runner');
     await page.locator('#career-resistanceRunner').check();
@@ -246,7 +260,10 @@ async function main() {
     await page.waitForTimeout(90);
     equal('lowering it again updates back', await dieCount('Difficulty'), 2);
 
-    // A situational option moves them too.
+    // A situational option moves them too. They live behind one collapsed row now.
+    await openSituation();
+    check('the situation panel folds away and says what is set',
+      /nothing set/i.test(await page.locator('#screen').innerText()));
     await page.locator('#roller-cover').check();
     await page.waitForTimeout(90);
     equal('taking cover adds a Boost die live', await dieCount('Boost'), 1);
@@ -255,6 +272,7 @@ async function main() {
     equal('leaving cover removes it again', await dieCount('Boost'), 0);
 
     // --- called shots, two-weapon fighting and swaying a crowd (§10A, §5H, §11) ---
+    await openSituation();
     await page.selectOption('#roller-difficulty', 'average');
     await page.waitForTimeout(90);
     const setbackBefore = await dieCount('Setback');
@@ -364,19 +382,22 @@ async function main() {
     await dogCard().getByRole('button', { name: 'Promote to Rival' }).click();
     check('R-16: promotion moves it to rival tier', /rival/.test(await dogCard().innerText()));
 
-    // Initiative slots: ownership is fixed and the owning side fills each slot (§5A').
-    await page.fill('#init-label', 'Test Runner');
-    await page.fill('#init-success', '3');
-    await page.selectOption('#init-owner', 'pc');
-    await page.getByRole('button', { name: 'Add roll' }).click();
-    await page.fill('#init-label', 'Checkpoint Guards');
-    await page.fill('#init-success', '1');
-    await page.selectOption('#init-owner', 'npc');
-    await page.getByRole('button', { name: 'Add roll' }).click();
-    await page.getByRole('button', { name: 'Start encounter' }).click();
+    // Initiative is roster-first: everyone already in the fight is listed by name and side,
+    // so a roll is two numbers rather than four fields and an Add (B-4).
+    await page.getByRole('button', { name: /^Add Test Runner$/ }).click();
+    await page.waitForTimeout(120);
+    check('the initiative list names everyone already in the fight',
+      (await page.locator('#init-roster tr').count()) === 4, // header plus three combatants
+      await page.locator('#init-roster').innerText());
+    await page.getByLabel('Uncancelled Success for Test Runner').fill('3');
+    await page.getByLabel('Uncancelled Success for Checkpoint Guards').fill('1');
+    await page.getByLabel('Uncancelled Success for Guard Dog').fill('0');
+    await page.locator('#init-start').click();
     await page.waitForSelector('text=/round 1/');
-    check('initiative produces one slot per roll, ranked by Success',
-      (await page.locator('table tr').count()) === 3); // header plus two slots
+    check('initiative produces one slot per participant, ranked by Success',
+      (await page.locator('table tr').count()) === 4); // header plus three slots
+    const slotOrder = await page.locator('table').first().innerText();
+    check('the highest Success takes the first slot', /1\s+PC/.test(slotOrder), slotOrder.replace(/\n/g, ' | '));
 
     // Progress tracker: the Dragnet escalates and drives both Heat tracks (B§6).
     await page.fill('#task-name', 'City dragnet');
@@ -592,7 +613,7 @@ async function main() {
     await page.selectOption('#bestiary-pick', 'streetPatrol');
     await page.getByRole('button', { name: 'Drop in', exact: true }).click();
     await page.waitForTimeout(80);
-    await page.locator('.result', { hasText: 'Street Patrol' }).first().getByRole('button', { name: 'Remove', exact: true }).click();
+    await page.getByRole('button', { name: /^Remove Street Patrol.* from the fight$/ }).first().click();
     await page.waitForSelector('.modal-backdrop');
     const confirmText = await page.locator('.modal').innerText();
     check('removing a combatant asks first', /take .* out of the fight/i.test(confirmText), confirmText.slice(0, 120));
@@ -712,6 +733,144 @@ async function main() {
         /1 of 1 hard points used/.test(await page.locator('.result', { hasText: 'P38 pistol' }).first().innerText()));
     }
 
+    // Saving finishes the draft: the wizard starts clean rather than reopening the saved
+    // character at Review and offering to save it again.
+    await go('#/create');
+    check('the wizard starts over after a character is saved',
+      (await page.locator('#build-from-career').count()) === 1,
+      await page.locator('#screen .card').first().innerText().then((t) => t.replace(/\n/g, ' | ')));
+
+    // --- the attack chain: weapon → range → target → damage → applied (§5B) ---
+    await go('#/combat');
+    await page.selectOption('#bestiary-pick', 'checkpointGuards');
+    await page.getByRole('button', { name: 'Drop in', exact: true }).click();
+    await page.waitForTimeout(120);
+    await go('#/roll');
+    await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+    await page.waitForTimeout(80);
+    await page.selectOption('#roller-weapon', 'unarmed');
+    await page.waitForTimeout(120);
+    equal('choosing a weapon takes its skill', await page.inputValue('#roller-skill'), 'brawl');
+    equal('a melee weapon fixes the check at Average', await page.inputValue('#roller-difficulty'), 'average');
+
+    await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+    await page.selectOption('#roller-weapon', 'p38');
+    await page.waitForTimeout(120);
+    equal('a firearm takes the Ranged skill', await page.inputValue('#roller-skill'), 'ranged');
+    await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+    await page.selectOption('#roller-range', 'long');
+    await page.waitForTimeout(120);
+    equal('the range band sets the difficulty on its own', await page.inputValue('#roller-difficulty'), 'hard');
+    equal('and the pool follows it', await dieCount('Difficulty'), 3);
+
+    // Aim at the guards: their soak and Adversary rank come off the tracker.
+    await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+    const targetValue = await page.evaluate(() => document.querySelector('#roller-target option:nth-child(2)').value);
+    await page.selectOption('#roller-target', targetValue);
+    await page.waitForTimeout(120);
+    check('picking a target states what their soak will take off',
+      /soak \d+ comes off the damage/i.test(await page.locator('#roller-target-note').innerText()));
+
+    await page.getByRole('button', { name: 'One more success' }).click();
+    await page.getByRole('button', { name: 'One more success' }).click();
+    await page.getByRole('button', { name: 'One more success' }).click();
+    await page.waitForTimeout(120);
+    const damageText = await page.locator('#attack-damage').innerText();
+    // P38 base 6 plus 3 successes is 9, less the guards' soak.
+    check('the damage is worked out from the weapon, the successes and their soak',
+      /6 base and 3 from the successes is 9/.test(damageText), damageText.replace(/\n/g, ' | '));
+    const woundsQuoted = Number((await page.locator('#damage-wounds').innerText()).replace(/\D+/g, ''));
+    await page.locator('#apply-attack-damage').click();
+    await page.waitForTimeout(150);
+    await go('#/combat');
+    const guardsAfter = await page.locator('.result', { hasText: 'Checkpoint Guards' }).first().innerText();
+    check('one tap puts those wounds on the target',
+      new RegExp(`Wounds ${woundsQuoted}/`).test(guardsAfter), guardsAfter.replace(/\n/g, ' | '));
+
+    // --- the spend table follows the kind of check, not always combat (A-11) ---
+    await go('#/roll');
+    await page.selectOption('#roller-context', 'social');
+    await page.waitForTimeout(90);
+    await page.getByRole('button', { name: 'One more success' }).click();
+    await page.getByRole('button', { name: 'One more advantage' }).click();
+    await page.getByRole('button', { name: 'One more advantage' }).click();
+    await page.waitForTimeout(90);
+    const socialSpends = await page.locator('#roll-result').innerText();
+    check('a social check offers the social spends, not the combat ones',
+      /talking someone round/i.test(socialSpends) && !/critical injury/i.test(socialSpends),
+      socialSpends.slice(0, 200).replace(/\n/g, ' | '));
+    await page.selectOption('#roller-context', 'combat');
+    await page.waitForTimeout(90);
+    check('switching back to a fight brings the combat spends',
+      /a fight/i.test(await page.locator('#roll-result').innerText()));
+    await page.getByRole('button', { name: 'Clear symbols' }).click();
+
+    // --- story points: every spend, from the header chip, on any screen (A-14) ---
+    await page.locator('#story-points-chip').click();
+    await page.waitForSelector('#story-pools');
+    const poolsBefore = await page.locator('#story-pools').innerText();
+    check('the chip opens both pools and all eight spends',
+      (await page.locator('.modal button[id^="story-"]').count()) === 8, poolsBefore);
+    await page.locator('#story-player-narrate').click();
+    await page.waitForTimeout(150);
+    check('spending from the player pool moves the point to the GM',
+      /0 in the player pool, 1 in the GM pool/.test(await page.locator('#story-pools').innerText()),
+      await page.locator('#story-pools').innerText());
+    check('an empty pool cannot be spent from',
+      await page.locator('#story-player-addDie').isDisabled());
+    await page.getByRole('button', { name: 'Close' }).click();
+    await page.waitForTimeout(80);
+
+    // --- the combat card names what the turn was spent on (C-5) ---
+    await go('#/combat');
+    const guardCardNow = () => page.locator('.result', { hasText: 'Checkpoint Guards' }).first();
+    check('the card states the turn budget where it is enforced',
+      /one action and 1 free maneuver; a second costs 2 strain/i.test(await guardCardNow().innerText()));
+    await guardCardNow().locator('select[id^="maneuver-pick-"]').selectOption('aim');
+    await guardCardNow().getByRole('button', { name: /^Take the chosen maneuver/ }).click();
+    await page.waitForTimeout(120);
+    check('the maneuver is recorded by name, not as a bare counter',
+      /This turn: Aim/.test(await guardCardNow().innerText()), await guardCardNow().innerText().then((t) => t.replace(/\n/g, ' | ')));
+
+    // --- conditions on an NPC (A-15) ---
+    await guardCardNow().locator('input[id$="-disoriented"]').check();
+    await page.waitForTimeout(120);
+    check('an NPC can be held disoriented and it sticks',
+      /disoriented/i.test(await guardCardNow().innerText()));
+    await go('#/combat');
+    check('the condition survives a rerender',
+      await page.locator('.result', { hasText: 'Checkpoint Guards' }).first().locator('input[id$="-disoriented"]').isChecked());
+
+    // --- the character summary (C-6) and the career name (C-1) ---
+    await go('#/sheet');
+    check('the sheet opens on Vitals rather than wherever it was left',
+      (await page.getByRole('tab', { name: 'Vitals', exact: true }).getAttribute('aria-selected')) === 'true');
+    check('the career reads as its printed name, not its id',
+      /Resistance Runner/.test(await page.locator('#screen .card').first().innerText()),
+      await page.locator('#screen .card').first().innerText().then((t) => t.replace(/\n/g, ' | ')));
+    await subtab('Summary');
+    const summary = await page.locator('#character-summary').innerText();
+    check('the summary carries the whole character on one screen',
+      /Characteristics/.test(summary) && /Skills/.test(summary) && /What drives them/.test(summary)
+      && /Carried/.test(summary) && /Lasting injuries/.test(summary), summary.slice(0, 200).replace(/\n/g, ' | '));
+    check('the summary offers to print', (await page.locator('#print-summary').count()) === 1);
+
+    // --- the bestiary is grouped by tier rather than one long run (B-5) ---
+    await go('#/gm');
+    await page.waitForSelector('#bestiary-list');
+    check('opponents are grouped into collapsible tiers',
+      (await page.locator('#bestiary-list details').count()) === 4,
+      String(await page.locator('#bestiary-list details').count()));
+    const gmHeight = await page.evaluate(() => document.querySelector('#screen').scrollHeight);
+    check('which brings the tab back under 4,000px', gmHeight < 4000, `${gmHeight}px`);
+
+    // --- backup says what it will displace before writing (A-16) ---
+    await go('#/settings');
+    await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+    await page.waitForTimeout(80);
+    check('the backup note says the log and the encounter travel with it',
+      /roll log/i.test(await page.locator('#screen').innerText()));
+
     // --- safety-tools note (§20A) ---
     await go('#/settings');
     await page.getByRole('link', { name: 'Open the safety-tools note' }).click();
@@ -781,11 +940,25 @@ async function main() {
     }
     // Every sub-tab pane on the sheet, not just the one that opens by default.
     await go('#/sheet');
-    for (const tab of ['Vitals', 'Skills', 'Gear', 'Talents & injuries', 'Recovery', 'Advance']) {
+    for (const tab of ['Vitals', 'Skills', 'Gear', 'Talents & injuries', 'Recovery', 'Advance', 'Summary']) {
       await subtab(tab);
       const problems = await page.evaluate(A11Y_PROBE);
       check(`sheet ${tab} passes the accessibility sweep`, problems.length === 0, [...new Set(problems)].slice(0, 5).join(' | '));
     }
+    // The GM screen's own sub-tabs, which the loop above only reaches at its default.
+    await go('#/gm');
+    for (const tab of ['Network', 'Opponents', 'Encounters', 'Tables', 'Build']) {
+      await subtab(tab);
+      await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+      await page.waitForTimeout(60);
+      const problems = await page.evaluate(A11Y_PROBE);
+      check(`GM ${tab} passes the accessibility sweep`, problems.length === 0, [...new Set(problems)].slice(0, 5).join(' | '));
+    }
+    // And the wizard's later steps, which only exist once you are inside them.
+    await go('#/create');
+    const wizardProblems = await page.evaluate(A11Y_PROBE);
+    check('the wizard\'s opening fork passes the accessibility sweep', wizardProblems.length === 0,
+      [...new Set(wizardProblems)].slice(0, 5).join(' | '));
 
     // --- deleting a character: confirms first, then removes it everywhere ---
     await go('#/');

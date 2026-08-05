@@ -2,18 +2,21 @@
 // resource header that rides on every in-play screen.
 
 import { el, clear, titleCase, clamp } from './core.js';
-import { showToast, confirmModal, panel, subTabs, emptyState, outcomeBox, numberStepper } from './ui.js';
+import { showToast, confirmModal, modal, panel, subTabs, emptyState, outcomeBox, numberStepper } from './ui.js';
 import { PANELS, label as termLabel, gloss } from './help.js';
 import {
   SKILLS, CHARACTERISTICS, CONDITIONS, HEAT, CRITICAL_INJURIES, SUFFOCATION, RECOVERY,
-  XP_COSTS, SKILL_RANK_MAX, FALLING, FALLING_RULES
+  XP_COSTS, SKILL_RANK_MAX, FALLING, FALLING_RULES, STORY_POINTS, MOTIVATIONS
 } from '../data.js';
-import { talent, buildPool, canBuyTalent, visibleTalents, xpCost, skill as skillById, medicineDifficulty, fallDamage } from './rules.js';
+import {
+  talent, buildPool, canBuyTalent, visibleTalents, xpCost, skill as skillById,
+  medicineDifficulty, fallDamage, career as careerById
+} from './rules.js';
 import { ITEM_DAMAGE, ATTACHMENTS, DIFFICULTIES, GEAR, WEAPONS, ARMOUR, RARITY, BLACK_MARKET } from '../data.js';
 import { blackMarketPurchase } from './rules.js';
 import { hardPoints } from './derived.js';
 import { Settings } from './settings.js';
-import { rollCriticalInjury, state as rollerState } from './roller.js';
+import { rollCriticalInjury, spendStoryPoint, state as rollerState } from './roller.js';
 import {
   derivedFor, woundThreshold, strainThreshold, soak, encumbranceState, criticalModifier
 } from './derived.js';
@@ -35,11 +38,66 @@ export function renderResourceHeader() {
   node.append(
     chip('Injury', `${character.state.wounds}/${woundThreshold(character)}`, `${termLabel('wounds')} — ${gloss('wounds')}`),
     chip('Stress', `${character.state.strain}/${strainThreshold(character)}`, `${termLabel('strain')} — ${gloss('strain')}`),
-    chip('Story', `${cell.pools.storyPointsPlayer}/${cell.pools.storyPointsGM}`, `${termLabel('storyPoints')}: players / GM. ${gloss('storyPoints')}`),
+    // The story-point chip is the way into the economy, so all eight spends are one tap
+    // from every in-play screen rather than buried on one of them.
+    el('button', {
+      type: 'button', class: 'chip chip-button', id: 'story-points-chip',
+      'aria-label': `Story points: ${cell.pools.storyPointsPlayer} for the players, ${cell.pools.storyPointsGM} for the GM. Open the spend list.`,
+      title: `${termLabel('storyPoints')}: players / GM. ${gloss('storyPoints')}`,
+      text: `Story ${cell.pools.storyPointsPlayer}/${cell.pools.storyPointsGM}`,
+      onclick: () => openStoryPoints()
+    }),
     chip('Heat', `${character.state.personalHeat}·${cell.cellHeat}`, `${termLabel('personalHeat')} · ${termLabel('cellHeat')}. ${gloss('personalHeat')}`),
     chip('Load', `${enc.carried}/${enc.threshold}`, `${termLabel('encumbrance')} — ${gloss('encumbrance')}`)
   );
   if (character.state.incapacitated) node.append(el('span', { class: 'chip', text: 'INCAPACITATED' }));
+}
+
+/** Every Story Point spend the manual prints, both pools, with the two-pool flow enforced:
+ *  a spent point moves to the other pool once its effect resolves (§8, R-4). */
+export function openStoryPoints() {
+  const draw = () => {
+    const cell = getCell();
+    const body = el('div', {});
+    body.append(el('p', { class: 'small', id: 'story-pools', text:
+      `${cell.pools.storyPointsPlayer} in the player pool, ${cell.pools.storyPointsGM} in the GM pool. ${STORY_POINTS.flow}` }));
+
+    const pool = (side, spends, heading) => {
+      body.append(el('h3', { text: heading }));
+      const available = side === 'player' ? cell.pools.storyPointsPlayer : cell.pools.storyPointsGM;
+      if (!available) body.append(el('p', { class: 'small muted', text: 'Nothing in this pool to spend.' }));
+      spends.forEach((spend) => {
+        body.append(el('div', { class: 'result' }, [
+          el('div', { class: 'result-head' }, [el('span', { class: 'result-title', text: spend.label })]),
+          el('button', {
+            type: 'button', class: 'secondary', id: `story-${side}-${spend.id}`,
+            text: 'Spend one', disabled: !available,
+            'aria-label': `${spend.label} — spend one story point from the ${side} pool`,
+            onclick: () => {
+              const result = spendStoryPoint(side, spend.id);
+              if (!result.ok) { showToast(result.reason); return; }
+              // The die-modification spends only mean something on an open check, so that
+              // one hands the upgrade straight to the roller.
+              if (spend.id === 'upgradeDowngrade') {
+                if (side === 'player') rollerState.upgradeAbility += 1;
+                else rollerState.upgradeDifficulty += 1;
+              }
+              showToast(`${spend.label}. Pools now ${result.pools.storyPointsPlayer} player / ${result.pools.storyPointsGM} GM.`);
+              document.dispatchEvent(new CustomEvent('resource:refresh'));
+              dialog.close();
+              openStoryPoints();
+            }
+          })
+        ]));
+      });
+    };
+    pool('player', STORY_POINTS.playerSpends, 'Spend from the player pool');
+    pool('gm', STORY_POINTS.gmSpends, 'Spend from the GM pool');
+    body.append(el('p', { class: 'small muted', text: STORY_POINTS.reset }));
+    return body;
+  };
+  const dialog = modal({ title: 'Story points', body: draw(), actions: [{ label: 'Close', primary: true }] });
+  return dialog;
 }
 
 export const SHEET_TABS = [
@@ -48,9 +106,14 @@ export const SHEET_TABS = [
   { id: 'gear',    label: 'Gear' },
   { id: 'talents', label: 'Talents & injuries' },
   { id: 'care',    label: 'Recovery' },
-  { id: 'advance', label: 'Advance' }
+  { id: 'advance', label: 'Advance' },
+  { id: 'summary', label: 'Summary' }
 ];
 let sheetTab = 'vitals';
+
+/** The sheet opens on Vitals every time it is navigated to, rather than wherever it was
+ *  last left (B-6). Sub-tab choice only survives while you stay on the screen. */
+export function resetSheetTab() { sheetTab = 'vitals'; }
 
 export function renderSheet(mount) {
   clear(mount);
@@ -69,7 +132,7 @@ export function renderSheet(mount) {
 
   mount.append(el('div', { class: 'card' }, [
     el('h2', { text: character.identity.name || 'Unnamed' }),
-    el('p', { class: 'small muted', text: `${titleCase(character.identity.career || '')} · ${character.xp.available} experience unspent` }),
+    el('p', { class: 'small muted', text: `${careerName(character.identity.career)} · ${character.xp.available} experience unspent` }),
     character.identity.erratum
       ? el('p', { class: 'small' }, [el('span', { class: 'badge badge-inferred', text: 'corrected' }), ' ', character.identity.erratum.note])
       : null,
@@ -77,6 +140,12 @@ export function renderSheet(mount) {
   ]));
 
   PANES[sheetTab](mount, character, derived, rerender);
+}
+
+/** Careers are stored by id; the printed name is what a reader wants to see (C-1). */
+function careerName(id) {
+  const def = careerById(id);
+  return def ? def.name : (id ? titleCase(id) : 'no career');
 }
 
 function pane_vitals(mount, character, derived, rerender) {
@@ -563,7 +632,76 @@ function pane_advance(mount, character, derived, rerender) {
   ]));
 }
 
-const PANES = { vitals: pane_vitals, skills: pane_skills, gear: pane_gear, talents: pane_talents, care: pane_care, advance: pane_advance };
+/** A read-only account of the whole character on one screen, so it can be printed and
+ *  carried as a paper backup (C-6). Nothing here is editable by design. */
+function pane_summary(mount, character, derived, rerender) {
+  const card = panel('The whole character', PANELS.sheetSummary, [], { id: 'character-summary' });
+  const m = character.identity.motivation || {};
+  const line = (label, value) => el('p', { class: 'small' }, [el('strong', { text: `${label}: ` }), String(value || '—')]);
+
+  card.append(el('h3', { text: character.identity.name || 'Unnamed' }));
+  card.append(line('Career', careerName(character.identity.career)));
+  card.append(line('Experience', `${character.xp.available} unspent of ${character.xp.total} earned`));
+
+  card.append(el('h3', { text: 'Characteristics' }));
+  card.append(el('div', { class: 'stat-grid' }, CHARACTERISTICS.map((c) => statBox(c.name, character.attributes[c.id]))));
+
+  card.append(el('h3', { text: 'Worked-out numbers' }));
+  card.append(el('div', { class: 'stat-grid' }, [
+    statBox('Injury limit', `${character.state.wounds} / ${derived.woundThreshold}`),
+    statBox('Stress limit', `${character.state.strain} / ${derived.strainThreshold}`),
+    statBox(termLabel('soak'), derived.soak),
+    statBox('Close defence', derived.meleeDefense),
+    statBox('Ranged defence', derived.rangedDefense),
+    statBox('Carrying', `${encumbranceState(character).carried} / ${derived.encumbranceThreshold}`)
+  ]));
+
+  card.append(el('h3', { text: 'Skills' }));
+  const trained = SKILLS.filter((sk) => character.skills[sk.id].rank > 0);
+  if (!trained.length) card.append(el('p', { class: 'small muted', text: 'No ranks bought yet.' }));
+  else {
+    const table = el('table');
+    table.append(el('tr', {}, [el('th', { text: 'Skill' }), el('th', { text: 'Rank' }), el('th', { text: 'Pool' })]));
+    trained.forEach((sk) => {
+      const pool = buildPool(character.skills[sk.id].rank, character.attributes[sk.characteristic]);
+      table.append(el('tr', {}, [
+        el('td', { text: `${sk.name}${character.skills[sk.id].career ? ' ●' : ''}` }),
+        el('td', { text: String(character.skills[sk.id].rank) }),
+        el('td', { text: `${pool.ability}A ${pool.proficiency}P` })
+      ]));
+    });
+    card.append(el('div', { class: 'table-wrap' }, [table]));
+  }
+
+  card.append(el('h3', { text: 'Talents' }));
+  card.append(el('p', { class: 'small', text: character.talents.length
+    ? character.talents.map((t) => `${talent(t.id) ? talent(t.id).name : t.id}${t.ranks > 1 ? ` ×${t.ranks}` : ''}`).join(', ')
+    : 'None yet.' }));
+
+  card.append(el('h3', { text: 'What drives them' }));
+  ['desire', 'fear', 'strength', 'flaw'].forEach((facet) => card.append(line(titleCase(facet), m[facet])));
+
+  card.append(el('h3', { text: 'Carried' }));
+  const items = character.inventory.items || [];
+  card.append(el('p', { class: 'small', text: items.length ? items.map((i) => i.name || i.id).join(', ') : 'Nothing.' }));
+  const money = character.inventory.money;
+  card.append(line('Money', `${money.amount || 0} ${Settings.currencyLabel()} · ${money.rationCards || 0} ration cards · ${money.barterGoods || 0} in barter goods`));
+
+  const untreated = (character.state.criticalInjuries || []).filter((c) => !c.healed);
+  card.append(el('h3', { text: 'Lasting injuries' }));
+  card.append(el('p', { class: 'small', text: untreated.length ? untreated.map((c) => `${c.name} (${c.severity})`).join(', ') : 'None untreated.' }));
+
+  card.append(line(termLabel('personalHeat'), `${character.state.personalHeat} of ${HEAT.max}`));
+  if (character.notes) { card.append(el('h3', { text: 'Notes' }), el('p', { class: 'small', text: character.notes })); }
+
+  card.append(el('button', {
+    type: 'button', class: 'secondary', id: 'print-summary', text: 'Print or save as PDF',
+    onclick: () => window.print()
+  }));
+  mount.append(card);
+}
+
+const PANES = { vitals: pane_vitals, skills: pane_skills, gear: pane_gear, talents: pane_talents, care: pane_care, advance: pane_advance, summary: pane_summary };
 
 /** HOUSE RULE — the black-market counter. It reuses the printed rarity ladder and adds the
  *  barter demand on top; every surface here is badged so it never reads as printed. */

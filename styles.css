@@ -423,6 +423,22 @@ th { font-family: var(--font-head); text-transform: uppercase; font-size: 0.7rem
   white-space: nowrap;
 }
 
+/* The story-point chip is the way into the spend list, so it reads as the same chip as its
+   neighbours rather than inheriting the button styling. */
+button.chip-button {
+  font: inherit;
+  font-size: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: normal;
+  border-color: var(--brass);
+  min-height: 0;
+  margin: 0;
+}
+button.chip-button:hover,
+button.chip-button:focus-visible { border-color: var(--ink); }
+
 label > select, label > input { margin-top: 0.2rem; }
 textarea { min-height: 5rem; }
 
@@ -637,3 +653,22 @@ details.accordion > *:last-child { padding-bottom: 0.6rem; }
 .die-red    { border-left-color: var(--oxblood); }
 .die-blue   { border-left-color: var(--focus); }
 .die-black  { border-left-color: var(--ink-soft); }
+
+
+/* --- printing (C-6) ---
+   The summary tab is meant to become a paper backup, so printing drops the app chrome and
+   the sub-tab bar and leaves the sheet itself on the page. */
+@media print {
+  .app-header, .bottom-nav, .resource-header, .toast-region, #modal-root,
+  .skip-link, .subtabs, .howto, #print-summary { display: none !important; }
+  body { background: #fff; color: #000; }
+  .screen { padding: 0; }
+  .card, #character-summary {
+    border: 0; background: none; box-shadow: none; padding: 0; margin: 0 0 0.6rem;
+    break-inside: avoid;
+  }
+  #character-summary h3 { break-after: avoid; }
+  .stat { border: 1px solid #999; }
+  table { border-collapse: collapse; }
+  th, td { border-bottom: 1px solid #ccc; }
+}

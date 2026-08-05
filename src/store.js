@@ -9,6 +9,8 @@ import { STORY_POINTS } from '../data.js';
 const K_CHARACTERS = STORAGE_PREFIX + 'characters';
 const K_ACTIVE = STORAGE_PREFIX + 'activeCharacter';
 const K_CELL = STORAGE_PREFIX + 'cell';
+const K_COMBAT = STORAGE_PREFIX + 'combat';
+const K_TASKS = STORAGE_PREFIX + 'tasks';
 
 function readJson(key, fallback) {
   try {
@@ -88,31 +90,73 @@ export function saveCell(cell) {
 }
 
 // --- backup ---
+const K_LOG = STORAGE_PREFIX + 'rollLog';
+
+/** Everything that would be lost if this device went away: characters, the network, the
+ *  settings, the roll log, the running encounter and the open progress tasks. */
 export function exportAll() {
   return JSON.stringify({
     app: 'reich62-player',
     exportedAt: new Date().toISOString(),
     characters: listCharacters(),
     cell: getCell(),
-    settings: Settings.raw()
+    settings: Settings.raw(),
+    rollLog: readJson(K_LOG, []),
+    combat: readJson(K_COMBAT, null),
+    tasks: readJson(K_TASKS, [])
   }, null, 2);
 }
 
-export function importAll(json) {
+/** What a backup file holds and what is on this device, so an import can be described
+ *  before it happens rather than silently replacing everything. */
+export function describeBackup(json) {
   const parsed = typeof json === 'string' ? JSON.parse(json) : json;
   if (!parsed || parsed.app !== 'reich62-player') throw new Error('Not a REICH \'62 Player backup file.');
-  writeJson(K_CHARACTERS, (parsed.characters || []).map(normalise));
-  if (parsed.cell) writeJson(K_CELL, parsed.cell);
-  if (parsed.settings) writeJson(STORAGE_PREFIX + 'settings', parsed.settings);
+  const combat = parsed.combat || {};
+  return {
+    parsed,
+    incoming: {
+      characters: (parsed.characters || []).map((c) => (c.identity || {}).name || 'Unnamed'),
+      cell: parsed.cell ? (parsed.cell.name || 'unnamed network') : null,
+      cellHeat: parsed.cell ? parsed.cell.cellHeat : null,
+      rollLog: (parsed.rollLog || []).length,
+      combatRound: combat.active ? combat.round : null,
+      tasks: (parsed.tasks || []).length
+    },
+    current: {
+      characters: listCharacters().map((c) => c.identity.name || 'Unnamed'),
+      rollLog: readJson(K_LOG, []).length,
+      tasks: listTasks().length
+    }
+  };
+}
+
+/** `mode` is 'replace' — everything on the device gives way to the file — or 'merge',
+ *  which adds the file's characters alongside the ones already here. */
+export function importAll(json, { mode = 'replace' } = {}) {
+  const { parsed } = describeBackup(json);
+  const incoming = (parsed.characters || []).map(normalise);
+
+  if (mode === 'merge') {
+    const existing = readJson(K_CHARACTERS, []);
+    const byId = new Map(existing.map((c) => [c.id, c]));
+    incoming.forEach((c) => byId.set(c.id, c));
+    writeJson(K_CHARACTERS, [...byId.values()]);
+  } else {
+    writeJson(K_CHARACTERS, incoming);
+    if (parsed.rollLog) localStorage.setItem(K_LOG, JSON.stringify(parsed.rollLog));
+    if (parsed.combat) writeJson(K_COMBAT, parsed.combat);
+    if (parsed.tasks) writeJson(K_TASKS, parsed.tasks);
+    if (parsed.cell) writeJson(K_CELL, parsed.cell);
+    if (parsed.settings) writeJson(STORAGE_PREFIX + 'settings', parsed.settings);
+  }
   document.dispatchEvent(new CustomEvent('store:changed', { detail: { kind: 'import' } }));
-  return { characters: (parsed.characters || []).length };
+  return { characters: incoming.length, mode };
 }
 
 export { blankCharacter };
 
 // --- combat, tasks and lifecycle (Phase 4) ---
-const K_COMBAT = STORAGE_PREFIX + 'combat';
-const K_TASKS = STORAGE_PREFIX + 'tasks';
 const K_UNDO = STORAGE_PREFIX + 'undo';
 
 export function blankCombat() {

@@ -651,11 +651,11 @@ day one; fantasy-phrase join codes; themed `modal()`/`showToast`/`confirmModal`/
 | `rules.js` | Pure lookups over data files | talent lookup, pyramid legality, rarity resolution, difficulty ladder, Medicine difficulty ladder, fall damage, bestiary lookup + threat-flag evaluation |
 | `derived.js` | Derived calculations + data normalisation/migration | WT/ST/Soak/Defense/encumbrance, cumulative Critical-Injury modifier |
 | `settings.js` | Feature toggles | solo · GM screen · digital roller (R-B1 gated) · non-setting talents (R-11) · currency label + starting budget (R-8) · GM discretionary dice (§5C'') |
-| `store.js` | Local/cloud persistence, Cell entity, combat mirroring, JSON export/import | Cell + Heat persistence |
+| `store.js` | Local/cloud persistence, Cell entity, combat mirroring, full JSON export with a described replace-or-merge import | Cell + Heat persistence |
 | `sync.js` | Firebase auth, campaigns, join codes, presence, theme | Phase 5 |
 | `wizard.js` | Creation wizard + pregens | career → 4 skills → 70 XP → derived → Motivation → gear |
-| `roller.js` | **Dice engine**: pool build, modification order, symbol entry, cancellation, opposed sequence (§3.2), Story Point spends, spend-table application, damage applier, Critical Injury roller, **roll-log writes** | four context-specific spend tables |
-| `sheet.js` | Character sheet, in-play tracking, **persistent resource header** | header = wounds · strain · Story Points · **Personal Heat** · encumbrance |
+| `roller.js` | **Dice engine**: pool build, modification order, symbol entry, cancellation, opposed sequence (§3.2), the attack chain (weapon → range → target → damage), Story Point spends, spend-table application, damage applier, Critical Injury roller, **roll-log writes** | four context-specific spend tables, chosen explicitly |
+| `sheet.js` | Character sheet, in-play tracking, printable summary, the Story Point spend sheet, **persistent resource header** | header = wounds · strain · Story Points (tappable) · **Personal Heat** · encumbrance |
 | `combat.js` | Combat tracker: **initiative slots (§5A')**, turn/maneuver budget with strain cost, combatant cards, generic progress tracker (§3.13), lifecycle events (§3.12) | slot-filling model, vehicle scale, bestiary drop-in, minion-group WT from per-member value (R-18), Dragnet extended check |
 | `heat.js` | **New module (game-specific):** Heat generation (§17.1), Personal/Cell thresholds and their auto-applied effects, decay, surveilled-context flag | — |
 | `solo.js` | Oracle, Random Event, Meaning/Element tables, solo loop | enabled (official rules) |
@@ -687,7 +687,8 @@ campaigns/{campaignId}
                                  sourceId, sourceBook: "manual"|"bestiary", // provenance
                                  derivedFrom: "printed"|"recipe",           // R-15
                                  abilities[], actedThisRound, conditions{},
-                                 maneuversUsed, actionUsed, criticalInjuries[] } },
+                                 maneuversUsed, actionUsed, turnLog[],   // §5A named spends
+                                 criticalInjuries[] } },
              vehicles: { id: { speed, handling, hullTrauma, systemStrain, ... } } }
   tasks/{taskId}: { name, kind: "heat"|"repair"|"clock"|"dragnet",     // dragnet = B§6
                     progress, target, contributors[],
@@ -867,22 +868,23 @@ is worked in this position, immediately after `data-npcs.js`.)*
 - [x] Critical Injury list with **cumulative +10 modifier** tracked
 - [x] Notes, JSON **export/import** in Settings
 - [ ] Portrait (canvas-compressed) — lands with Phase 5 storage
+- [x] Read-only character summary that prints cleanly, as a paper backup
 - [x] Persistence + normalisation/migration path
 
 ### Phase 3 — Dice Engine — **COMPLETE**
 - [x] Pool builder from skill+characteristic with **modification order enforced**
 - [x] **Manual symbol-entry roller (primary and default, per R-B1)** + cancellation + net outcome
 - [x] Digital roller behind `digitalRoller` — unblocked once `DIE_FACES` was supplied (D§); rolls the assembled pool, reports each die and face, and fills the symbol entry (R-B1)
-- [x] Difficulty picker (7 levels)
+- [x] Difficulty picker (7 levels), plus the range-band ladder setting it for a ranged attack (§5B)
 - [x] Upgrade/downgrade controls in the roller UI, including spending a Story Point to upgrade (§2.4, §8)
 - [x] Auto-applied dice: conditions, encumbrance, Heat thresholds
 - [x] Auto-applied dice: environment, silhouette, cover/concealment (§5E, §5J), plus the Adversary talent's upgrades (§12C)
 - [x] **Opposed-check builder** (§3.2 exact sequence) and competitive-check comparator (R-3)
-- [x] **Four context spend tables** (combat / generic / social / vehicle) surfaced by affordability (R-12)
+- [x] **Four context spend tables** (combat / generic / social / vehicle) surfaced by affordability (R-12), chosen by an explicit "what kind of check is this?" picker
 - [x] Called shots (§10A), two-weapon fighting (§5H) and group influence (§11) as check-setup controls feeding the pool
 - [x] One-tap application of a chosen spend to the character's state (§5C)
-- [x] **Story Point spends** with two-pool flow enforced (`spendStoryPoint`) — pool UI lands with the GM tab
-- [x] Damage applier: base + net 🌟 − Soak → wounds; strain path; Pierce handling
+- [x] **Story Point spends** with two-pool flow enforced (`spendStoryPoint`) — all four player and four GM spends open from the resource header's story chip on any in-play screen
+- [x] Damage applier: base + net 🌟 − Soak → wounds; strain path; Pierce handling — surfaced as the attack chain (weapon → range band → target → one-tap apply)
 - [x] **Critical Injury roller** with all modifiers (+10/injury, Vicious, Durable, falls) and effect auto-application
 - [x] **Talent "tap to use"** for the mechanically-hooked talents — strain and Story Point costs deducted, once-per-X flags set
 - [x] **Roll log** (local; capped at 100; `aria-live`; enough detail to re-derive)
@@ -898,7 +900,7 @@ is worked in this position, immediately after `data-npcs.js`.)*
 - [x] **Lifecycle engine** (§3.12): End Encounter / Scene / Session / Day / Week / Adventure with confirmation summary + one-step undo
 - [x] **Generic progress tracker** (§3.13) reused by Heat, repairs, ad-hoc clocks and the Dragnet
 - [x] Advancement loop (§3.15) with pyramid + creation-only gates, Dedication handling, advancement log
-- [x] Local combat helper: **initiative slot model (§5A')**, turn/maneuver budget with strain cost, combatant cards, minion-group wound pooling from the per-member value (R-18)
+- [x] Local combat helper: **initiative slot model (§5A')** built roster-first, turn/maneuver budget with strain cost and the maneuver and action named rather than counted, combatant cards with editable conditions, minion-group wound pooling from the per-member value (R-18)
 - [x] Combat helper: vehicle scale (§12) — speed, hull trauma, system strain, Damage Control, and crashes inflicting hull trauma equal to speed
 - [x] NPC builder surface: the §12C recipes, all 21 special abilities, and the quick-gen tables, rollable on the GM screen
 - [x] NPC builder: builds from the §12C recipes and saves into the combat tracker as `derivedFrom: "recipe"` (R-15)
@@ -924,13 +926,14 @@ is worked in this position, immediately after `data-npcs.js`.)*
 - [x] Safety-tools note (§20A, paraphrased, one screen, linked from Settings)
 
 ### Hardening (always)
-- [x] Regression harness per §13.5 assertions — 448 checks, every ruling pinned
+- [x] Regression harness per §13.5 assertions — 497 checks, every ruling pinned
 - [x] **Accessibility pass** — an automated sweep runs on every screen and every sheet sub-tab with all accordions forced open, asserting that every button, link, input and select carries an accessible name, that no positive `tabindex` exists, that heading levels never skip, and that every table has header cells. Two real faults were found and fixed (see A-9)
 - [x] **Usability pass 1** — seat model, self-describing panels, sub-tabs and accordions, plain-language first, guardrails on destructive actions, persistent outcomes
 - [x] **Usability pass 2 (formatting)** — compact help bars, checklist line breaks, always-labelled dice symbols, the Outcome panel with a status chip and a plain-English explanation, and a rules library grouped into readable sections
 - [x] **Rules-accuracy audit, pass 1** — findings below, each closed with a regression check
 - [x] **Rules-accuracy audit, pass 2 (local surfaces)** — findings A-5…A-9 below. Deferred to a third pass, after Phase 5: the sync layer's own rules exposure
-- [ ] Rules-accuracy audit, pass 3 (after Phase 5)
+- [x] **Full app and gameplay-flow audit, pass 3** — findings A-10…A-16, B-1…B-6 and C-1…C-6 below, every one closed with a regression check
+- [ ] Rules-accuracy audit, pass 4 (after Phase 5)
 
 #### Audit pass 1 — findings (Rule · Target · Fix · Why)
 
@@ -967,10 +970,40 @@ Pass 2 audited the app against §13.2 (no rules value hardcoded in `src/`), agai
 Behavior/UI · Schema (name · type · default · location, §8 updated) · Acceptance (browser
 verification).
 
+#### Audit pass 3 — full app and gameplay-flow audit (Rule · Target · Fix · Why)
+
+Pass 3 drove the app headlessly through a whole create → play loop with every toggle on,
+measured every screen and sub-tab at 360px, and read all fifteen `src/` modules. It looked
+for three things: rules the app holds but cannot perform, flows whose order fights the way
+the game is played, and dead ends. **Section A is missing capability, B is flow, C is polish.**
+
+| # | Rule | Target | Fix | Why |
+|---|---|---|---|---|
+| **A-10** | Damage is the weapon base plus one per uncancelled Success, less soak (§5B) | `roller.js`, `rules.js` | `computeDamage` and `applyDamage` existed and **no UI ever called them** — after a hit the app said nothing about damage. Now the Roll screen carries the whole attack chain: pick a weapon, pick the range, pick a target off the combat tracker, and the Outcome states `base + successes − soak` and applies it to that combatant in one tap. `rules.js` gained `attackDifficulty`, `weaponBaseDamage` (handling the Brawn and plus-Brawn weapons) and `weaponPierce` | The most-used calculation in the system was being done in players' heads while the app held every number it needed. It also closes the Roll → Combat direction of B-3 |
+| **A-11** | Four separate spend tables — combat, everyday, social, vehicle (§5C, §5C', §11, §12) | `roller.js` | `state.context` was initialised to `'combat'` and **never assigned**, so a Charm check offered "inflict a Critical Injury" and three of the four extracted tables were unreachable. A "what kind of check is this?" picker now sets it, and the Outcome names the table it is showing | Three ticked ledger rows were rendering nowhere, and the one table that did render was wrong for every non-combat check |
+| **A-12** | Ranged difficulty follows the range band; melee is always Average (§5B) | `roller.js`, `rules.js` | `RANGED_DIFFICULTY_BY_RANGE` was imported into the roller and unused, alongside three other dead imports. Choosing a weapon and a range now writes the difficulty picker, so shooting at Long range becomes Hard by itself and the screen shows why | An automatic rule was being applied by hand, or forgotten |
+| **A-13** | Weapons carry a skill, damage, crit rating, range and qualities (§15C) | `roller.js` | Weapons sat in inventory as inert rows and never reached a check. The weapon picker now sets the skill, marks what the character actually carries with a dot, and still offers the whole list for borrowed and improvised weapons and for GM-side rolls | Without a weapon in the check there is no damage, no crit rating and no range band — A-10 and A-12 both depended on this |
+| **A-14** | Eight Story Point spends, four per pool, each moving the point across (§8, R-4) | `sheet.js` | Only "upgrade a die" had a control and the GM pool had none. The header's story chip is now a button opening both pools with all eight spends; spending disables itself when a pool is empty, and the die-modification spend hands its upgrade straight to the open check | Seven of eight printed options were unreachable, and the economy is the system's main lever on a roll |
+| **A-15** | Conditions apply to anyone, not only to PCs (§3.9) | `combat.js` | Every combatant stored a `conditions` object that nothing could edit, so a rival could never be held staggered or disoriented. Each card now carries the condition list, minus the two that are the character's own bookkeeping (suspicion, carrying load) | Concussive, Disorient and three Critical Injury results all land on NPCs, and the tracker could not record any of them |
+| **A-16** | Everything lives on this device only | `store.js`, `screens.js` | The export omitted the roll log, the running encounter and the progress tasks, and importing overwrote everything silently. The export now carries all of it; the import reads the file first and states what is in it and what it will displace, then offers replace or merge | A backup that silently drops a session's log is not a backup, and a one-tap irreversible wipe of every character had no confirmation |
+| **B-1** | — | `roller.js` | The Roll screen was 3,405px at 360px — about 4.4 phone screens — with the Outcome below all of it and the middle third given to controls that sit at their defaults on most checks. Every situational control now folds behind one row that names what is currently set (`nothing set`, or `cover · adversary 1 · suspicion`), so nothing hides silently. **2,759px, and that includes the new attack panel** | The thing you look at was the furthest thing from the top |
+| **B-2** | — | `combat.js` | The screen opened with "Wrapping up" — the boundaries you fire when everything is over. Order is now turn order, who is in the fight, vehicles, long jobs, and wrapping up last. `renderCombat` split into five named section builders | The last thing you do was the first thing on screen |
+| **B-3** | — | `roller.js` | No round trip between Combat and Roll: the target's Adversary rank was retyped by hand. The target picker reads the tracker, and the damage goes back to that combatant | Two screens modelling the same fight shared nothing |
+| **B-4** | — | `combat.js` | Starting a six-way fight cost about 30 typed interactions — name, successes, advantages, side and Add, per participant, with the fields clearing each time. Initiative is now roster-first: everyone already in the fight is listed by name and side and needs two numbers, with "Roll for the NPCs" when the simulated roller is on, an accordion for anyone not on the tracker, and "use roster order instead" for tables that track order on paper | Setup cost more effort than the fight |
+| **B-5** | — | `gm.js` | The Opponents tab rendered all 28 stat blocks expanded: 6,534px, 1,128 words, one run. Grouped into collapsible tiers with the first open, the way the rules library groups its entries. **2,944px** | Eight screens of scrolling to reach the animals |
+| **B-6** | — | `router.js`, `sheet.js`, `gm.js` | Sheet and GM sub-tab choice, and the GM's bestiary filters, were module state that survived navigation — you returned to the Sheet on "Advance" and to a bestiary still filtered to "very challenging only". Both reset on arrival | A screen that reopens somewhere other than its start is a screen you have to re-orient in |
+| **C-1** | — | `sheet.js` | The sheet header printed `ResistanceRunner` where Home printed "Resistance Runner". It now reads the career's printed name |
+| **C-2** | — | `wizard.js` | The gear step was 33 priced rows in one unsorted run. Grouped into weapons, armour and everything else, filterable, each row stating what the item does, with anything over budget disabled and the basket listed |
+| **C-3** | — | `wizard.js` | The three ready-made characters sat below all eleven careers, making the fastest way to start the hardest to find. Step 1 is now a fork: play a ready-made character, or build one from a career |
+| **C-4** | — | `wizard.js` | Saving a character left the draft in place, so revisiting Create reopened the saved character at its review step and offered to save it a second time. `finish()` clears the draft |
+| **C-5** | — | `combat.js`, `data.js` | The card enforced the turn budget without ever saying what a turn allows. Each card now states it in words, the Maneuver and Action buttons pick from the 9 maneuvers and 4 action types, and the turn reads back as what happened ("This turn: Move, Aim (2 strain)") |
+| **C-6** | — | `sheet.js`, `styles.css` | No way to see or keep the whole character at once. A read-only Summary sub-tab holds characteristics, worked-out numbers, skills with their pools, talents, motivation, gear, money, untreated injuries and notes, with a print stylesheet that drops the app chrome |
+
 ## 12. Changelog
 
 | Date | Change | Why | Verification | Cache |
 |---|---|---|---|---|
+| 2026-08-05 | **Audit pass 3 closed: the attack chain, the collapsed Roll screen, roster-first initiative, and thirteen other flow fixes.** *(A-10, A-12, A-13)* The Roll screen gained the whole attack chain: a weapon sets the skill, the range band sets the difficulty, a target picked off the combat tracker supplies the soak and the Adversary rank, and the Outcome states `base + successes − soak` and applies it to that combatant in one tap. `computeDamage` and `applyDamage` had existed with no caller since Phase 3; `rules.js` gained `attackDifficulty`, `rangedDifficultyFor`, `weaponBaseDamage` and `weaponPierce`. *(A-11)* `state.context` was never assigned, so three of the four spend tables were unreachable and a Charm check offered a Critical Injury; an explicit "what kind of check is this?" picker now sets it. *(A-14)* The header's story chip opens both pools with all eight spends. *(A-15)* Combatant conditions became editable. *(A-16)* The export now carries the roll log, the encounter and the tasks, and the import describes the file and what it displaces before offering replace or merge. *(B-1)* The situational controls fold behind one row naming what is set — 3,405px → 2,759px including the new panel. *(B-2)* Combat leads with the fight and ends with the boundaries. *(B-4)* Initiative is roster-first, with an NPC auto-roll and a roster-order escape. *(B-5)* Opponents grouped by tier — 6,534px → 2,944px. *(B-6)* Sub-tabs and bestiary filters reset on arrival. *(C-1…C-6)* Career names, a grouped and filtered gear step, the pregen fork as step 1, the draft cleared after saving, named maneuvers and actions on the card, and a printable character summary. | A full audit of the app and its gameplay flows, with the eleven answers the user chose | `npm test`: **497 checks pass, zero console errors**. New checks drive the attack chain end to end (weapon sets the skill, band sets the difficulty, damage computed from the weapon and the target's soak, wounds landing on the tracker), the spend table switching with the kind of check, all eight story-point spends and the two-pool flow, an NPC held disoriented across a rerender, the named maneuver on the card, the roster-first initiative order, the wizard fork and its clean restart, the summary's contents, the four bestiary groups and the tab back under 4,000px. The accessibility sweep now also walks the five GM sub-tabs, the Summary tab and the wizard fork | `reich62-v24` |
 | 2026-08-05 | **Audit pass 2 closed: five single-source violations, six unsurfaced tables, five missing tools, and the accessibility pass.** *(A-5)* `combat.js`, `roller.js`, `heat.js`, `ui.js` and `rules-index.js` were restating rules values instead of reading them — the minion group's `perMember + 1` Critical cost, the silhouette ±2 thresholds, the Heat levels the Setbacks start at, the symbol glyph and name maps, and two hand-written library sentences. All now read the data; `data.js` gained `criticalWoundCost`, `HEAT.safehouseDefault`, `HEAT.tracks.cellEscalationAtPersonal` and an explicit `cellEffect: null` on Heat 1. *(A-6)* `MOVEMENT_COSTS`, `FALLING_RULES`, `SHEET_FIELDS`, `WEAPON_NOTE` and `VEHICLE_NOTE` reach the rules library; `DIE_FACES_SOURCE` annotates the roller toggle. *(A-7)* Five printed rules gained tools: the Recovery tab states the Medicine difficulty for the patient in front of you, with the self-treatment and no-kit steps, and hands the check to the Roll screen; it also applies a fall, mitigation first, then soak, with strain never soaked. The Roll screen gained a called-shot picker, a two-weapon toggle and an audience-size picker. *(A-8)* `core.js` gained `plain()`, so no data string can carry a section marker onto a screen regardless of what the pagination happens to render. *(A-9)* The accessibility pass is now an automated sweep over every screen and every sheet sub-tab; it found and fixed two heading-level skips. | "Fix everything" against the audit list | `npm test`: **448 checks pass, zero console errors**. New checks pin the five values against their data tables, the six library entries, the Medicine ladder at four wound ratios plus both modifiers, fall damage with mitigation and soak in the right order, the three new roller controls moving the live dice counts and reverting cleanly, that no library entry leaks a section marker, and the accessibility sweep on ten screens and six sub-tabs | `reich62-v23` |
 | 2026-08-05 | **Errata adopted as a source of record.** `source/reich62_errata.md` confirms all 22 rulings; the app already matched 21 of them, so the only behavioural delta was **R-8's pocket money**, which the errata adds: unspent starting budget is kept as cash, and a **d100 of pocket money** is rolled once the shopping is done — spendable in play, never on more starting gear. `data.js` records `unspentKept` and `pocketMoney` under the R-8 house aid; the wizard's gear step gains a badged roll control and states the cash you will start with, the review step repeats it, and `finish()` credits unspent budget plus pocket money to the character's purse. §4 now cites the errata as binding. | Table owner's errata, supplied verbatim | `npm test`: 378 checks pass, **zero console errors**. New checks pin the d100 range, that pocket money cannot widen the gear budget, the two R-8 flags, and that a finished character starts with the unspent budget plus the roll | `reich62-v22` |
 | 2026-08-05 | **Black-market purchasing added as an explicit house rule (H-1).** `data.js` gains `BLACK_MARKET`, flagged `houseRule: true` and carrying its own badge: barter starts at rarity 6, one ration card per point above 5, +1 difficulty with nothing to trade, and a failed check showing 3 threat or any despair counting as a surveilled context. `rules.js` gains `blackMarketPurchase`, which reuses the printed rarity ladder and location modifiers rather than replacing them. `heat.js` extends `heatFromCheck` with the exposure trigger — a Streetwise despair still reads as an evasion check, so it costs 2. The purse splits into three: cash, ration cards and barter goods, back-filled on old characters. The Gear tab gains a badged **Buy something** counter that quotes the check, the price and the barter demand, sets the check up on the Roll screen, or pays outright. Currency is now **Reichsmark (RM)**, still 500 to start and still relabellable. | Table owner's house rule, supplied verbatim | `npm test`: 372 checks pass, **zero console errors**. New checks pin the card formula at rarities 5–10, the +1 penalty and its removal by cards or goods, location modifiers still stacking, three Heat cases plus the evasion despair, the three purses surviving normalisation, and the counter in the browser: a rarity-6 radio deducts 500 RM and one card and lands in the inventory | `reich62-v21` |

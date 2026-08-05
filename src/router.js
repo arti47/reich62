@@ -7,10 +7,10 @@ import { modal } from './ui.js';
 import { activeCharacterId } from './store.js';
 import { renderHome, renderRules, renderSettings, renderSafety } from './screens.js';
 import { renderWizard } from './wizard.js';
-import { renderSheet, renderResourceHeader } from './sheet.js';
+import { renderSheet, renderResourceHeader, resetSheetTab } from './sheet.js';
 import { renderRoller } from './roller.js';
 import { renderCombat } from './combat.js';
-import { renderGm } from './gm.js';
+import { renderGm, resetGmTab } from './gm.js';
 import { renderSolo } from './solo.js';
 
 const ROUTES = [
@@ -106,6 +106,9 @@ export function renderScreen() {
 }
 
 export function startRouter() {
+  // Arriving at a screen from elsewhere opens it at its first sub-tab rather than wherever
+  // it happened to be left (B-6).
+  window.addEventListener('hashchange', () => { resetSheetTab(); resetGmTab(); });
   window.addEventListener('hashchange', renderScreen);
   document.addEventListener('nav:refresh', () => { renderNav(); });
   document.addEventListener('resource:refresh', () => { renderResourceHeader(); });

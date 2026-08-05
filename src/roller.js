@@ -9,12 +9,15 @@ import { PANELS, label as termLabel, gloss } from './help.js';
 import {
   SKILLS, DIFFICULTIES, SPEND_TABLES, STORY_POINTS, CRITICAL_INJURY_RULES, DIE_FACES,
   RANGED_DIFFICULTY_BY_RANGE, COMBAT_CHECK_PROCEDURE, DICE, SILHOUETTE_RULE,
-  CALLED_SHOTS, COMBAT_VARIANTS, SOCIAL_ENCOUNTERS
+  CALLED_SHOTS, COMBAT_VARIANTS, SOCIAL_ENCOUNTERS, WEAPONS, RANGE_BANDS
 } from '../data.js';
 import {
   skill as skillById, buildPool, buildOpposedDifficulty, modifyPool, difficultyDice,
-  criticalInjuryFor, criticalInjuryTotal
+  criticalInjuryFor, criticalInjuryTotal, attackDifficulty, rangedDifficultyFor,
+  weaponBaseDamage, weaponPierce, weapon as weaponById
 } from './rules.js';
+import { getCombat } from './store.js';
+import { damageCombatant } from './combat.js';
 import { activeCharacter, getCell, saveCell, saveCharacter } from './store.js';
 import { soak as soakOf, woundThreshold, strainThreshold, criticalModifier } from './derived.js';
 import { encumbranceState } from './derived.js';
@@ -94,6 +97,12 @@ export const state = {
   calledShot: null,        // §10A — how many aim maneuvers were spent, or null for no called shot
   twoWeapon: false,        // §5H — the off-hand attack raises the difficulty a step
   audienceSize: null,      // §11 — group influence sets the difficulty from the crowd's size
+  // The attack chain (§5B): a weapon, a range band and a target on the combat tracker.
+  // With a weapon chosen the pool takes its skill, and the band sets the difficulty; with a
+  // target chosen the soak, defence and Adversary rank come off that combatant.
+  weaponId: null,
+  rangeBand: null,
+  targetId: null,
   // When `advancedAutomation` is off the automatic dice are shown as confirmable rows
   // rather than applied silently; the flag turns the prompting off.
   autoDice: { conditions: true, encumbrance: true, heat: true },
@@ -209,6 +218,77 @@ export function assemblePool(character = activeCharacter()) {
   if (state.downgradeDifficulty) { modifications.push({ stage: 'downgrade', die: 'challenge', count: state.downgradeDifficulty }); notes.push(`${state.downgradeDifficulty} Challenge downgraded to Difficulty`); }
 
   return { pool: modifyPool(pool, modifications), notes, modifications };
+}
+
+// --- the attack chain (§5B): weapon → range → target → damage ---
+
+/** Every weapon, with the ones this character carries first and flagged. The whole list
+ *  stays reachable: a GM rolling for an NPC, or a player who has not logged their gear,
+ *  still needs to pick up a rifle without going shopping first. */
+export function availableWeapons(character) {
+  const carriedIds = new Set((character ? character.inventory.items || [] : [])
+    .filter((i) => i.kind === 'weapon').map((i) => i.id));
+  const rank = (w) => (carriedIds.has(w.id) ? 0 : w.price === null ? 1 : 2);
+  return WEAPONS
+    .map((w) => ({ ...w, carried: carriedIds.has(w.id) }))
+    .sort((a, b) => rank(a) - rank(b));
+}
+
+/** The chosen target on the combat tracker, if there is one. */
+export function currentTarget() {
+  if (!state.targetId) return null;
+  return getCombat().combatants[state.targetId] || null;
+}
+
+/** Set the weapon, taking its skill and letting the range band set the difficulty (§5B).
+ *  The difficulty picker is written to rather than silently overridden, so what the screen
+ *  shows is what the pool used. */
+export function chooseWeapon(weaponId) {
+  state.weaponId = weaponId || null;
+  const def = weaponById(state.weaponId);
+  if (!def) { state.rangeBand = null; return null; }
+  state.skillId = def.skill;
+  if (!state.rangeBand) state.rangeBand = def.range;
+  state.difficultyId = attackDifficulty(def, state.rangeBand);
+  return def;
+}
+
+export function chooseRangeBand(band) {
+  state.rangeBand = band || null;
+  const def = weaponById(state.weaponId);
+  if (def) state.difficultyId = attackDifficulty(def, state.rangeBand);
+  return state.difficultyId;
+}
+
+/** Point the check at a combatant: their Adversary rank feeds the pool, their soak the damage. */
+export function chooseTarget(combatantId) {
+  state.targetId = combatantId || null;
+  const target = currentTarget();
+  state.targetAdversary = target ? (target.adversary || 0) : 0;
+  return target;
+}
+
+/** What this attack does on a hit: weapon base + net Success, less soak after Pierce (§5B). */
+export function attackDamage(character = activeCharacter(), net = null) {
+  const def = weaponById(state.weaponId);
+  if (!def) return null;
+  const result = net || outcome(state.entered).net;
+  const target = currentTarget();
+  const base = weaponBaseDamage(def, character ? character.attributes.brawn : 0);
+  const pierce = weaponPierce(def);
+  const damage = computeDamage({
+    baseDamage: base,
+    netSuccess: result.success,
+    targetSoak: target ? (target.soak || 0) : 0,
+    pierce
+  });
+  return {
+    ...damage, weapon: def, base, pierce, target,
+    // A Critical Injury triggers when uncancelled Advantage meets the crit rating, or on a
+    // Despair, or by spending two Advantage (§5B, §5.7).
+    critical: result.advantage >= def.crit || result.despair > 0,
+    critReason: result.despair > 0 ? 'an uncancelled despair' : `${def.crit} advantage`
+  };
 }
 
 /** Resolve the entered symbols (§1) and produce everything the log needs. */
@@ -390,6 +470,15 @@ export function renderRoller(mount) {
   DIFFICULTIES.forEach((d) => diffSelect.append(el('option', { value: d.id, text: `${d.name} (${d.dice})`, selected: state.difficultyId === d.id })));
   setup.append(el('label', { class: 'small', for: 'roller-difficulty', text: 'Difficulty' }), diffSelect);
 
+  // What kind of check this is decides which spend table the Outcome offers (§5C, §11, §12).
+  const contextSelect = el('select', {
+    id: 'roller-context', 'aria-label': 'Kind of check',
+    onchange: (e) => { state.context = e.target.value; rerender(); }
+  });
+  CHECK_CONTEXTS.forEach((c) => contextSelect.append(el('option', { value: c.id, text: c.label, selected: state.context === c.id })));
+  setup.append(el('label', { class: 'small', for: 'roller-context', text: 'What kind of check is this?' }), contextSelect);
+  setup.append(el('p', { class: 'small muted', text: 'It decides which list of things you can spend leftover advantage and threat on.' }));
+
   setup.append(toggle('roller-opposed', 'Opposed check', state.opposed, (v) => { state.opposed = v; rerender(); }));
   if (state.opposed) {
     setup.append(el('p', { class: 'small muted', text: 'Only you roll. The difficulty side is built from the opponent\'s rating: the higher value sets Difficulty dice, the lower upgrades that many to Challenge.' }));
@@ -402,9 +491,14 @@ export function renderRoller(mount) {
   setup.append(toggle('roller-public', 'Public check (Heat Setbacks apply)', state.publicCheck, (v) => { state.publicCheck = v; rerender(); }));
   mount.append(setup);
 
+  // --- the attack: weapon, range and target (§5B) ---
+  mount.append(attackPanel(character, rerender));
+
   // --- situational modifiers (§5E, §5J) and die modifications (§2.4, §8) ---
   const situationBody = el('div', {});
-  const situational = panel('The situation', PANELS.rollSituation, [situationBody]);
+  // Everything here is at its default on most checks, so it folds away behind one row that
+  // says what is currently set rather than occupying a third of the screen (B-1).
+  const situational = panel('The situation', PANELS.rollSituation, []);
   if (!Settings.advancedAutomation()) {
     situationBody.append(el('p', { class: 'small muted', text: 'Automatic dice are listed for confirmation. Switch on advanced automation in Settings to apply them without asking.' }));
     situationBody.append(toggle('auto-conditions', 'Apply condition dice', state.autoDice.conditions, (v) => { state.autoDice.conditions = v; rerender(); }));
@@ -464,6 +558,7 @@ export function renderRoller(mount) {
 
   const modBody = el('div', {});
   situationBody.append(accordion('Change the dice by hand', [modBody], { key: 'roll-mods', summary: 'upgrade, downgrade, spend a story point' }));
+
   modBody.append(numberField('roller-upgrade-ability', 'Upgrade your dice', state.upgradeAbility, (v) => { state.upgradeAbility = v; rerender(); }));
   modBody.append(numberField('roller-downgrade-ability', 'Downgrade your dice', state.downgradeAbility, (v) => { state.downgradeAbility = v; rerender(); }));
   modBody.append(numberField('roller-upgrade-difficulty', 'Upgrade the difficulty', state.upgradeDifficulty, (v) => { state.upgradeDifficulty = v; rerender(); }));
@@ -479,6 +574,11 @@ export function renderRoller(mount) {
       document.dispatchEvent(new CustomEvent('resource:refresh'));
       rerender();
     }
+  }));
+  situational.append(accordion('Anything unusual about this check?', [situationBody], {
+    key: 'roll-situation',
+    summary: situationSummary(character),
+    defaultOpen: false
   }));
   mount.append(situational);
 
@@ -546,9 +646,60 @@ export function renderRoller(mount) {
     heat.reasons.length ? el('ul', { class: 'small' }, heat.reasons.map((r) => el('li', { text: r }))) : el('span', {})
   );
 
+  // --- damage, when the check was an attack (§5B) ---
+  if (anyEntered && state.weaponId) {
+    const dmg = attackDamage(character, result.net);
+    const damageBody = el('div', { id: 'attack-damage' });
+    if (!result.success) {
+      damageBody.append(el('p', { class: 'small muted', text: `The ${dmg.weapon.name} missed, so there is no damage to work out.` }));
+    } else {
+      damageBody.append(el('p', { class: 'small' }, [
+        `${dmg.weapon.name}: ${dmg.base} base and ${result.net.success} from the successes is ${dmg.raw}`,
+        dmg.target ? `, less ${dmg.soaked} soak${dmg.pierce ? ` after Pierce ${dmg.pierce}` : ''} — ` : ' — ',
+        el('strong', { id: 'damage-wounds', text: `${dmg.target ? dmg.wounds : dmg.raw} wounds` }),
+        dmg.target ? '.' : '. Pick a target above and the app takes their soak off for you.'
+      ]));
+      if (dmg.critical) {
+        damageBody.append(el('p', { class: 'small', id: 'damage-critical' }, [
+          el('span', { class: 'badge', text: 'critical' }), ' ',
+          `${titleCase(dmg.critReason)} means this hit also causes a lasting injury.`
+        ]));
+      }
+      if (dmg.target) {
+        damageBody.append(el('button', {
+          type: 'button', class: 'primary', id: 'apply-attack-damage',
+          text: `Apply ${dmg.wounds} wounds to ${dmg.target.name}`,
+          onclick: () => {
+            const applied = damageCombatant(dmg.target.id, { wounds: dmg.wounds, critical: dmg.critical });
+            if (!applied.ok && applied.reason) { showToast(applied.reason); return; }
+            const lines = [`${dmg.wounds} wounds to ${dmg.target.name}.`, ...(applied.notes || [])];
+            appendSpendToLastEntry(`${dmg.wounds} wounds to ${dmg.target.name}`);
+            state.lastOutcome = lines;
+            showToast(lines.join(' '));
+            document.dispatchEvent(new CustomEvent('resource:refresh'));
+            rerender();
+          }
+        }));
+      } else if (character) {
+        damageBody.append(el('button', {
+          type: 'button', class: 'secondary', id: 'apply-attack-damage-self',
+          text: `Take ${dmg.raw} wounds myself`,
+          onclick: () => {
+            const after = applyDamage(character, { wounds: Math.max(0, dmg.raw - soakOf(character)) });
+            showToast(`Wounds now ${after.wounds}/${after.woundThreshold}${after.incapacitated ? ' — incapacitated' : ''}`);
+            document.dispatchEvent(new CustomEvent('resource:refresh'));
+            rerender();
+          }
+        }));
+      }
+    }
+    resultCard.append(el('h3', { text: 'Damage' }), damageBody);
+  }
+
   const spends = anyEntered ? availableSpends(state.context, result.net) : [];
   if (spends.length) {
-    resultCard.append(el('h3', { text: 'Spends available' }));
+    const contextLabel = (CHECK_CONTEXTS.find((c) => c.id === state.context) || CHECK_CONTEXTS[1]).label;
+    resultCard.append(el('h3', { text: `What you can spend it on — ${contextLabel.toLowerCase()}` }));
     spends.slice(0, 8).forEach((row) => {
       resultCard.append(el('div', { class: 'result' }, [
         el('div', { class: 'result-head' }, [
@@ -635,6 +786,105 @@ export function renderRoller(mount) {
 /** The dice this check uses, as live per-type numbers: anything that feeds the pool —
  *  skill, characteristic, difficulty, opposition, cover, concealment, size, conditions,
  *  encumbrance, suspicion, upgrades — moves these the moment you touch it. */
+/** A one-line account of what is currently pushing the dice around, so the collapsed
+ *  situation panel never hides a modifier the player has forgotten about. */
+function situationSummary(character) {
+  const set = [];
+  if (state.concealment > 0 && state.concealmentRole !== 'none') set.push('concealment');
+  if (state.cover) set.push('cover');
+  if (state.silhouetteDelta !== 0) set.push('size');
+  if (state.targetAdversary > 0) set.push(`adversary ${state.targetAdversary}`);
+  if (state.calledShot !== null) set.push('called shot');
+  if (state.twoWeapon) set.push('two weapons');
+  if (state.audienceSize) set.push(`crowd of ${state.audienceSize}`);
+  if (state.upgradeAbility || state.upgradeDifficulty || state.downgradeAbility || state.downgradeDifficulty) set.push('hand-changed dice');
+  if (character) {
+    const conditions = Object.entries(character.state.conditions || {}).filter(([, on]) => on);
+    if (state.autoDice.conditions && conditions.length) set.push('your condition');
+    if (state.autoDice.encumbrance && encumbranceState(character).over) set.push('overloaded');
+    if (state.autoDice.heat && heatSetbackDice({
+      personalHeat: character.state.personalHeat, cellHeat: getCell().cellHeat, isPublicCheck: state.publicCheck
+    })) set.push('suspicion');
+  }
+  return set.length ? set.join(' · ') : 'nothing set';
+}
+
+/** The four spend tables the manual prints, named in the words a player would use. */
+export const CHECK_CONTEXTS = [
+  { id: 'combat',  label: 'A fight' },
+  { id: 'generic', label: 'Anything else' },
+  { id: 'social',  label: 'Talking someone round' },
+  { id: 'vehicle', label: 'Driving or flying' }
+];
+
+/** Weapon, range and target. Choosing a weapon takes its skill and lets the band set the
+ *  difficulty; choosing a target takes their soak and Adversary rank off the tracker (§5B). */
+function attackPanel(character, rerender) {
+  const body = el('div', {});
+  const weapons = availableWeapons(character);
+  const combatants = Object.values(getCombat().combatants || {});
+
+  const weaponSelect = el('select', {
+    id: 'roller-weapon', 'aria-label': 'Weapon',
+    onchange: (e) => { chooseWeapon(e.target.value); rerender(); }
+  });
+  weaponSelect.append(el('option', { value: '', text: 'Not attacking with a weapon', selected: !state.weaponId }));
+  weapons.forEach((w) => weaponSelect.append(el('option', {
+    value: w.id, selected: state.weaponId === w.id,
+    text: `${w.carried ? '● ' : ''}${w.name} — ${titleCase(w.skill)}, damage ${w.damage}${w.damageType === 'plusBrawn' ? ' + Brawn' : ''}, crit ${w.crit}`
+  })));
+  body.append(el('label', { class: 'small', for: 'roller-weapon', text: 'Weapon' }), weaponSelect);
+  body.append(el('p', { class: 'small muted', text: weapons.some((w) => w.carried)
+    ? 'A dot marks what you are actually carrying; the rest of the list is there for borrowed and improvised weapons.'
+    : 'Nothing in your inventory is a weapon, so the whole list is offered. Buy one on the Gear tab and it moves to the top with a dot.' }));
+
+  if (state.weaponId) {
+    const def = weaponById(state.weaponId);
+    const isMelee = def.skill === 'brawl' || def.skill === 'melee';
+    if (isMelee) {
+      body.append(el('p', { class: 'small muted', id: 'roller-range-note', text: 'A melee attack is always an Average check, whatever the range.' }));
+    } else {
+      const rangeSelect = el('select', {
+        id: 'roller-range', 'aria-label': 'Range to the target',
+        onchange: (e) => { chooseRangeBand(e.target.value); rerender(); }
+      });
+      RANGE_BANDS.forEach((r) => rangeSelect.append(el('option', {
+        value: r.id, selected: state.rangeBand === r.id,
+        text: `${r.name} — ${titleCase(rangedDifficultyFor(r.id))}`
+      })));
+      body.append(el('label', { class: 'small', for: 'roller-range', text: 'How far away are they?' }), rangeSelect);
+      body.append(el('p', { class: 'small muted', text: `${def.name} is built for ${def.range} range. Further out the difficulty climbs on its own.` }));
+    }
+  }
+
+  const targetSelect = el('select', {
+    id: 'roller-target', 'aria-label': 'Target',
+    onchange: (e) => { chooseTarget(e.target.value); rerender(); }
+  });
+  targetSelect.append(el('option', { value: '', text: combatants.length ? 'No particular target' : 'Nobody on the combat tracker', selected: !state.targetId }));
+  combatants.forEach((c) => targetSelect.append(el('option', {
+    value: c.id, selected: state.targetId === c.id,
+    text: `${c.name}${c.minionCount ? ` ×${c.minionCount}` : ''} — soak ${c.soak}, wounds ${c.wounds}/${c.woundThreshold ?? '—'}`
+  })));
+  body.append(el('label', { class: 'small', for: 'roller-target', text: 'Who are you shooting at?' }), targetSelect);
+  const target = currentTarget();
+  if (target) {
+    body.append(el('p', { class: 'small muted', id: 'roller-target-note', text:
+      `Soak ${target.soak} comes off the damage; defence ${target.meleeDef}/${target.rangedDef}${target.adversary ? `, and Adversary ${target.adversary} upgrades this check ${target.adversary} time(s)` : ''}.` }));
+  } else if (!combatants.length) {
+    body.append(el('p', { class: 'small muted', text: 'Drop an opponent into the Combat screen and it can work out the damage for you.' }));
+  }
+
+  const active = [state.weaponId, state.targetId].filter(Boolean).length;
+  return panel('What are you attacking with?', PANELS.rollAttack, [
+    accordion('Weapon, range and target', [body], {
+      key: 'roll-attack',
+      summary: state.weaponId ? `${weaponById(state.weaponId).name}${target ? ` → ${target.name}` : ''}` : 'nothing chosen',
+      defaultOpen: active > 0
+    })
+  ], { id: 'roll-attack' });
+}
+
 function diceToRoll(pool, notes) {
   const wrap = el('div', { class: 'dice-to-roll' });
   wrap.append(el('h3', { class: 'dice-to-roll-title', text: 'Dice to roll' }));

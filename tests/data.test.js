@@ -337,6 +337,27 @@ export async function dataChecks({ check, equal }) {
     library.every((e) => !/(?:B?§|D§)[0-9]/.test(`${e.title} ${e.body}`)),
     (library.find((e) => /(?:B?§|D§)[0-9]/.test(`${e.title} ${e.body}`)) || {}).title);
 
+  // --- the attack chain (§5B): weapon, range, damage ---
+  equal('melee is always an Average check whatever the range',
+    R.attackDifficulty(R.weapon('knife'), 'extreme'), 'average');
+  equal('a shot at short range is Easy', R.attackDifficulty(R.weapon('p38'), 'short'), 'easy');
+  equal('the same shot at medium is Average', R.attackDifficulty(R.weapon('p38'), 'medium'), 'average');
+  equal('at long range it is Hard', R.attackDifficulty(R.weapon('p38'), 'long'), 'hard');
+  equal('at extreme range it is Daunting', R.attackDifficulty(R.weapon('p38'), 'extreme'), 'daunting');
+  equal('a plain firearm deals its printed damage', R.weaponBaseDamage(R.weapon('p38'), 3), 6);
+  equal('a knife adds Brawn to its rating', R.weaponBaseDamage(R.weapon('knife'), 3), 5);
+  equal('unarmed damage is Brawn itself', R.weaponBaseDamage(R.weapon('unarmed'), 3), 3);
+  equal('Pierce is read off the weapon qualities', R.weaponPierce(R.weapon('knife')), 1);
+  equal('a weapon without Pierce reads zero', R.weaponPierce(R.weapon('p38')), 0);
+
+  // --- story point spends: all four on each side, and the two-pool flow ---
+  equal('four player spends', D.STORY_POINTS.playerSpends.length, 4);
+  equal('four GM spends', D.STORY_POINTS.gmSpends.length, 4);
+
+  // --- the conditions a GM can hold an NPC in ---
+  check('the NPC condition list drops the ones that are the character\'s own bookkeeping',
+    D.CONDITIONS.filter((c) => !c.id.startsWith('heat') && !['encumbered', 'incapacitated'].includes(c.id)).length >= 5);
+
   // --- solo tables (§18–§20, §23) ---
   equal('3 Oracle likelihoods', S.ORACLE.likelihoods.length, 3);
   equal('Likely is 2 Ability against 1 Difficulty', `${S.ORACLE.likelihoods[0].ability}v${S.ORACLE.likelihoods[0].difficulty}`, '2v1');

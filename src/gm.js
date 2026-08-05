@@ -34,6 +34,16 @@ const GM_TABS = [
 ];
 let gmTab = 'bestiary';
 
+/** Arriving at the GM screen opens it at Opponents with the browser unfiltered, rather than
+ *  wherever the last visit left it (B-6). */
+export function resetGmTab() {
+  gmTab = 'bestiary';
+  filters.tier = 'all';
+  filters.heatOnly = false;
+  filters.challengingOnly = false;
+  filters.query = '';
+}
+
 export function renderGm(mount) {
   clear(mount);
   const rerender = () => renderGm(mount);
@@ -92,7 +102,32 @@ function gmBestiary(mount, rerender) {
       return true;
     });
     list.append(el('p', { class: 'small muted', text: `${entries.length} of ${BESTIARY.length} entries` }));
-    entries.forEach((entry) => {
+    // Grouped by tier and collapsed, the way the rules library groups its entries, so 28
+    // full stat blocks do not arrive as one 6,500px run (B-5).
+    const groups = [
+      { id: 'minion', label: 'Minions' }, { id: 'rival', label: 'Rivals' },
+      { id: 'nemesis', label: 'Nemeses' }, { id: 'animal', label: 'Animals' }
+    ];
+    let opened = 0;
+    groups.forEach((group) => {
+      const inGroup = entries.filter((e) => e.kind === group.id);
+      if (!inGroup.length) return;
+      const body = el('div', {});
+      inGroup.forEach((entry) => body.append(entryCard(entry)));
+      const open = !!q || opened === 0;
+      opened += 1;
+      list.append(el('details', { class: 'accordion', open }, [
+        el('summary', {}, [
+          el('span', { class: 'accordion-title', text: group.label }),
+          el('span', { class: 'accordion-summary', text: String(inGroup.length) })
+        ]),
+        body
+      ]));
+    });
+  }
+
+  function entryCard(entry) {
+    {
       const stats = entry.abstract
         ? 'Abstract — no combat stats; resolved as an Oracle roll.'
         : `Soak ${entry.soak ?? '—'} · Def ${(entry.defense || {}).melee ?? 0}/${(entry.defense || {}).ranged ?? 0} · WT ${entry.woundThreshold ?? `${entry.woundThresholdPerMember} per member`}${entry.strainThreshold ? ` · ST ${entry.strainThreshold}` : ''}${entry.adversary ? ` · Adversary ${entry.adversary}` : ''}`;
@@ -113,8 +148,8 @@ function gmBestiary(mount, rerender) {
           onclick: () => { const r = addFromBestiary(entry.id); showToast(r.ok ? `${entry.name} added to the tracker` : r.reason); }
         })
       ]);
-      list.append(card);
-    });
+      return card;
+    }
   }
   drawList();
 }

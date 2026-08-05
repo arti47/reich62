@@ -4,7 +4,7 @@ import {
   SKILLS, CHARACTERISTICS, DIFFICULTIES, TALENTS, TALENT_RULES, CAREERS, WEAPONS, ARMOUR,
   GEAR, VEHICLES, ITEM_QUALITIES, CRITICAL_INJURIES, CRITICAL_INJURY_RULES, CONDITIONS,
   RARITY, POOL_BUILD, UPGRADE_MAP, DOWNGRADE_MAP, MODIFICATION_ORDER, XP_COSTS,
-  RECOVERY, FALLING, FALLING_RULES
+  RECOVERY, FALLING, FALLING_RULES, RANGED_DIFFICULTY_BY_RANGE, COMBAT_CHECK_PROCEDURE
 } from '../data.js';
 import { BLACK_MARKET } from '../data.js';
 import { ADVERSARY_ABILITIES, ADVERSARY_TIERS } from '../data-npcs.js';
@@ -88,6 +88,34 @@ export function stepDifficulty(levelId, steps) {
   if (index < 0) return levelId;
   const next = Math.min(ladder.length - 1, Math.max(0, index + steps));
   return ladder[next].id;
+}
+
+/** Difficulty of a combat check: melee is always Average, ranged follows the band (§5B). */
+export function attackDifficulty(weaponDef, rangeBand) {
+  if (!weaponDef) return null;
+  if (weaponDef.skill === 'brawl' || weaponDef.skill === 'melee') return COMBAT_CHECK_PROCEDURE.meleeDifficulty;
+  const row = RANGED_DIFFICULTY_BY_RANGE.find((r) => r.range === (rangeBand || weaponDef.range));
+  return row ? row.difficulty : COMBAT_CHECK_PROCEDURE.meleeDifficulty;
+}
+
+export function rangedDifficultyFor(band) {
+  const row = RANGED_DIFFICULTY_BY_RANGE.find((r) => r.range === band);
+  return row ? row.difficulty : null;
+}
+
+/** A weapon's base damage before successes (§15C, §5H).
+ *  `brawn` weapons deal Brawn; `plusBrawn` weapons add their rating to it. */
+export function weaponBaseDamage(weaponDef, brawn = 0) {
+  if (!weaponDef) return 0;
+  if (weaponDef.damageType === 'characteristic' || weaponDef.damage === 'brawn') return brawn;
+  if (weaponDef.damageType === 'plusBrawn') return brawn + (Number(weaponDef.damage) || 0);
+  return Number(weaponDef.damage) || 0;
+}
+
+/** Pierce X reduces the target's soak by X (§10). */
+export function weaponPierce(weaponDef) {
+  const quality = (weaponDef ? weaponDef.qualities || [] : []).find((q) => /^Pierce/i.test(q));
+  return quality ? (Number(quality.replace(/\D+/g, '')) || 0) : 0;
 }
 
 /** Difficulty of a Medicine check to treat wounds (§5G).

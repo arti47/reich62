@@ -17,7 +17,7 @@ import { saveCharacter, setActiveCharacter } from './store.js';
 import { Settings } from './settings.js';
 import { rollDie } from './core.js';
 
-const STEPS = ['career', 'skills', 'xp', 'derived', 'motivation', 'gear', 'review'];
+const STEPS = ['start', 'career', 'skills', 'xp', 'derived', 'motivation', 'gear', 'review'];
 
 const XP_TABS = [
   { id: 'characteristics', label: 'Characteristics' },
@@ -27,8 +27,10 @@ const XP_TABS = [
 let xpTab = 'characteristics';
 let skillFilter = '';
 let talentFilter = '';
+let gearFilter = '';
 
 const STEP_HELP = {
+  start: { lede: 'Two ways in: take a character the book already wrote, or build one from scratch.', detail: 'The three ready-made characters come with their characteristics, four skills and their gear already set, but the book prints them with all 70 experience still unspent and no talents or motivation \u2014 so either way you finish the same steps. Building from a career takes a few minutes longer and the choices are all yours.' },
   career: { lede: 'Your background. It decides which skills stay cheap for you, for good.', detail: 'Pick a career, then choose four of its eight skills to start at rank 1. All eight stay cheaper to raise for the rest of this character\'s life, so the four you pick now are a head start rather than a limit.' },
   skills: { lede: 'Choose four of your career\'s eight skills. Each starts at rank 1.', detail: 'There is no wrong answer: the other four are still cheap to buy later.' },
   xp: { lede: 'Every character gets the same 70 experience. Spend it here.', detail: 'Characteristics can only be raised now, at ten times the new rating per step. Skills cost five times the new rank, plus five if they are not career skills, and stop at rank 2 during creation. Talents cost five times their tier and follow the pyramid rule.' },
@@ -99,6 +101,7 @@ function applyPregen(id) {
 // --- legality ---
 export function validateStep(index = step) {
   const name = STEPS[index];
+  if (name === 'start') return null; // either path is legal; the fork itself decides where to go
   if (name === 'career') {
     if (!draft.identity.career) return 'Choose a career first.';
   }
@@ -259,6 +262,10 @@ export function finish() {
   character.state.strain = 0;
   const saved = saveCharacter(character);
   setActiveCharacter(saved.id);
+  // The draft is finished, so the wizard starts clean next time rather than reopening the
+  // saved character at its review step and offering to save it a second time.
+  draft = null;
+  step = 0;
   return { ok: true, character: saved };
 }
 
@@ -278,8 +285,9 @@ export function renderWizard(mount) {
 
   const body = el('div', { class: 'card' });
   ({
-    career: renderCareerStep, skills: renderSkillsStep, xp: renderXpStep, derived: renderDerivedStep,
-    motivation: renderMotivationStep, gear: renderGearStep, review: renderReviewStep
+    start: renderStartStep, career: renderCareerStep, skills: renderSkillsStep, xp: renderXpStep,
+    derived: renderDerivedStep, motivation: renderMotivationStep, gear: renderGearStep,
+    review: renderReviewStep
   })[STEPS[step]](body);
   mount.append(body);
 
@@ -306,6 +314,33 @@ export function renderWizard(mount) {
   mount.append(nav);
 }
 
+/** The fork: a ready-made character, or one built from a career (C-3). */
+function renderStartStep(node) {
+  node.append(el('h3', { text: 'Start from a ready-made character' }));
+  node.append(el('p', { class: 'small muted', text: 'The book prints these three with all 70 experience still unspent and no talents or motivation, so picking one drops you straight into spending it.' }));
+  PREGENS.forEach((p) => {
+    node.append(el('div', { class: 'result' }, [
+      el('div', { class: 'result-head' }, [
+        el('span', { class: 'result-title', text: p.name }),
+        el('span', { class: 'cite', text: careerById(p.career).name })
+      ]),
+      el('div', { class: 'result-body', text: `${Object.entries(p.skills).map(([id, r]) => `${titleCase(id)} ${r}`).join(', ')}. Carries ${p.gear.join(', ')}.` }),
+      el('button', {
+        type: 'button', class: 'secondary', id: `pregen-${p.id}`,
+        text: `Play ${p.name}`,
+        onclick: () => { startWizard({ pregenId: p.id }); showToast(`${p.name} loaded — 70 experience still to spend`); rerender(); }
+      })
+    ]));
+  });
+
+  node.append(el('h3', { text: 'Or build one from a career' }));
+  node.append(el('p', { class: 'small muted', text: 'Eleven careers, about five minutes, and the app checks every rule as you go so an illegal character cannot be saved.' }));
+  node.append(el('button', {
+    type: 'button', class: 'primary', id: 'build-from-career', text: 'Build my own',
+    onclick: () => { step = STEPS.indexOf('career'); rerender(); }
+  }));
+}
+
 function renderCareerStep(node) {
   node.append(el('label', { class: 'small', for: 'char-name', text: 'Name' }));
   node.append(el('input', {
@@ -326,15 +361,6 @@ function renderCareerStep(node) {
     ]));
   });
 
-  node.append(el('h3', { text: 'Or start from a pregen' }));
-  PREGENS.forEach((p) => {
-    node.append(el('button', {
-      type: 'button', class: 'secondary', text: `${p.name}`,
-      onclick: () => { startWizard({ pregenId: p.id }); showToast(`${p.name} loaded — 70 XP still to spend`); rerender(); }
-    }));
-    node.append(document.createTextNode(' '));
-  });
-  node.append(el('p', { class: 'small muted', text: 'Pregens are printed with 70 XP unspent and no talents or Motivation, so they open here rather than as a finished sheet.' }));
 }
 
 function renderSkillsStep(node) {
@@ -523,35 +549,70 @@ function renderGearStep(node) {
   }));
   node.append(pocketRow);
   node.append(el('p', { class: 'small muted', text: `You will start play with ${cash.total} ${Settings.currencyLabel()}: ${cash.unspent} left from the budget${cash.pocket ? ` and ${cash.pocket} in pocket money` : ''}.` }));
-  const catalogue = [
-    ...WEAPONS.filter((w) => w.price).map((w) => ({ ...w, kind: 'weapon' })),
-    ...ARMOUR.filter((a) => a.price).map((a) => ({ ...a, kind: 'armour' })),
-    ...GEAR.filter((g) => g.price).map((g) => ({ ...g, kind: 'gear' }))
+  // 33 priced items in one run is unreadable, so the shop is filtered and grouped the way
+  // the skills and talents steps are (C-2).
+  node.append(el('input', {
+    type: 'search', id: 'gear-filter', placeholder: 'Filter the shop', 'aria-label': 'Filter the shop',
+    value: gearFilter, oninput: (e) => { gearFilter = e.target.value; rerender(); }
+  }));
+  const needle = gearFilter.trim().toLowerCase();
+  const groups = [
+    { id: 'weapon', label: 'Weapons', items: WEAPONS.filter((w) => w.price) },
+    { id: 'armour', label: 'Armour',  items: ARMOUR.filter((a) => a.price) },
+    { id: 'gear',   label: 'Everything else', items: GEAR.filter((g) => g.price) }
   ];
-  catalogue.forEach((item) => {
-    const owned = (draft.inventory.items || []).filter((i) => i.id === item.id).length;
-    node.append(el('div', { class: 'result' }, [
-      el('div', { class: 'result-head' }, [
-        el('span', { class: 'result-title', text: `${item.name}${owned ? ` ×${owned}` : ''}` }),
-        el('span', { class: 'cite', text: `${item.price} · rarity ${item.rarity ?? '—'}` })
-      ]),
-      el('button', {
-        type: 'button', class: 'secondary', text: 'Add',
-        onclick: () => {
-          draft.inventory.items.push({ id: item.id, name: item.name, kind: item.kind, price: item.price, encumbrance: item.encumbrance || 0, qty: 1, equipped: false });
-          rerender();
-        }
-      }),
-      owned ? el('button', {
-        type: 'button', class: 'secondary', text: 'Remove',
-        onclick: () => {
-          const at = draft.inventory.items.findIndex((i) => i.id === item.id);
-          if (at >= 0) draft.inventory.items.splice(at, 1);
-          rerender();
-        }
-      }) : null
-    ]));
+  let matched = 0;
+  groups.forEach((group) => {
+    const items = group.items
+      .filter((i) => !needle || `${i.name} ${i.effect || ''}`.toLowerCase().includes(needle))
+      .map((i) => ({ ...i, kind: group.id }));
+    if (!items.length) return;
+    matched += items.length;
+    const body = el('div', {});
+    items.forEach((item) => {
+      const owned = (draft.inventory.items || []).filter((i) => i.id === item.id).length;
+      const affordable = gearSpent() + item.price <= budget;
+      body.append(el('div', { class: 'result' }, [
+        el('div', { class: 'result-head' }, [
+          el('span', { class: 'result-title', text: `${item.name}${owned ? ` ×${owned}` : ''}` }),
+          el('span', { class: 'cite', text: `${item.price} ${Settings.currencyLabel()} · rarity ${item.rarity ?? '—'}` })
+        ]),
+        el('div', { class: 'result-body', text: group.id === 'weapon'
+          ? `${titleCase(item.skill)}, damage ${item.damage}, crit ${item.crit}, ${item.range} range${item.qualities.length ? `, ${item.qualities.join(', ')}` : ''}.`
+          : group.id === 'armour'
+            ? `Adds ${item.soak} to damage resisted and ${item.defense} to defence. ${item.note || ''}`
+            : (item.effect || '') }),
+        el('button', {
+          type: 'button', class: 'secondary', text: affordable ? 'Add' : 'Too dear',
+          disabled: !affordable, 'aria-label': `Add ${item.name}`,
+          onclick: () => {
+            draft.inventory.items.push({ id: item.id, name: item.name, kind: item.kind, price: item.price, encumbrance: item.encumbrance || 0, qty: 1, equipped: false });
+            rerender();
+          }
+        }),
+        owned ? el('button', {
+          type: 'button', class: 'secondary', text: 'Remove', 'aria-label': `Remove ${item.name}`,
+          onclick: () => {
+            const at = draft.inventory.items.findIndex((i) => i.id === item.id);
+            if (at >= 0) draft.inventory.items.splice(at, 1);
+            rerender();
+          }
+        }) : null
+      ]));
+    });
+    node.append(accordion(`${group.label}`, [body], {
+      key: `wizard-gear-${group.id}`, summary: `${items.length} item${items.length === 1 ? '' : 's'}`,
+      defaultOpen: group.id === 'weapon' || !!needle
+    }));
   });
+  if (!matched) node.append(emptyState('Nothing in the shop matches that.'));
+
+  // What is already in the basket, so it can be undone without hunting the catalogue.
+  const basket = draft.inventory.items || [];
+  if (basket.length) {
+    node.append(el('h3', { text: 'In the basket' }));
+    node.append(el('p', { class: 'small', text: basket.map((i) => i.name).join(', ') }));
+  }
 }
 
 function renderReviewStep(node) {
