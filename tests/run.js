@@ -598,6 +598,12 @@ async function main() {
     await go('#/');
     const charCard = () => page.locator('.result', { hasText: 'Test Runner' }).first();
     check('a character can be deleted from Home', (await charCard().getByRole('button', { name: 'Delete' }).count()) === 1);
+    // The controls sit in a row of their own; the link and the button must not overlap.
+    const openBox = await charCard().getByRole('link', { name: 'Open the sheet' }).boundingBox();
+    const deleteBox = await charCard().getByRole('button', { name: 'Delete' }).boundingBox();
+    check('the sheet link and the delete button do not overlap',
+      deleteBox.x >= openBox.x + openBox.width || deleteBox.y >= openBox.y + openBox.height,
+      `link ${JSON.stringify(openBox)} button ${JSON.stringify(deleteBox)}`);
     await charCard().getByRole('button', { name: 'Delete' }).click();
     await page.waitForSelector('.modal-backdrop');
     check('deleting a character asks first and says it cannot be undone',
