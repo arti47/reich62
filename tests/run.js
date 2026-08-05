@@ -580,6 +580,28 @@ async function main() {
     check('the safety-tools note covers session zero and rule zero',
       /Rule zero/.test(await page.locator('#screen').innerText()));
 
+    // --- deleting a character: confirms first, then removes it everywhere ---
+    await go('#/');
+    const charCard = () => page.locator('.result', { hasText: 'Test Runner' }).first();
+    check('a character can be deleted from Home', (await charCard().getByRole('button', { name: 'Delete' }).count()) === 1);
+    await charCard().getByRole('button', { name: 'Delete' }).click();
+    await page.waitForSelector('.modal-backdrop');
+    check('deleting a character asks first and says it cannot be undone',
+      /cannot be undone/i.test(await page.locator('.modal').innerText()));
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await page.waitForTimeout(80);
+    check('cancelling keeps the character', (await charCard().count()) === 1);
+    await charCard().getByRole('button', { name: 'Delete' }).click();
+    await page.waitForSelector('.modal-backdrop');
+    await page.getByRole('button', { name: 'Delete', exact: true }).last().click();
+    await page.waitForTimeout(120);
+    check('confirming removes the character', (await page.locator('.result', { hasText: 'Test Runner' }).count()) === 0);
+    check('the empty roster offers to create one', /No characters yet/.test(await page.locator('#screen').innerText()));
+    check('deleting the active character clears the resource header',
+      await page.locator('#resource-header').isHidden());
+    await go('#/sheet');
+    check('the sheet falls back to its empty state', /no character yet/i.test(await page.locator('#screen').innerText()));
+
     // 390px as well as 360px.
     await page.setViewportSize({ width: 390, height: 780 });
     for (const label of ['Home', 'Sheet', 'Roll', 'Combat', 'Solo', 'GM', 'Rules', 'Settings']) {
