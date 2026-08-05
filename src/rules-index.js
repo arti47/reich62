@@ -5,6 +5,7 @@ import * as D from '../data.js';
 import * as N from '../data-npcs.js';
 import * as M from '../data-monsters.js';
 import { Settings } from './settings.js';
+import { plain as stripMarkers } from './core.js';
 
 /** Which part of the books an entry belongs to, so the library can group rather than
  *  present 547 rows in one run. */
@@ -32,7 +33,8 @@ export function sectionFor(cite) {
 /** Entries read as sentences: the title names the thing, the body is a full sentence
  *  explaining it, and the citation says where it comes from. */
 const entry = (title, body, cite, extra = {}) => {
-  let text = String(body).trim();
+  let text = stripMarkers(String(body));
+  title = stripMarkers(String(title));
   if (text && !/[.!?)]$/.test(text)) text += '.';
   if (text) text = text.charAt(0).toUpperCase() + text.slice(1);
   return { title, body: text, cite, section: sectionFor(cite), ...extra };
@@ -86,21 +88,29 @@ export function buildIndex() {
 
   out.push(entry('Outnumbering', D.MULTIPLE_ATTACKERS.guidance.join(' '), '§5C\'\''));
   D.RANGE_BANDS.forEach((r) => out.push(entry(`${r.name} range`, r.note, '§5D')));
+  D.MOVEMENT_COSTS.forEach((m) => out.push(entry(
+    `Moving from ${m.from} to ${m.to}`,
+    `${m.maneuvers} maneuver${m.maneuvers === 1 ? '' : 's'}, and the same again coming back. Difficult terrain doubles it`,
+    '§5D')));
   D.ENVIRONMENT.forEach((e) => out.push(entry(e.name, e.summary, '§5E')));
-  out.push(entry('Encumbrance', `Threshold 5 + Brawn. ${D.ENCUMBRANCE.overThreshold} ${D.ENCUMBRANCE.severeOverThreshold}`, '§5F'));
+  out.push(entry('Encumbrance', `Threshold ${D.ENCUMBRANCE.thresholdBase} + Brawn. ${D.ENCUMBRANCE.overThreshold} ${D.ENCUMBRANCE.severeOverThreshold}`, '§5F'));
   D.RECOVERY.methods.forEach((m) => out.push(entry(`Recovery: ${m.name}`, `${m.restores}. Limit: ${m.limit}.`, m.cite || '§5G', {})));
   out.push(entry('Two-weapon combat', D.COMBAT_VARIANTS.twoWeapon.steps.join(' '), '§5H'));
-  out.push(entry('Unarmed combat', `Damage equals Brawn, Crit 5, engaged, Knockdown. ${D.COMBAT_VARIANTS.unarmed.note}`, '§5H'));
+  out.push(entry('Unarmed combat', `A ${titleCase(D.COMBAT_VARIANTS.unarmed.skill)} attack at ${D.COMBAT_VARIANTS.unarmed.range} range: damage equals ${titleCase(D.COMBAT_VARIANTS.unarmed.damage)}, critical rating ${D.COMBAT_VARIANTS.unarmed.crit}, ${D.COMBAT_VARIANTS.unarmed.qualities.join(', ')}. ${D.COMBAT_VARIANTS.unarmed.note}`, '§5H'));
   D.FALLING.forEach((f) => out.push(entry(`Falling: ${f.band}`, `Wounds ${f.wounds || f.woundsFormula}, strain ${f.strain}${f.criticalModifier ? `, Critical Injury roll +${f.criticalModifier}` : ''}.`, '§5I')));
+  out.push(entry('Falling: soak and mitigation', `${D.FALLING_RULES.soak} ${D.FALLING_RULES.mitigation}`, '§5I'));
   out.push(entry('Suffocation', `${D.SUFFOCATION.strainPerRound} strain per round. ${D.SUFFOCATION.escalation}`, '§5I'));
   D.SILHOUETTES.forEach((s) => out.push(entry(
     `Size ${s.value}`,
-    `${s.examples}. A target two or more sizes larger is one step easier to hit, two or more sizes smaller one step harder`,
+    `${s.examples}. A target ${D.SILHOUETTE_RULE.largerTarget.differenceAtLeast} or more sizes larger is `
+      + `${Math.abs(D.SILHOUETTE_RULE.largerTarget.difficultySteps)} step easier to hit, `
+      + `${D.SILHOUETTE_RULE.smallerTarget.differenceAtLeast} or more sizes smaller `
+      + `${Math.abs(D.SILHOUETTE_RULE.smallerTarget.difficultySteps)} step harder`,
     '§5J')));
 
   D.DERIVED_FORMULAS.forEach((f) => out.push(entry(`Derived: ${f.name}`, `${f.formula}${f.note ? '. ' + f.note : ''}`, f.cite, {})));
-  out.push(entry('XP costs', `Characteristic ${'10 × new rating'} (creation only) · career skill 5 × new rank · non-career skill 5 × new rank + 5 · talent 5 × tier. ${D.XP_COSTS.gates.join(' ')}`, '§7'));
-  out.push(entry('Story Points', `${D.STORY_POINTS.flow} ${D.STORY_POINTS.reset} Player pool starts at 1 per PC; the GM pool starts at 0.`, '§8', {}));
+  out.push(entry('XP costs', `Characteristic costs ${D.XP_COSTS.characteristic.formula} and can only be bought at creation · career skill ${D.XP_COSTS.careerSkill.formula} · non-career skill ${D.XP_COSTS.nonCareerSkill.formula} · talent ${D.XP_COSTS.talent.formula}. ${D.XP_COSTS.gates.join(' ')}`, '§7'));
+  out.push(entry('Story Points', `${D.STORY_POINTS.flow} ${D.STORY_POINTS.reset} The player pool starts at ${D.STORY_POINTS.startingPlayerPoolPerPc} per PC; the GM pool starts at ${D.STORY_POINTS.startingGmPool}.`, '§8', {}));
   D.STORY_POINTS.playerSpends.forEach((s) => out.push(entry(`Story Point spend: ${s.label}`, 'Player pool.', '§8')));
 
   D.CRITICAL_INJURIES.forEach((c) => out.push(entry(`Critical Injury ${c.min}–${c.max === 9999 ? '+' : c.max}: ${c.name}`, `${c.severity}. ${c.effect}`, '§9')));
@@ -128,7 +138,7 @@ export function buildIndex() {
   N.ADVERSARY_TIERS.forEach((t) => out.push(entry(`Adversary tier: ${t.name}`, `${t.summary} ${t.rules.join(' ')}`, t.cite)));
   out.push(entry('Adversary talent', N.ADVERSARY_TALENT.summary, '§12C'));
   N.ADVERSARY_ABILITIES.forEach((a) => out.push(entry(a.name, a.summary, a.cite, {})));
-  out.push(entry('NPC quick-generation', `Roll d10 for archetype, then d10 for disposition, then build with the §12C recipes. ${N.NPC_QUICKGEN.tierMapping}`, '§20', {}));
+  out.push(entry('NPC quick-generation', `Roll ${N.NPC_QUICKGEN.die} for archetype, then ${N.NPC_QUICKGEN.die} for disposition, then build with the adversary tier recipes. ${N.NPC_QUICKGEN.tierMapping}`, '§20', {}));
 
   D.CREATION_STEPS.forEach((s) => out.push(entry(`Creation: ${s.name}`, s.summary, s.cite, s.ruling ? { badge: 'house aid', badgeClass: 'badge-house' } : {})));
   D.CAREERS.forEach((c) => out.push(entry(
@@ -144,6 +154,7 @@ export function buildIndex() {
     g.name,
     `${g.effect} Encumbrance ${g.encumbrance}${g.price ? `, costing ${g.price}` : ''}${g.rarity !== null && g.rarity !== undefined ? `, rarity ${g.rarity}` : ''}`,
     '§15')));
+  out.push(entry('Carrying a weapon', D.WEAPON_NOTE, '§15C'));
   D.WEAPONS.forEach((w) => out.push(entry(
     w.name,
     `Used with ${titleCase(w.skill)} at ${w.range} range. Damage ${w.damage}, critical rating ${w.crit}, encumbrance ${w.encumbrance}. ${w.qualities.length ? `Qualities: ${w.qualities.join(', ')}` : 'It has no special qualities'}`,
@@ -152,6 +163,7 @@ export function buildIndex() {
     a.name,
     `Adds ${a.soak} to damage resisted and ${a.defense} to defence, for ${a.encumbrance} encumbrance. ${a.note}`,
     '§15D')));
+  out.push(entry('Owning a vehicle', D.VEHICLE_NOTE, '§15E'));
   D.VEHICLES.forEach((v) => out.push(entry(
     v.name,
     `Size ${v.silhouette}, top speed ${v.speed}, handling ${v.handling >= 0 ? '+' : ''}${v.handling}. It takes ${v.hull} hull trauma and ${v.systemStrain} system strain before it stops, behind ${v.armour} armour`,
@@ -168,6 +180,8 @@ export function buildIndex() {
   D.SKILL_EXAMPLES.forEach((s) => out.push(entry(`Using ${titleCase(s.skill)}`, s.example, '§26')));
   D.QUICK_REFERENCE.sections.forEach((s) => out.push(entry(`Quick reference: ${s.title}`, s.body, '§30')));
   D.CONDITIONS.forEach((c) => out.push(entry(c.name, c.effect, c.cite || '§3.9', c.inferred ? { badge: 'inferred', badgeClass: 'badge-inferred' } : {})));
+  D.SHEET_FIELDS.groups.forEach((g) => out.push(entry(
+    `On the character sheet: ${g.name}`, g.fields.join('; '), '§16A')));
 
   M.BESTIARY.forEach((e) => out.push(entry(`${e.name} (${e.kind})`, `${e.hook}${e.woundThreshold ? ` Wound Threshold ${e.woundThreshold}.` : ''}${e.woundThresholdPerMember && e.kind === 'minion' ? ` Wound Threshold ${e.woundThresholdPerMember} per member.` : ''}`, e.cite)));
   M.ENCOUNTER_BLOCKS.forEach((b) => out.push(entry(b.name, `${b.hook} ${b.consequence}`, b.cite)));
@@ -179,8 +193,15 @@ export function buildIndex() {
 const titleCase = (v) => String(v).charAt(0).toUpperCase() + String(v).slice(1);
 const listWords = (arr) => arr.length > 1 ? `${arr.slice(0, -1).join(', ')} and ${arr[arr.length - 1]}` : arr[0];
 
-const COMBAT_TEXT = () => 'Everyone rolls a Simple Cool or Vigilance check for Initiative; rank by uncancelled Success. That produces slots owned by the PC or NPC side, and each round the owning side picks who fills each slot.';
-const CALLED = () => 'Declared before the roll and aimed with the Aim maneuver\'s targeted option; on a hit, three Advantage disables the target or their gear instead of dealing damage.';
+// Both are assembled from the data tables rather than restated (§13.2).
+const COMBAT_TEXT = () => {
+  const init = D.COMBAT_SEQUENCE.initiative;
+  return `Everyone rolls a ${titleCase(init.difficulty)} ${init.skills.map(titleCase).join(' or ')} check for Initiative. `
+    + `${init.ranking} ${init.choose} ${D.COMBAT_SEQUENCE.round.join(' ')}`;
+};
+const CALLED = () => [
+  D.CALLED_SHOTS.declare, D.CALLED_SHOTS.aimPenalty, D.CALLED_SHOTS.payoff, D.CALLED_SHOTS.limit
+].join(' ');
 
 export function search(index, query) {
   const q = String(query || '').trim().toLowerCase();

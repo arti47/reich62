@@ -2,7 +2,7 @@
 // and every rollable reference table (§3.21, B§6–B§7). Gated behind the gmScreen flag.
 
 import { el, clear, titleCase, rollDie } from './core.js';
-import { showToast, modal, panel, subTabs, emptyState, confirmModal } from './ui.js';
+import { showToast, modal, panel, subTabs, accordion, emptyState, confirmModal } from './ui.js';
 import { PANELS, label as termLabel } from './help.js';
 import {
   CRITICAL_INJURIES, ENCOUNTER_SIZING, DIFFICULTIES, SPEND_TABLES, HEAT, DREAD_CHECKS,
@@ -12,6 +12,7 @@ import { ADVERSARY_TIERS, ADVERSARY_ABILITIES, NPC_QUICKGEN, ADVERSARY_TALENT } 
 import { BESTIARY, ENCOUNTER_BLOCKS, RANDOM_ENCOUNTERS, MINION_GROUPS } from '../data-monsters.js';
 import { isVeryChallenging, minionGroupWoundThreshold, adversaryAbility } from './rules.js';
 import { addFromBestiary, createTask, addRecipeNpc, papersCheckReflex } from './combat.js';
+import { setUpEncounterBlock } from './roller.js';
 import { activeCharacter } from './store.js';
 import { getCell, saveCell } from './store.js';
 import { applyCellHeat, applyPersonalHeat } from './heat.js';
@@ -21,7 +22,7 @@ const filters = { tier: 'all', heatOnly: false, challengingOnly: false, query: '
 /** Papers-Check Reflex outside a running encounter: the ability's Heat effect applies even
  *  when the guards are not on the combat tracker (B§2). */
 function applyCellHeatless(character) {
-  const applied = applyPersonalHeat(character, 1);
+  const applied = applyPersonalHeat(character, 1, 'Papers-Check Reflex at a checkpoint');
   return { applied, note: `Papers-Check Reflex: Personal Heat ${applied.before} → ${applied.after}.` };
 }
 
@@ -33,6 +34,16 @@ const GM_TABS = [
   { id: 'build',      label: 'Build' }
 ];
 let gmTab = 'bestiary';
+
+/** Arriving at the GM screen opens it at Opponents with the browser unfiltered, rather than
+ *  wherever the last visit left it (B-6). */
+export function resetGmTab() {
+  gmTab = 'bestiary';
+  filters.tier = 'all';
+  filters.heatOnly = false;
+  filters.challengingOnly = false;
+  filters.query = '';
+}
 
 export function renderGm(mount) {
   clear(mount);
@@ -92,7 +103,32 @@ function gmBestiary(mount, rerender) {
       return true;
     });
     list.append(el('p', { class: 'small muted', text: `${entries.length} of ${BESTIARY.length} entries` }));
-    entries.forEach((entry) => {
+    // Grouped by tier and collapsed, the way the rules library groups its entries, so 28
+    // full stat blocks do not arrive as one 6,500px run (B-5).
+    const groups = [
+      { id: 'minion', label: 'Minions' }, { id: 'rival', label: 'Rivals' },
+      { id: 'nemesis', label: 'Nemeses' }, { id: 'animal', label: 'Animals' }
+    ];
+    let opened = 0;
+    groups.forEach((group) => {
+      const inGroup = entries.filter((e) => e.kind === group.id);
+      if (!inGroup.length) return;
+      const body = el('div', {});
+      inGroup.forEach((entry) => body.append(entryCard(entry)));
+      const open = !!q || opened === 0;
+      opened += 1;
+      list.append(el('details', { class: 'accordion', open }, [
+        el('summary', {}, [
+          el('span', { class: 'accordion-title', text: group.label }),
+          el('span', { class: 'accordion-summary', text: String(inGroup.length) })
+        ]),
+        body
+      ]));
+    });
+  }
+
+  function entryCard(entry) {
+    {
       const stats = entry.abstract
         ? 'Abstract — no combat stats; resolved as an Oracle roll.'
         : `Soak ${entry.soak ?? '—'} · Def ${(entry.defense || {}).melee ?? 0}/${(entry.defense || {}).ranged ?? 0} · WT ${entry.woundThreshold ?? `${entry.woundThresholdPerMember} per member`}${entry.strainThreshold ? ` · ST ${entry.strainThreshold}` : ''}${entry.adversary ? ` · Adversary ${entry.adversary}` : ''}`;
@@ -113,8 +149,8 @@ function gmBestiary(mount, rerender) {
           onclick: () => { const r = addFromBestiary(entry.id); showToast(r.ok ? `${entry.name} added to the tracker` : r.reason); }
         })
       ]);
-      list.append(card);
-    });
+      return card;
+    }
   }
   drawList();
 }
@@ -136,6 +172,19 @@ function gmEncounters(mount, rerender) {
       card.append(el('button', {
         type: 'button', class: 'secondary', text: 'Start the dragnet tracker',
         onclick: () => { createTask({ name: block.name, kind: 'dragnet', target: 4 }); showToast('Dragnet started on the progress tracker'); }
+      }));
+    } else {
+      // The other three blocks print their skills and opposition, so they can be deployed
+      // rather than read out (A-19).
+      card.append(el('button', {
+        type: 'button', class: 'secondary', id: `deploy-${block.id}`,
+        text: 'Set this check up on the Roll screen',
+        onclick: () => {
+          const result = setUpEncounterBlock(block.id);
+          if (!result.ok) { showToast(result.reason); return; }
+          showToast(`${block.name}: ${titleCase(result.skill)} against ${titleCase(result.opposing)}`);
+          location.hash = '#/roll';
+        }
       }));
     }
     blocks.append(card);
@@ -205,8 +254,9 @@ function gmTables(mount, rerender) {
 function gmBuild(mount, rerender) {
   // --- NPC builder from the §12C recipes ---
   const builder = panel('Build an opponent', PANELS.gmBuild, []);
+  const tierBody = el('div', {});
   ADVERSARY_TIERS.forEach((tier) => {
-    builder.append(el('div', { class: 'result' }, [
+    tierBody.append(el('div', { class: 'result' }, [
       el('div', { class: 'result-head' }, [
         el('span', { class: 'result-title', text: tier.name }),
         el('span', { class: 'cite', text: 'tier' })
@@ -216,15 +266,32 @@ function gmBuild(mount, rerender) {
       el('p', { class: 'small', text: tier.threatGuide || '' })
     ]));
   });
+  builder.append(accordion('How the three tiers work', [tierBody], {
+    key: 'gm-tiers', summary: ADVERSARY_TIERS.map((t) => t.name).join(', ')
+  }));
   builder.append(el('p', { class: 'small', text: `${ADVERSARY_TALENT.name}: ${ADVERSARY_TALENT.summary}` }));
-  const abilityList = el('div');
-  ADVERSARY_ABILITIES.forEach((ability) => {
-    abilityList.append(el('div', { class: 'result' }, [
-      el('div', { class: 'result-head' }, [
-        el('span', { class: 'result-title', text: ability.name }),
-        el('span', { class: 'cite', text: ability.source === 'bestiary' ? 'bestiary' : 'core rules' })
+  // The 21 abilities are grouped by which book defines them and collapsed, the way the
+  // Opponents tab groups its stat blocks (B-10).
+  const abilityList = el('div', { id: 'ability-groups' });
+  [['manual', 'From the core rules'], ['bestiary', 'From the bestiary']].forEach(([source, label], index) => {
+    const inGroup = ADVERSARY_ABILITIES.filter((a) => a.source === source);
+    if (!inGroup.length) return;
+    const body = el('div', {});
+    inGroup.forEach((ability) => {
+      body.append(el('div', { class: 'result' }, [
+        el('div', { class: 'result-head' }, [
+          el('span', { class: 'result-title', text: ability.name }),
+          el('span', { class: 'cite', text: ability.type || '' })
+        ]),
+        el('div', { class: 'result-body', text: ability.summary })
+      ]));
+    });
+    abilityList.append(el('details', { class: 'accordion', open: index === 0 }, [
+      el('summary', {}, [
+        el('span', { class: 'accordion-title', text: label }),
+        el('span', { class: 'accordion-summary', text: String(inGroup.length) })
       ]),
-      el('div', { class: 'result-body', text: ability.summary })
+      body
     ]));
   });
   // Build and save a stat block from the recipes. Recipe-built NPCs derive their stats and

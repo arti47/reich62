@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- The installed app is a fixed-layout tool, not a document: pinch-zoom only ever shifted
+     the sheet sideways mid-session, so the viewport is locked. Every screen is already
+     tested for legibility at 360px and honours the system text size. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="description" content="Player-character companion for REICH '62 — creation, tracking, narrative dice, Heat.">
 <meta name="theme-color" content="#12100E">
 <title>REICH '62 Player</title>

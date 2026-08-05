@@ -423,6 +423,22 @@ th { font-family: var(--font-head); text-transform: uppercase; font-size: 0.7rem
   white-space: nowrap;
 }
 
+/* The story-point chip is the way into the spend list, so it reads as the same chip as its
+   neighbours rather than inheriting the button styling. */
+button.chip-button {
+  font: inherit;
+  font-size: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: normal;
+  border-color: var(--brass);
+  min-height: 0;
+  margin: 0;
+}
+button.chip-button:hover,
+button.chip-button:focus-visible { border-color: var(--ink); }
+
 label > select, label > input { margin-top: 0.2rem; }
 textarea { min-height: 5rem; }
 
@@ -511,7 +527,7 @@ details.accordion > *:last-child { padding-bottom: 0.6rem; }
   padding: 0.6rem 0.7rem;
   margin: 0.6rem 0;
 }
-.outcome h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.3rem; }
+.outcome h2, .outcome h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.3rem; }
 .outcome ul { margin: 0; padding-left: 1.1rem; }
 .outcome-warn { border-left-color: var(--oxblood); }
 
@@ -595,7 +611,7 @@ details.accordion > *:last-child { padding-bottom: 0.6rem; }
 .rule-section > summary { font-family: var(--font-head); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.8rem; }
 .rule-entry { padding: 0.5rem 0; border-bottom: 1px solid var(--rule); }
 .rule-entry:last-child { border-bottom: 0; }
-.rule-entry h4 { margin: 0 0 0.15rem; font-size: 0.95rem; font-family: var(--font-body); font-weight: 600; }
+.rule-entry h3 { margin: 0 0 0.15rem; font-size: 0.95rem; font-family: var(--font-body); font-weight: 600; }
 .rule-entry p { margin: 0; font-size: 0.9rem; color: var(--ink-soft); }
 .rule-entry .cite { display: inline-block; margin-top: 0.2rem; }
 
@@ -637,3 +653,51 @@ details.accordion > *:last-child { padding-bottom: 0.6rem; }
 .die-red    { border-left-color: var(--oxblood); }
 .die-blue   { border-left-color: var(--focus); }
 .die-black  { border-left-color: var(--ink-soft); }
+
+
+/* --- printing (C-6) ---
+   The summary tab is meant to become a paper backup, so printing drops the app chrome and
+   the sub-tab bar and leaves the sheet itself on the page. */
+@media print {
+  .app-header, .bottom-nav, .resource-header, .toast-region, #modal-root,
+  .skip-link, .subtabs, .howto, #print-summary { display: none !important; }
+  body { background: #fff; color: #000; }
+  .screen { padding: 0; }
+  .card, #character-summary {
+    border: 0; background: none; box-shadow: none; padding: 0; margin: 0 0 0.6rem;
+    break-inside: avoid;
+  }
+  #character-summary h3 { break-after: avoid; }
+  .stat { border: 1px solid #999; }
+  table { border-collapse: collapse; }
+  th, td { border-bottom: 1px solid #ccc; }
+}
+
+
+/* The Everything seat shows more than five screens, so the bar drops the labels and gives
+   each glyph the whole tab (B-7). The accessible name rides on the link itself. */
+.bottom-nav.nav-glyph-only a { padding: 0.5rem 0; }
+.bottom-nav.nav-glyph-only .nav-glyph { font-size: 1.3rem; }
+
+
+/* --- the update prompt ---
+   A persistent bar, not a timed toast: an update that arrives while the phone is pocketed
+   has to still be there when it comes back out. It sits above the bottom nav. */
+.update-bar {
+  position: fixed;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: calc(var(--nav-height, 3.5rem) + 0.5rem + env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--brass);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+.update-bar .update-text { flex: 1 1 100%; font-size: 0.9rem; }
+.update-bar button { margin: 0; }

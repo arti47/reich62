@@ -308,7 +308,9 @@ Attacking a target 2+ silhouettes larger than you: −1 difficulty. Attacking a 
 
 ## 6. Derived Attributes
 
-
+**Human base Wound Threshold: 8. Human base Strain Threshold: 10.** 🏷️ *(Errata R-1 — an
+inferred value: neither source printed a base, and this pair is the one the §16 pregens agree
+on.)*
 
 - **Wound Threshold** = species/archetype base + Brawn (fixed at character creation; only raised afterward via talents such as Toughened).
 - **Strain Threshold** = species/archetype base + Willpower (fixed at creation; raised via talents such as Grit).
@@ -880,7 +882,8 @@ Roll 1d10 (a Genesys Ability die read 1–10, or the numeral on any d10) on **Ac
 ## 16. Pre-Generated Characters
 
 **Anna Voss — Resistance Runner** (human)
-Br2 Ag3 In2 Cu3 Wi2 Pr2 | Skulduggery 2, Stealth 2, Streetwise 2, Cool 1 | Wound 11, Strain 12, Soak 2
+Br2 Ag3 In2 Cu3 Wi2 Pr2 | Skulduggery 2, Stealth 2, Streetwise 2, Cool 1 | Wound 10, Strain 12, Soak 2
+*(Errata R-1: printed Wound 11 was an erratum — 8 + Brawn 2 = 10.)*
 Gear: forged papers (good), lockpicks, P38.
 
 **Klaus Reiniger — SD Agent (defecting)** (human)

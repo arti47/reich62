@@ -8,12 +8,16 @@ import { showToast, renderTally, modal, panel, accordion, outcomeBox, numberStep
 import { PANELS, label as termLabel, gloss } from './help.js';
 import {
   SKILLS, DIFFICULTIES, SPEND_TABLES, STORY_POINTS, CRITICAL_INJURY_RULES, DIE_FACES,
-  RANGED_DIFFICULTY_BY_RANGE, COMBAT_CHECK_PROCEDURE, DICE
+  RANGED_DIFFICULTY_BY_RANGE, COMBAT_CHECK_PROCEDURE, DICE, SILHOUETTE_RULE,
+  CALLED_SHOTS, COMBAT_VARIANTS, SOCIAL_ENCOUNTERS, WEAPONS, RANGE_BANDS
 } from '../data.js';
 import {
   skill as skillById, buildPool, buildOpposedDifficulty, modifyPool, difficultyDice,
-  criticalInjuryFor, criticalInjuryTotal
+  criticalInjuryFor, criticalInjuryTotal, attackDifficulty, rangedDifficultyFor,
+  weaponBaseDamage, weaponPierce, weapon as weaponById, encounterBlock, stepDifficulty
 } from './rules.js';
+import { getCombat } from './store.js';
+import { damageCombatant } from './combat.js';
 import { activeCharacter, getCell, saveCell, saveCharacter } from './store.js';
 import { soak as soakOf, woundThreshold, strainThreshold, criticalModifier } from './derived.js';
 import { encumbranceState } from './derived.js';
@@ -22,7 +26,7 @@ import { Settings } from './settings.js';
 import { STORAGE_PREFIX } from './core.js';
 
 /** One line per symbol, so the entry pad doubles as the legend. */
-const SYMBOL_HELP = {
+export const SYMBOL_HELP = {
   success: 'Cancels a failure. One left over means the check works.',
   advantage: 'Cancels a threat. Left over, you spend it on something good.',
   triumph: 'Never cancels, always happens. The best result on the dice.',
@@ -35,6 +39,8 @@ const SYMBOL_ORDER = ['success', 'advantage', 'triumph', 'failure', 'threat', 'd
 
 const LOG_KEY = STORAGE_PREFIX + 'rollLog';
 const LOG_CAP = 100;
+const LOG_PAGE = 12;
+let logShown = LOG_PAGE;
 
 export function readLog() {
   try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch { return []; }
@@ -80,6 +86,9 @@ export const state = {
   lastOutcome: null,
   context: 'combat',
   spendTriumphOnHeat: false,
+  // Set when the check came from a black-market purchase, so the house rule's exposure
+  // trigger applies on a bad failure.
+  blackMarket: false,
   // Situational modifiers the manual defines (§5E, §5J) and the two Story Point die
   // modifications (§8), all applied in the §2.4 modification order.
   targetAdversary: 0,      // §12C — the Adversary talent upgrades checks against that NPC
@@ -87,6 +96,20 @@ export const state = {
   concealmentRole: 'none', // 'hiding' | 'observing' | 'none'
   cover: false,            // §5E — ranged defence 1 plus a Boost on checks from behind it
   silhouetteDelta: 0,      // §5J — target silhouette minus your own
+  calledShot: null,        // §10A — how many aim maneuvers were spent, or null for no called shot
+  twoWeapon: false,        // §5H — the off-hand attack raises the difficulty a step
+  audienceSize: null,      // §11 — group influence sets the difficulty from the crowd's size
+  // The attack chain (§5B): a weapon, a range band and a target on the combat tracker.
+  // With a weapon chosen the pool takes its skill, and the band sets the difficulty; with a
+  // target chosen the soak, defence and Adversary rank come off that combatant.
+  weaponId: null,
+  rangeBand: null,
+  targetId: null,
+  // Which of the target's skills is resisting, on an opposed check (§3A).
+  opposedSkillId: 'discipline',
+  // Dice a tapped talent has put into this check, and the talents that did it (§12A).
+  talentDice: { boost: 0, setback: 0 },
+  talentNotes: [],
   // When `advancedAutomation` is off the automatic dice are shown as confirmable rows
   // rather than applied silently; the flag turns the prompting off.
   autoDice: { conditions: true, encumbrance: true, heat: true },
@@ -118,8 +141,27 @@ export function assemblePool(character = activeCharacter()) {
     pool.difficulty = opp.difficulty;
     pool.challenge = opp.challenge;
     notes.push('Difficulty side built from the opponent\'s rating; only the active character rolls');
+  } else if (state.audienceSize) {
+    // Group influence: the crowd's size sets the difficulty outright (§11).
+    const row = SOCIAL_ENCOUNTERS.groupInfluenceLadder.find((g) => g.audience === state.audienceSize);
+    pool.difficulty = difficultyDice(row ? row.difficulty : state.difficultyId);
+    notes.push(`Swaying ${state.audienceSize} people sets the difficulty at ${titleCase(row ? row.difficulty : state.difficultyId)}`);
   } else {
     pool.difficulty = difficultyDice(state.difficultyId);
+  }
+
+  // Two-weapon fighting takes the higher difficulty and raises it one more step (§5H).
+  if (state.twoWeapon) {
+    modifications.push({ stage: 'add', die: 'difficulty', count: COMBAT_VARIANTS.twoWeapon.extraDifficultySteps });
+    notes.push(`Fighting with two weapons: ${COMBAT_VARIANTS.twoWeapon.extraDifficultySteps} more difficulty, and the pool uses the lower of the two skills and characteristics`);
+  }
+
+  // A called shot aims at something specific and pays for it in Setback dice (§10A).
+  if (state.calledShot !== null) {
+    const aim = CALLED_SHOTS.setbackByAim.find((a) => a.aimManeuvers === state.calledShot)
+      || CALLED_SHOTS.setbackByAim[0];
+    modifications.push({ stage: 'add', die: 'setback', count: aim.setback });
+    notes.push(`${aim.label}: ${aim.setback} Setback, and ${CALLED_SHOTS.payoffAdvantageCost} Advantage on a hit disables the target instead of wounding them`);
   }
 
   // Environmental and size modifiers are properties of the situation, not the character,
@@ -141,13 +183,15 @@ export function assemblePool(character = activeCharacter()) {
     modifications.push({ stage: 'upgrade', die: 'difficulty', count: state.targetAdversary });
     notes.push(`Target has Adversary ${state.targetAdversary}: the difficulty is upgraded ${state.targetAdversary} time(s)`);
   }
-  // Silhouette (§5J): two or more larger is one step easier, two or more smaller one harder.
-  if (state.silhouetteDelta >= 2) {
-    modifications.push({ stage: 'remove', die: 'difficulty', count: 1 });
-    notes.push('Target is 2 or more silhouettes larger: one difficulty less');
-  } else if (state.silhouetteDelta <= -2) {
-    modifications.push({ stage: 'add', die: 'difficulty', count: 1 });
-    notes.push('Target is 2 or more silhouettes smaller: one difficulty more');
+  // Silhouette (§5J): the thresholds and the direction both come from SILHOUETTE_RULE.
+  const bigger = SILHOUETTE_RULE.largerTarget;
+  const smaller = SILHOUETTE_RULE.smallerTarget;
+  if (state.silhouetteDelta >= bigger.differenceAtLeast) {
+    modifications.push({ stage: 'remove', die: 'difficulty', count: Math.abs(bigger.difficultySteps) });
+    notes.push(`Target is ${bigger.differenceAtLeast} or more sizes larger: ${Math.abs(bigger.difficultySteps)} difficulty less`);
+  } else if (state.silhouetteDelta <= -smaller.differenceAtLeast) {
+    modifications.push({ stage: 'add', die: 'difficulty', count: Math.abs(smaller.difficultySteps) });
+    notes.push(`Target is ${smaller.differenceAtLeast} or more sizes smaller: ${Math.abs(smaller.difficultySteps)} difficulty more`);
   }
 
   if (character) {
@@ -174,6 +218,12 @@ export function assemblePool(character = activeCharacter()) {
     }
   }
 
+  // Dice a talent has contributed, added before the upgrade stage like any other addition.
+  if (state.talentDice.boost) { modifications.push({ stage: 'add', die: 'boost', count: state.talentDice.boost }); }
+  if (state.talentDice.setback > 0) { modifications.push({ stage: 'add', die: 'setback', count: state.talentDice.setback }); }
+  if (state.talentDice.setback < 0) { modifications.push({ stage: 'remove', die: 'setback', count: -state.talentDice.setback }); }
+  state.talentNotes.forEach((n) => notes.push(n));
+
   // Upgrades and downgrades resolve after every addition, per the modification order (§2.4).
   if (state.upgradeAbility) { modifications.push({ stage: 'upgrade', die: 'ability', count: state.upgradeAbility }); notes.push(`${state.upgradeAbility} Ability upgraded to Proficiency`); }
   if (state.upgradeDifficulty) { modifications.push({ stage: 'upgrade', die: 'difficulty', count: state.upgradeDifficulty }); notes.push(`${state.upgradeDifficulty} Difficulty upgraded to Challenge`); }
@@ -181,6 +231,129 @@ export function assemblePool(character = activeCharacter()) {
   if (state.downgradeDifficulty) { modifications.push({ stage: 'downgrade', die: 'challenge', count: state.downgradeDifficulty }); notes.push(`${state.downgradeDifficulty} Challenge downgraded to Difficulty`); }
 
   return { pool: modifyPool(pool, modifications), notes, modifications };
+}
+
+// --- the attack chain (§5B): weapon → range → target → damage ---
+
+/** Every weapon, with the ones this character carries first and flagged. The whole list
+ *  stays reachable: a GM rolling for an NPC, or a player who has not logged their gear,
+ *  still needs to pick up a rifle without going shopping first. */
+export function availableWeapons(character) {
+  const carriedIds = new Set((character ? character.inventory.items || [] : [])
+    .filter((i) => i.kind === 'weapon').map((i) => i.id));
+  const rank = (w) => (carriedIds.has(w.id) ? 0 : w.price === null ? 1 : 2);
+  return WEAPONS
+    .map((w) => ({ ...w, carried: carriedIds.has(w.id) }))
+    .sort((a, b) => rank(a) - rank(b));
+}
+
+/** The chosen target on the combat tracker, if there is one. */
+export function currentTarget() {
+  if (!state.targetId) return null;
+  return getCombat().combatants[state.targetId] || null;
+}
+
+/** Set the weapon, taking its skill and letting the range band set the difficulty (§5B).
+ *  The difficulty picker is written to rather than silently overridden, so what the screen
+ *  shows is what the pool used. */
+export function chooseWeapon(weaponId) {
+  state.weaponId = weaponId || null;
+  const def = weaponById(state.weaponId);
+  if (!def) { state.rangeBand = null; return null; }
+  state.skillId = def.skill;
+  if (!state.rangeBand) state.rangeBand = def.range;
+  state.difficultyId = attackDifficulty(def, state.rangeBand);
+  return def;
+}
+
+export function chooseRangeBand(band) {
+  state.rangeBand = band || null;
+  const def = weaponById(state.weaponId);
+  if (def) state.difficultyId = attackDifficulty(def, state.rangeBand);
+  return state.difficultyId;
+}
+
+/** Point the check at a combatant: their Adversary rank feeds the pool, their soak the
+ *  damage, and — on an opposed check — their own rating builds the difficulty side (§3A). */
+export function chooseTarget(combatantId) {
+  state.targetId = combatantId || null;
+  const target = currentTarget();
+  state.targetAdversary = target ? (target.adversary || 0) : 0;
+  if (target && state.opposed) applyTargetOpposition();
+  return target;
+}
+
+/** The best rating the target has for resisting this check, read off their loaded stat
+ *  block. Printed NPC stats are used as printed and never recomputed (R-15). */
+export function targetOpposition(skillId = state.opposedSkillId) {
+  const target = currentTarget();
+  if (!target) return null;
+  const skills = target.skills || {};
+  const chars = target.characteristics || {};
+  const def = skillById(skillId);
+  const rank = Number(skills[skillId] || 0);
+  const characteristic = def ? Number(chars[def.characteristic] || 0) : 0;
+  return { skillId, rank, characteristic, name: target.name, skillName: def ? def.name : skillId };
+}
+
+/** Copy that rating into the opposed fields, which stay editable afterwards. */
+export function applyTargetOpposition(skillId = state.opposedSkillId) {
+  const opp = targetOpposition(skillId);
+  if (!opp) return null;
+  state.opposedSkillId = opp.skillId;
+  state.opponent.skill = opp.rank;
+  state.opponent.characteristic = opp.characteristic;
+  return opp;
+}
+
+/** Set a check up from a published encounter block (B§6): the skill, the opposed side and
+ *  the difficulty the block prints, so it is deployable rather than read out (A-19). */
+export function setUpEncounterBlock(blockId) {
+  const block = encounterBlock(blockId);
+  if (!block) return { ok: false, reason: 'Unknown encounter block.' };
+  const res = block.resolution;
+  state.skillId = res.activeSkills[0];
+  state.context = 'social';
+  state.surveilled = true;
+  state.weaponId = null;
+  state.rangeBand = null;
+  state.audienceSize = null;
+  const dice = Array.isArray(res.oppositionDice) ? res.oppositionDice[0] : res.oppositionDice;
+  if (dice) {
+    // The block prints its opposition as a flat number of Difficulty dice.
+    state.opposed = false;
+    const level = DIFFICULTIES.find((d) => d.dice === dice);
+    if (level) state.difficultyId = level.id;
+  } else {
+    // No printed pool: build the difficulty side from the opposing skill instead (§3A).
+    state.opposed = true;
+    state.opposedSkillId = res.opposingSkill;
+    if (currentTarget()) applyTargetOpposition(res.opposingSkill);
+  }
+  return { ok: true, block, skill: res.activeSkills[0], opposing: res.opposingSkill, dice };
+}
+
+/** What this attack does on a hit: weapon base + net Success, less soak after Pierce (§5B). */
+export function attackDamage(character = activeCharacter(), net = null) {
+  const def = weaponById(state.weaponId);
+  if (!def) return null;
+  const result = net || outcome(state.entered).net;
+  const target = currentTarget();
+  const base = weaponBaseDamage(def, character ? character.attributes.brawn : 0);
+  const pierce = weaponPierce(def);
+  const damage = computeDamage({
+    baseDamage: base,
+    netSuccess: result.success,
+    targetSoak: target ? (target.soak || 0) : 0,
+    pierce
+  });
+  return {
+    ...damage, weapon: def, base, pierce, target,
+    // A Critical Injury triggers when uncancelled Advantage meets the crit rating, or on a
+    // Despair, or by spending two Advantage (§5B, §5.7).
+    critical: result.advantage >= def.crit || result.despair > 0,
+    critReason: result.despair > 0 ? 'an uncancelled despair' : `${def.crit} advantage`
+  };
 }
 
 /** Resolve the entered symbols (§1) and produce everything the log needs. */
@@ -192,7 +365,10 @@ export function resolve(character = activeCharacter()) {
     triumph: result.triumph,
     surveilled: state.surveilled,
     skillId: state.skillId,
-    spendTriumphOnHeat: state.spendTriumphOnHeat
+    spendTriumphOnHeat: state.spendTriumphOnHeat,
+    blackMarket: state.blackMarket,
+    failed: !result.success,
+    threat: result.netThreat
   });
   return { pool, notes, result, heat };
 }
@@ -200,7 +376,9 @@ export function resolve(character = activeCharacter()) {
 export function commit(character = activeCharacter()) {
   const { pool, notes, result, heat } = resolve(character);
   let heatApplied = null;
-  if (character && heat.personalHeat) heatApplied = applyPersonalHeat(character, heat.personalHeat);
+  if (character && heat.personalHeat) {
+    heatApplied = applyPersonalHeat(character, heat.personalHeat, heat.reasons[0] || `A ${state.skillId} check`);
+  }
 
   const entry = {
     ts: Date.now(),
@@ -359,20 +537,55 @@ export function renderRoller(mount) {
   DIFFICULTIES.forEach((d) => diffSelect.append(el('option', { value: d.id, text: `${d.name} (${d.dice})`, selected: state.difficultyId === d.id })));
   setup.append(el('label', { class: 'small', for: 'roller-difficulty', text: 'Difficulty' }), diffSelect);
 
-  setup.append(toggle('roller-opposed', 'Opposed check', state.opposed, (v) => { state.opposed = v; rerender(); }));
+  // What kind of check this is decides which spend table the Outcome offers (§5C, §11, §12).
+  const contextSelect = el('select', {
+    id: 'roller-context', 'aria-label': 'Kind of check',
+    onchange: (e) => { state.context = e.target.value; rerender(); }
+  });
+  CHECK_CONTEXTS.forEach((c) => contextSelect.append(el('option', { value: c.id, text: c.label, selected: state.context === c.id })));
+  setup.append(el('label', { class: 'small', for: 'roller-context', text: 'What kind of check is this?' }), contextSelect);
+  setup.append(el('p', { class: 'small muted', text: 'It decides which list of things you can spend leftover advantage and threat on.' }));
+
+  setup.append(toggle('roller-opposed', 'Opposed check', state.opposed, (v) => {
+    state.opposed = v;
+    if (v && currentTarget()) applyTargetOpposition();
+    rerender();
+  }));
   if (state.opposed) {
     setup.append(el('p', { class: 'small muted', text: 'Only you roll. The difficulty side is built from the opponent\'s rating: the higher value sets Difficulty dice, the lower upgrades that many to Challenge.' }));
+    // Which of their skills is resisting, and — when the target is on the tracker — its
+    // rating read straight off their stat block rather than typed in (A-20).
+    const oppSkill = el('select', {
+      id: 'opp-resist-skill', 'aria-label': 'Which of their skills resists',
+      onchange: (e) => { state.opposedSkillId = e.target.value; if (currentTarget()) applyTargetOpposition(); rerender(); }
+    });
+    SKILLS.forEach((sk) => oppSkill.append(el('option', { value: sk.id, text: `${sk.name} (${titleCase(sk.characteristic)})`, selected: state.opposedSkillId === sk.id })));
+    setup.append(el('label', { class: 'small', for: 'opp-resist-skill', text: 'What are they resisting with?' }), oppSkill);
+    const opp = targetOpposition();
+    if (opp) {
+      setup.append(el('p', { class: 'small muted', id: 'opp-from-target', text:
+        `${opp.name} has ${opp.skillName} ${opp.rank} with ${titleCase(skillById(opp.skillId).characteristic)} ${opp.characteristic}, so the difficulty side is built from those. Change either number if the situation differs.` }));
+    }
     setup.append(numberField('opp-skill', 'Their skill rank', state.opponent.skill, (v) => { state.opponent.skill = v; rerender(); }));
     setup.append(numberField('opp-char', 'Their characteristic', state.opponent.characteristic, (v) => { state.opponent.characteristic = v; rerender(); }));
   }
+  setup.append(toggle('roller-blackmarket', 'Black-market deal (house rule)', state.blackMarket, (v) => { state.blackMarket = v; rerender(); }));
   setup.append(toggle('roller-surveilled', 'Surveilled context', state.surveilled, (v) => { state.surveilled = v; rerender(); }));
   setup.append(toggle('roller-triumph-heat', 'Spend a Triumph to reduce Personal Heat by 1', state.spendTriumphOnHeat, (v) => { state.spendTriumphOnHeat = v; rerender(); }));
   setup.append(toggle('roller-public', 'Public check (Heat Setbacks apply)', state.publicCheck, (v) => { state.publicCheck = v; rerender(); }));
   mount.append(setup);
 
+  // --- the attack: weapon, range and target (§5B) ---
+  mount.append(attackPanel(character, rerender));
+
+  // --- what an opponent can lever on you, on a social check (§11) ---
+  if (state.context === 'social' && character) mount.append(motivationPanel(character, rerender));
+
   // --- situational modifiers (§5E, §5J) and die modifications (§2.4, §8) ---
   const situationBody = el('div', {});
-  const situational = panel('The situation', PANELS.rollSituation, [situationBody]);
+  // Everything here is at its default on most checks, so it folds away behind one row that
+  // says what is currently set rather than occupying a third of the screen (B-1).
+  const situational = panel('The situation', PANELS.rollSituation, []);
   if (!Settings.advancedAutomation()) {
     situationBody.append(el('p', { class: 'small muted', text: 'Automatic dice are listed for confirmation. Switch on advanced automation in Settings to apply them without asking.' }));
     situationBody.append(toggle('auto-conditions', 'Apply condition dice', state.autoDice.conditions, (v) => { state.autoDice.conditions = v; rerender(); }));
@@ -394,8 +607,45 @@ export function renderRoller(mount) {
   situationBody.append(numberField('roller-adversary', 'How hard is the target to hit?', state.targetAdversary, (v) => { state.targetAdversary = v; rerender(); },
     { max: 3, hint: 'Their Adversary rating, if they have one. Each rank makes this check one step harder.' }));
 
+  // Called shots (§10A): aiming at a specific thing costs Setback and pays off in a spend.
+  const calledSelect = el('select', {
+    id: 'roller-called-shot', 'aria-label': 'Called shot',
+    onchange: (e) => { state.calledShot = e.target.value === '' ? null : Number(e.target.value); rerender(); }
+  });
+  calledSelect.append(el('option', { value: '', text: 'Not aiming at anything in particular', selected: state.calledShot === null }));
+  CALLED_SHOTS.setbackByAim.forEach((a) => calledSelect.append(el('option', {
+    value: String(a.aimManeuvers), text: `${a.label} — ${a.setback} Setback`, selected: state.calledShot === a.aimManeuvers
+  })));
+  situationBody.append(
+    el('label', { class: 'small', for: 'roller-called-shot', text: 'Aiming at something specific' }),
+    calledSelect,
+    el('p', { class: 'small muted', text: `Declare it before you roll. On a hit, spending ${CALLED_SHOTS.payoffAdvantageCost} advantage disables the thing you aimed at — a weapon, a tyre, a radio — instead of dealing damage.` })
+  );
+
+  // Two-weapon fighting (§5H).
+  situationBody.append(toggle('roller-two-weapon', 'Attacking with a weapon in each hand', state.twoWeapon, (v) => { state.twoWeapon = v; rerender(); }));
+  if (state.twoWeapon) {
+    situationBody.append(el('p', { class: 'small muted', text: `Build the pool from the lower of the two skill ranks and the lower of the two characteristics. The primary weapon hits on a success; landing the off-hand one costs ${COMBAT_VARIANTS.twoWeapon.secondaryHit.advantage} advantage or ${COMBAT_VARIANTS.twoWeapon.secondaryHit.triumph} triumph.` }));
+  }
+
+  // Group influence (§11): the audience sets the difficulty outright.
+  const audienceSelect = el('select', {
+    id: 'roller-audience', 'aria-label': 'Audience size', disabled: state.opposed,
+    onchange: (e) => { state.audienceSize = e.target.value || null; rerender(); }
+  });
+  audienceSelect.append(el('option', { value: '', text: 'Talking to one person', selected: !state.audienceSize }));
+  SOCIAL_ENCOUNTERS.groupInfluenceLadder.forEach((g) => audienceSelect.append(el('option', {
+    value: g.audience, text: `${g.audience} people — ${titleCase(g.difficulty)}`, selected: state.audienceSize === g.audience
+  })));
+  situationBody.append(
+    el('label', { class: 'small', for: 'roller-audience', text: 'Swaying a crowd' }),
+    audienceSelect,
+    el('p', { class: 'small muted', text: 'Working a room instead of one person: the size of the audience sets the difficulty and overrides the picker above.' })
+  );
+
   const modBody = el('div', {});
   situationBody.append(accordion('Change the dice by hand', [modBody], { key: 'roll-mods', summary: 'upgrade, downgrade, spend a story point' }));
+
   modBody.append(numberField('roller-upgrade-ability', 'Upgrade your dice', state.upgradeAbility, (v) => { state.upgradeAbility = v; rerender(); }));
   modBody.append(numberField('roller-downgrade-ability', 'Downgrade your dice', state.downgradeAbility, (v) => { state.downgradeAbility = v; rerender(); }));
   modBody.append(numberField('roller-upgrade-difficulty', 'Upgrade the difficulty', state.upgradeDifficulty, (v) => { state.upgradeDifficulty = v; rerender(); }));
@@ -411,6 +661,11 @@ export function renderRoller(mount) {
       document.dispatchEvent(new CustomEvent('resource:refresh'));
       rerender();
     }
+  }));
+  situational.append(accordion('Anything unusual about this check?', [situationBody], {
+    key: 'roll-situation',
+    summary: situationSummary(character),
+    defaultOpen: false
   }));
   mount.append(situational);
 
@@ -478,9 +733,60 @@ export function renderRoller(mount) {
     heat.reasons.length ? el('ul', { class: 'small' }, heat.reasons.map((r) => el('li', { text: r }))) : el('span', {})
   );
 
+  // --- damage, when the check was an attack (§5B) ---
+  if (anyEntered && state.weaponId) {
+    const dmg = attackDamage(character, result.net);
+    const damageBody = el('div', { id: 'attack-damage' });
+    if (!result.success) {
+      damageBody.append(el('p', { class: 'small muted', text: `The ${dmg.weapon.name} missed, so there is no damage to work out.` }));
+    } else {
+      damageBody.append(el('p', { class: 'small' }, [
+        `${dmg.weapon.name}: ${dmg.base} base and ${result.net.success} from the successes is ${dmg.raw}`,
+        dmg.target ? `, less ${dmg.soaked} soak${dmg.pierce ? ` after Pierce ${dmg.pierce}` : ''} — ` : ' — ',
+        el('strong', { id: 'damage-wounds', text: `${dmg.target ? dmg.wounds : dmg.raw} wounds` }),
+        dmg.target ? '.' : '. Pick a target above and the app takes their soak off for you.'
+      ]));
+      if (dmg.critical) {
+        damageBody.append(el('p', { class: 'small', id: 'damage-critical' }, [
+          el('span', { class: 'badge', text: 'critical' }), ' ',
+          `${titleCase(dmg.critReason)} means this hit also causes a lasting injury.`
+        ]));
+      }
+      if (dmg.target) {
+        damageBody.append(el('button', {
+          type: 'button', class: 'primary', id: 'apply-attack-damage',
+          text: `Apply ${dmg.wounds} wounds to ${dmg.target.name}`,
+          onclick: () => {
+            const applied = damageCombatant(dmg.target.id, { wounds: dmg.wounds, critical: dmg.critical });
+            if (!applied.ok && applied.reason) { showToast(applied.reason); return; }
+            const lines = [`${dmg.wounds} wounds to ${dmg.target.name}.`, ...(applied.notes || [])];
+            appendSpendToLastEntry(`${dmg.wounds} wounds to ${dmg.target.name}`);
+            state.lastOutcome = lines;
+            showToast(lines.join(' '));
+            document.dispatchEvent(new CustomEvent('resource:refresh'));
+            rerender();
+          }
+        }));
+      } else if (character) {
+        damageBody.append(el('button', {
+          type: 'button', class: 'secondary', id: 'apply-attack-damage-self',
+          text: `Take ${dmg.raw} wounds myself`,
+          onclick: () => {
+            const after = applyDamage(character, { wounds: Math.max(0, dmg.raw - soakOf(character)) });
+            showToast(`Wounds now ${after.wounds}/${after.woundThreshold}${after.incapacitated ? ' — incapacitated' : ''}`);
+            document.dispatchEvent(new CustomEvent('resource:refresh'));
+            rerender();
+          }
+        }));
+      }
+    }
+    resultCard.append(el('h3', { text: 'Damage' }), damageBody);
+  }
+
   const spends = anyEntered ? availableSpends(state.context, result.net) : [];
   if (spends.length) {
-    resultCard.append(el('h3', { text: 'Spends available' }));
+    const contextLabel = (CHECK_CONTEXTS.find((c) => c.id === state.context) || CHECK_CONTEXTS[1]).label;
+    resultCard.append(el('h3', { text: `What you can spend it on — ${contextLabel.toLowerCase()}` }));
     spends.slice(0, 8).forEach((row) => {
       resultCard.append(el('div', { class: 'result' }, [
         el('div', { class: 'result-head' }, [
@@ -515,14 +821,18 @@ export function renderRoller(mount) {
       }
       state.lastOutcome = lines;
       state.entered = newTally();
+      clearTalentDice();
       rerender();
       document.dispatchEvent(new CustomEvent('resource:refresh'));
     }
   }));
-  resultCard.append(el('button', { type: 'button', class: 'secondary', text: 'Clear symbols', onclick: () => { state.entered = newTally(); rerender(); } }));
+  resultCard.append(el('button', {
+    type: 'button', class: 'secondary', text: 'Clear symbols',
+    onclick: () => { state.entered = newTally(); clearTalentDice(); rerender(); }
+  }));
   mount.append(resultCard);
 
-  const log = readLog().slice(0, 12);
+  const log = readLog().slice(0, logShown);
   const logBody = el('div', {});
   const logCard = panel('Recent checks', PANELS.rollLog, []);
   if (!log.length) {
@@ -538,6 +848,14 @@ export function renderRoller(mount) {
     }));
   }
   logCard.append(logBody);
+  // The log holds up to 100; show more rather than hiding the rest (C-9).
+  if (readLog().length > log.length) {
+    logCard.append(el('button', {
+      type: 'button', class: 'secondary', id: 'log-show-more',
+      text: `Show more (${readLog().length - log.length} older)`,
+      onclick: () => { logShown += LOG_PAGE; rerender(); }
+    }));
+  }
   log.forEach((item) => {
     const verdict = item.outcome === 'success' ? 'Success' : 'Failure';
     const row = el('div', { class: 'result log-row' }, [
@@ -567,7 +885,187 @@ export function renderRoller(mount) {
 /** The dice this check uses, as live per-type numbers: anything that feeds the pool —
  *  skill, characteristic, difficulty, opposition, cover, concealment, size, conditions,
  *  encumbrance, suspicion, upgrades — moves these the moment you touch it. */
-function diceToRoll(pool, notes) {
+/** Push a talent's printed effect into the open check (§12A). Only the talents whose text
+ *  names an exact change to your own pool carry a `roller` block; the rest still deduct
+ *  their cost and state what they do. */
+export function applyTalentToCheck(talentDef, ranks = 1) {
+  const spec = talentDef.roller;
+  if (!spec) return null;
+  const applied = [];
+  const count = (v) => (v === 'ranks' ? ranks : Number(v) || 0);
+  if (spec.dice) {
+    Object.entries(spec.dice).forEach(([die, value]) => {
+      const n = count(value);
+      state.talentDice[die] = (state.talentDice[die] || 0) + n;
+      applied.push(`${n > 0 ? 'added' : 'removed'} ${Math.abs(n)} ${die}`);
+    });
+  }
+  if (spec.enteredSymbols) {
+    Object.entries(spec.enteredSymbols).forEach(([symbol, value]) => {
+      const n = count(value);
+      state.entered[symbol] += n;
+      applied.push(`added ${n} ${symbol}`);
+    });
+  }
+  if (spec.difficultySteps) {
+    state.difficultyId = stepDifficulty(state.difficultyId, spec.difficultySteps);
+    applied.push(`difficulty now ${state.difficultyId}`);
+  }
+  if (spec.clearEntry) {
+    state.entered = newTally();
+    applied.push('symbols cleared for the reroll');
+  }
+  state.talentNotes = [...state.talentNotes, `${talentDef.name}: ${spec.note}`];
+  return { applied, note: spec.note };
+}
+
+/** Talent contributions are per-check, so they clear when the check is logged or reset. */
+export function clearTalentDice() {
+  state.talentDice = { boost: 0, setback: 0 };
+  state.talentNotes = [];
+}
+
+/** A one-line account of what is currently pushing the dice around, so the collapsed
+ *  situation panel never hides a modifier the player has forgotten about. */
+function situationSummary(character) {
+  const set = [];
+  if (state.concealment > 0 && state.concealmentRole !== 'none') set.push('concealment');
+  if (state.cover) set.push('cover');
+  if (state.silhouetteDelta !== 0) set.push('size');
+  if (state.targetAdversary > 0) set.push(`adversary ${state.targetAdversary}`);
+  if (state.calledShot !== null) set.push('called shot');
+  if (state.twoWeapon) set.push('two weapons');
+  if (state.audienceSize) set.push(`crowd of ${state.audienceSize}`);
+  if (state.upgradeAbility || state.upgradeDifficulty || state.downgradeAbility || state.downgradeDifficulty) set.push('hand-changed dice');
+  if (state.talentNotes.length) set.push(`${state.talentNotes.length} talent${state.talentNotes.length === 1 ? '' : 's'}`);
+  if (character) {
+    const conditions = Object.entries(character.state.conditions || {}).filter(([, on]) => on);
+    if (state.autoDice.conditions && conditions.length) set.push('your condition');
+    if (state.autoDice.encumbrance && encumbranceState(character).over) set.push('overloaded');
+    if (state.autoDice.heat && heatSetbackDice({
+      personalHeat: character.state.personalHeat, cellHeat: getCell().cellHeat, isPublicCheck: state.publicCheck
+    })) set.push('suspicion');
+  }
+  return set.length ? set.join(' · ') : 'nothing set';
+}
+
+/** The four Motivation facets are what a social opponent works on, and the social spend
+ *  table prices learning each of them. Ticking one records that it is out (§11, §12B). */
+function motivationPanel(character, rerender) {
+  const m = character.identity.motivation || {};
+  const revealed = character.identity.motivationRevealed || {};
+  const table = SPEND_TABLES.social.positive;
+  // The costs come off the printed table rather than being restated (§13.2).
+  const costFor = (facet) => {
+    const row = table.find((r) => r.effects.some((e) => new RegExp(facet, 'i').test(e)));
+    return row ? row.cost : null;
+  };
+  const body = el('div', {});
+  [['strength', 'Strength'], ['flaw', 'Flaw'], ['desire', 'Desire'], ['fear', 'Fear']].forEach(([facet, label]) => {
+    const cost = costFor(label);
+    body.append(el('div', { class: 'toggle-row' }, [
+      el('input', {
+        type: 'checkbox', id: `motiv-${facet}`, checked: !!revealed[facet],
+        onchange: (e) => {
+          character.identity.motivationRevealed = { ...revealed, [facet]: e.target.checked };
+          saveCharacter(character);
+          rerender();
+        }
+      }),
+      el('label', { for: `motiv-${facet}` }, [
+        el('span', { text: `${label}: ${m[facet] || 'not chosen'}` }),
+        el('span', { class: 'toggle-desc', text: cost
+          ? `An opponent learns this by spending ${cost} advantage on a social check against you.`
+          : 'Not priced on the social spend table.' })
+      ])
+    ]));
+  });
+  const out = Object.entries(revealed).filter(([, v]) => v).length;
+  return panel('What they can work on', PANELS.rollMotivation, [
+    accordion('Your desire, fear, strength and flaw', [body], {
+      key: 'roll-motivation',
+      summary: out ? `${out} of 4 already known` : 'none known yet'
+    })
+  ], { id: 'roll-motivation' });
+}
+
+/** The four spend tables the manual prints, named in the words a player would use. */
+export const CHECK_CONTEXTS = [
+  { id: 'combat',  label: 'A fight' },
+  { id: 'generic', label: 'Anything else' },
+  { id: 'social',  label: 'Talking someone round' },
+  { id: 'vehicle', label: 'Driving or flying' }
+];
+
+/** Weapon, range and target. Choosing a weapon takes its skill and lets the band set the
+ *  difficulty; choosing a target takes their soak and Adversary rank off the tracker (§5B). */
+function attackPanel(character, rerender) {
+  const body = el('div', {});
+  const weapons = availableWeapons(character);
+  const combatants = Object.values(getCombat().combatants || {});
+
+  const weaponSelect = el('select', {
+    id: 'roller-weapon', 'aria-label': 'Weapon',
+    onchange: (e) => { chooseWeapon(e.target.value); rerender(); }
+  });
+  weaponSelect.append(el('option', { value: '', text: 'Not attacking with a weapon', selected: !state.weaponId }));
+  weapons.forEach((w) => weaponSelect.append(el('option', {
+    value: w.id, selected: state.weaponId === w.id,
+    text: `${w.carried ? '● ' : ''}${w.name} — ${titleCase(w.skill)}, damage ${w.damage}${w.damageType === 'plusBrawn' ? ' + Brawn' : ''}, crit ${w.crit}`
+  })));
+  body.append(el('label', { class: 'small', for: 'roller-weapon', text: 'Weapon' }), weaponSelect);
+  body.append(el('p', { class: 'small muted', text: weapons.some((w) => w.carried)
+    ? 'A dot marks what you are actually carrying; the rest of the list is there for borrowed and improvised weapons.'
+    : 'Nothing in your inventory is a weapon, so the whole list is offered. Buy one on the Gear tab and it moves to the top with a dot.' }));
+
+  if (state.weaponId) {
+    const def = weaponById(state.weaponId);
+    const isMelee = def.skill === 'brawl' || def.skill === 'melee';
+    if (isMelee) {
+      body.append(el('p', { class: 'small muted', id: 'roller-range-note', text: 'A melee attack is always an Average check, whatever the range.' }));
+    } else {
+      const rangeSelect = el('select', {
+        id: 'roller-range', 'aria-label': 'Range to the target',
+        onchange: (e) => { chooseRangeBand(e.target.value); rerender(); }
+      });
+      RANGE_BANDS.forEach((r) => rangeSelect.append(el('option', {
+        value: r.id, selected: state.rangeBand === r.id,
+        text: `${r.name} — ${titleCase(rangedDifficultyFor(r.id))}`
+      })));
+      body.append(el('label', { class: 'small', for: 'roller-range', text: 'How far away are they?' }), rangeSelect);
+      body.append(el('p', { class: 'small muted', text: `${def.name} is built for ${def.range} range. Further out the difficulty climbs on its own.` }));
+    }
+  }
+
+  const targetSelect = el('select', {
+    id: 'roller-target', 'aria-label': 'Target',
+    onchange: (e) => { chooseTarget(e.target.value); rerender(); }
+  });
+  targetSelect.append(el('option', { value: '', text: combatants.length ? 'No particular target' : 'Nobody on the combat tracker', selected: !state.targetId }));
+  combatants.forEach((c) => targetSelect.append(el('option', {
+    value: c.id, selected: state.targetId === c.id,
+    text: `${c.name}${c.minionCount ? ` ×${c.minionCount}` : ''} — soak ${c.soak}, wounds ${c.wounds}/${c.woundThreshold ?? '—'}`
+  })));
+  body.append(el('label', { class: 'small', for: 'roller-target', text: 'Who are you shooting at?' }), targetSelect);
+  const target = currentTarget();
+  if (target) {
+    body.append(el('p', { class: 'small muted', id: 'roller-target-note', text:
+      `Soak ${target.soak} comes off the damage; defence ${target.meleeDef}/${target.rangedDef}${target.adversary ? `, and Adversary ${target.adversary} upgrades this check ${target.adversary} time(s)` : ''}.` }));
+  } else if (!combatants.length) {
+    body.append(el('p', { class: 'small muted', text: 'Drop an opponent into the Combat screen and it can work out the damage for you.' }));
+  }
+
+  const active = [state.weaponId, state.targetId].filter(Boolean).length;
+  return panel('What are you attacking with?', PANELS.rollAttack, [
+    accordion('Weapon, range and target', [body], {
+      key: 'roll-attack',
+      summary: state.weaponId ? `${weaponById(state.weaponId).name}${target ? ` → ${target.name}` : ''}` : 'nothing chosen',
+      defaultOpen: active > 0
+    })
+  ], { id: 'roll-attack' });
+}
+
+export function diceToRoll(pool, notes = []) {
   const wrap = el('div', { class: 'dice-to-roll' });
   wrap.append(el('h3', { class: 'dice-to-roll-title', text: 'Dice to roll' }));
   const grid = el('div', { class: 'dice-grid' });
@@ -594,7 +1092,7 @@ function diceToRoll(pool, notes) {
 
 /** What the app rolled, read-only: one row per symbol that actually came up, with its
  *  count and what it does. Symbols at zero are left out entirely. */
-function rolledSymbols(entered) {
+export function rolledSymbols(entered) {
   const wrap = el('div', { class: 'rolled-symbols', id: 'rolled-symbols', 'aria-live': 'polite' });
   const shown = SYMBOL_ORDER.filter((sym) => entered[sym] > 0);
   if (!shown.length) {

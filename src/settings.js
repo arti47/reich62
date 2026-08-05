@@ -1,7 +1,7 @@
 // settings.js — feature and content toggles (CLAUDE.md §9). All default off.
 
-import { STORAGE_PREFIX } from './core.js';
-import { DIE_FACES } from '../data.js';
+import { STORAGE_PREFIX, plain } from './core.js';
+import { DIE_FACES, DIE_FACES_SOURCE } from '../data.js';
 import { CREATION_RULES } from '../data.js';
 
 const KEY = STORAGE_PREFIX + 'settings';
@@ -31,7 +31,9 @@ export function set(flag, value) {
 export const FLAGS = [
   { id: 'soloMode', label: 'Solo mode', desc: 'Adds the Solo tab: Oracle, random events, meaning and element tables.' },
   { id: 'gmScreen', label: 'GM screen', desc: 'Adds the GM tab with the bestiary browser and every rollable reference table.' },
-  { id: 'digitalRoller', label: 'Simulated dice roller', desc: 'Rolls the pool for you instead of you tapping in what your physical dice showed. Entering symbols by hand always works and stays the default.', blocked: () => DIE_FACES === null },
+  { id: 'digitalRoller', label: 'Simulated dice roller', desc: 'Rolls the pool for you instead of you tapping in what your physical dice showed. Entering symbols by hand always works and stays the default.',
+    note: () => DIE_FACES === null ? 'No face table is loaded, so the app cannot roll for you.' : `Rolls against the supplied face table. ${plain(DIE_FACES_SOURCE.note)}`,
+    blocked: () => DIE_FACES === null },
   { id: 'showNonSettingTalents', label: 'Show non-setting talents', desc: 'Reveals the 12 talents that reference things this setting does not have — hacking rules, bows, aircraft, cybernetics, animal companions.' },
   { id: 'gmDiscretionaryDice', label: 'GM discretionary dice', desc: 'Exposes the outnumbered and ganging-up dice, which the book says to use sparingly rather than automatically.' },
   { id: 'advancedAutomation', label: 'Advanced automation', desc: 'Applies environmental dice, encumbrance penalties and Heat setbacks without prompting first.' }

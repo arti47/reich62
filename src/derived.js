@@ -17,16 +17,25 @@ export function blankCharacter(over = {}) {
   return {
     schemaVersion: SCHEMA_VERSION,
     id: null,
-    identity: { name: '', career: null, careerSkills: [], motivation: { desire: null, fear: null, strength: null, flaw: null }, knowledgeSpecialisation: '', portraitUrl: null },
+    identity: { name: '', career: null, careerSkills: [], motivation: { desire: null, fear: null, strength: null, flaw: null },
+               // Which facets an opponent has worked out in play (§11).
+               motivationRevealed: { desire: false, fear: false, strength: false, flaw: false },
+               knowledgeSpecialisation: '', portraitUrl: null },
     attributes,
     skills,
     talents: [],
-    inventory: { items: [], tiny: [], money: { amount: 0 } },
+    // Cash, ration cards and barter goods are three separate pockets: the black-market
+    // house rule spends the last two, and they are not interchangeable with cash.
+    inventory: { items: [], tiny: [], money: { amount: 0, rationCards: 0, barterGoods: 0 } },
     state: {
       wounds: 0, strain: 0, criticalInjuries: [], critModifier: 0, conditions: {},
       incapacitated: false, deathState: null, personalHeat: 0, surveilledContext: false,
       perEncounterFlags: {}, perSceneFlags: {}, perSessionFlags: {}, perDayFlags: { painkillers: 0 },
-      perWeekFlags: {}, restLimits: {}
+      perWeekFlags: {}, restLimits: {},
+      // How the Medicine check is being made (§5G) and the last fall's summary (§5I).
+      careFlags: { selfTreatment: false, noEquipment: false }, lastFall: null,
+      // Why suspicion is where it is: the last dozen moves, newest first (§17).
+      heatTrail: []
     },
     xp: { total: 70, available: 70 },
     advancementLog: [],
@@ -41,9 +50,12 @@ export function normalise(character) {
   const out = { ...base, ...character };
   out.identity = { ...base.identity, ...(character.identity || {}) };
   out.identity.motivation = { ...base.identity.motivation, ...((character.identity || {}).motivation || {}) };
+  out.identity.motivationRevealed = { ...base.identity.motivationRevealed, ...((character.identity || {}).motivationRevealed || {}) };
   out.attributes = { ...base.attributes, ...(character.attributes || {}) };
   out.state = { ...base.state, ...(character.state || {}) };
+  out.state.careFlags = { ...base.state.careFlags, ...((character.state || {}).careFlags || {}) };
   out.inventory = { ...base.inventory, ...(character.inventory || {}) };
+  out.inventory.money = { ...base.inventory.money, ...((character.inventory || {}).money || {}) };
   out.xp = { ...base.xp, ...(character.xp || {}) };
   out.skills = { ...base.skills };
   for (const [id, value] of Object.entries(character.skills || {})) {

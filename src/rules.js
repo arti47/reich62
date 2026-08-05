@@ -3,8 +3,10 @@
 import {
   SKILLS, CHARACTERISTICS, DIFFICULTIES, TALENTS, TALENT_RULES, CAREERS, WEAPONS, ARMOUR,
   GEAR, VEHICLES, ITEM_QUALITIES, CRITICAL_INJURIES, CRITICAL_INJURY_RULES, CONDITIONS,
-  RARITY, POOL_BUILD, UPGRADE_MAP, DOWNGRADE_MAP, MODIFICATION_ORDER, XP_COSTS
+  RARITY, POOL_BUILD, UPGRADE_MAP, DOWNGRADE_MAP, MODIFICATION_ORDER, XP_COSTS,
+  RECOVERY, FALLING, FALLING_RULES, RANGED_DIFFICULTY_BY_RANGE, COMBAT_CHECK_PROCEDURE
 } from '../data.js';
+import { BLACK_MARKET } from '../data.js';
 import { ADVERSARY_ABILITIES, ADVERSARY_TIERS } from '../data-npcs.js';
 import { BESTIARY, ENCOUNTER_BLOCKS, RANDOM_ENCOUNTERS } from '../data-monsters.js';
 
@@ -88,6 +90,72 @@ export function stepDifficulty(levelId, steps) {
   return ladder[next].id;
 }
 
+/** Difficulty of a combat check: melee is always Average, ranged follows the band (§5B). */
+export function attackDifficulty(weaponDef, rangeBand) {
+  if (!weaponDef) return null;
+  if (weaponDef.skill === 'brawl' || weaponDef.skill === 'melee') return COMBAT_CHECK_PROCEDURE.meleeDifficulty;
+  const row = RANGED_DIFFICULTY_BY_RANGE.find((r) => r.range === (rangeBand || weaponDef.range));
+  return row ? row.difficulty : COMBAT_CHECK_PROCEDURE.meleeDifficulty;
+}
+
+export function rangedDifficultyFor(band) {
+  const row = RANGED_DIFFICULTY_BY_RANGE.find((r) => r.range === band);
+  return row ? row.difficulty : null;
+}
+
+/** A weapon's base damage before successes (§15C, §5H).
+ *  `brawn` weapons deal Brawn; `plusBrawn` weapons add their rating to it. */
+export function weaponBaseDamage(weaponDef, brawn = 0) {
+  if (!weaponDef) return 0;
+  if (weaponDef.damageType === 'characteristic' || weaponDef.damage === 'brawn') return brawn;
+  if (weaponDef.damageType === 'plusBrawn') return brawn + (Number(weaponDef.damage) || 0);
+  return Number(weaponDef.damage) || 0;
+}
+
+/** Pierce X reduces the target's soak by X (§10). */
+export function weaponPierce(weaponDef) {
+  const quality = (weaponDef ? weaponDef.qualities || [] : []).find((q) => /^Pierce/i.test(q));
+  return quality ? (Number(quality.replace(/\D+/g, '')) || 0) : 0;
+}
+
+/** Difficulty of a Medicine check to treat wounds (§5G).
+ *  The ladder and both modifiers come from the RECOVERY table; nothing is restated here. */
+export function medicineDifficulty({ wounds, woundThreshold: wt, selfTreatment = false, noEquipment = false }) {
+  const method = RECOVERY.methods.find((m) => m.id === 'medicineWounds');
+  const [easy, average, hard] = method.difficultyRule;
+  let base = easy.difficulty;
+  if (wounds > wt) base = hard.difficulty;
+  else if (wounds > wt / 2) base = average.difficulty;
+  const applied = [];
+  let steps = 0;
+  method.modifiers.forEach((mod) => {
+    const on = (mod.id === 'selfTreatment' && selfTreatment) || (mod.id === 'noEquipment' && noEquipment);
+    if (!on) return;
+    steps += mod.difficultySteps;
+    applied.push(`${mod.label}: ${mod.difficultySteps} step${mod.difficultySteps === 1 ? '' : 's'} harder`);
+  });
+  return { base, difficulty: steps ? stepDifficulty(base, steps) : base, steps, applied };
+}
+
+/** Wounds and strain from a fall, and the Critical Injury modifier it carries (§5I).
+ *  Mitigation is the Average Athletics or Coordination check the rules allow. */
+export function fallDamage({ band, woundThreshold: wt = 0, soak: soakValue = 0, successes = 0, advantages = 0 }) {
+  const row = FALLING.find((f) => f.band === band);
+  if (!row) return null;
+  const rawWounds = row.wounds !== undefined ? row.wounds : wt + 1;
+  // Mitigation first, then soak — soak reduces wounds only, never strain (FALLING_RULES).
+  const mitigated = Math.max(0, rawWounds - successes);
+  return {
+    band,
+    rawWounds,
+    wounds: Math.max(0, mitigated - soakValue),
+    strain: Math.max(0, row.strain - advantages),
+    criticalModifier: row.criticalModifier || 0,
+    note: row.note || null,
+    soakApplied: Math.min(soakValue, mitigated)
+  };
+}
+
 /** Critical Injury lookup on roll + modifiers; results past 100 are reachable (R-14). */
 export function criticalInjuryFor(total) {
   const value = Math.max(1, total);
@@ -107,6 +175,34 @@ export function rarityDifficulty(baseRarity, modifierValues = []) {
   const level = RARITY.difficultyFor(Math.min(effective, 10));
   const upgrades = Math.max(0, effective - 10); // R: above 10 stays Formidable but upgrades
   return { effectiveRarity: effective, difficulty: level, upgrades };
+}
+
+/** HOUSE RULE — resolve a black-market purchase (see BLACK_MARKET in data.js).
+ *  It reuses the printed rarity ladder and adds the barter demand on top. */
+export function blackMarketPurchase({ rarity, modifierValues = [], rationCards = 0, barterGoods = 0 }) {
+  const base = rarityDifficulty(rarity, modifierValues);
+  const needsBarter = rarity >= BLACK_MARKET.barterFromRarity;
+  const cardsRequired = needsBarter ? BLACK_MARKET.rationCardsFor(rarity) : 0;
+  const canPayInCards = rationCards >= cardsRequired;
+  // Anything in trade covers the demand at the GM's discretion; short of both, the deal
+  // gets harder and the shortfall is made up in cash or favours.
+  const covered = canPayInCards || (needsBarter && barterGoods > 0);
+  const extraSteps = needsBarter && !covered ? BLACK_MARKET.noBarterDifficultySteps : 0;
+
+  return {
+    houseRule: true,
+    skill: BLACK_MARKET.skill,
+    effectiveRarity: base.effectiveRarity,
+    difficulty: extraSteps ? stepDifficulty(base.difficulty, extraSteps) : base.difficulty,
+    baseDifficulty: base.difficulty,
+    upgrades: base.upgrades,
+    needsBarter,
+    cardsRequired,
+    cardsShort: Math.max(0, cardsRequired - rationCards),
+    payingWithCards: canPayInCards && cardsRequired > 0,
+    payingWithGoods: !canPayInCards && needsBarter && barterGoods > 0,
+    extraSteps
+  };
 }
 
 /** Talent pyramid legality (§7, §12A). `held` maps talentId -> ranks held. */
@@ -139,6 +235,23 @@ export function canBuyTalent(id, held = {}) {
   return { ok: true, tier, cost: TALENT_RULES.costPerTier[tier - 1] };
 }
 
+/** Is a set of held talents legal against the pyramid (§7)? Buying is gated by
+ *  `canBuyTalent`, but a refund can leave a legal set illegal, so the whole set is checked
+ *  before a character is saved. */
+export function pyramidLegal(held = {}) {
+  const counts = talentTierCounts(held);
+  for (let tier = 2; tier <= 5; tier += 1) {
+    if (counts[tier - 1] > counts[tier - 2]) {
+      return {
+        ok: false,
+        tier,
+        reason: `The talent pyramid is broken: ${counts[tier - 1]} in tier ${tier} but only ${counts[tier - 2]} in tier ${tier - 1}.`
+      };
+    }
+  }
+  return { ok: true, counts };
+}
+
 /** XP cost of a purchase (§7). */
 export function xpCost(kind, { newRating, newRank, tier, career: isCareer } = {}) {
   if (kind === 'characteristic') return XP_COSTS.characteristic.cost(newRating);
@@ -164,6 +277,11 @@ export function minionGroupWoundThreshold(perMember, members) {
 /** Group skill ranks for a minion group: members minus one (§12C). */
 export function minionGroupSkillRanks(members) {
   return adversaryTier('minion').groupSkillRanks(members);
+}
+
+/** Wounds a minion group takes when a Critical Injury lands: one member's share plus one (§12C). */
+export function minionCriticalWoundCost(perMember) {
+  return adversaryTier('minion').criticalWoundCost(perMember);
 }
 
 export { RANDOM_ENCOUNTERS };

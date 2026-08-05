@@ -7,6 +7,9 @@ import * as S from '../data-solo.js';
 import * as R from '../src/rules.js';
 import * as D2 from '../src/derived.js';
 import { cancel, outcome, newTally } from '../src/core.js';
+import * as H from '../src/heat.js';
+import * as UI from '../src/ui.js';
+import * as RI from '../src/rules-index.js';
 
 export async function dataChecks({ check, equal }) {
   // --- content inventory ---
@@ -221,6 +224,197 @@ export async function dataChecks({ check, equal }) {
   equal('R-15: a recipe NPC is marked as derived, not printed', recipe.combatant.derivedFrom, 'recipe');
   equal('R-15: a recipe rival derives soak from Brawn', recipe.combatant.soak, 3);
   C.removeCombatant(recipe.combatant.id);
+
+  // --- HOUSE RULE: black-market purchasing (not from either book) ---
+  check('the black-market rule is flagged as a house rule', D.BLACK_MARKET.houseRule === true);
+  equal('barter starts at rarity 6', D.BLACK_MARKET.barterFromRarity, 6);
+  equal('rarity 7 wants 2 ration cards', D.BLACK_MARKET.rationCardsFor(7), 2);
+  equal('rarity 6 wants 1 ration card', D.BLACK_MARKET.rationCardsFor(6), 1);
+  equal('rarity 5 wants none', D.BLACK_MARKET.rationCardsFor(5), 0);
+  equal('rarity 10 wants 5', D.BLACK_MARKET.rationCardsFor(10), 5);
+  equal('it routes through Streetwise', D.BLACK_MARKET.skill, 'streetwise');
+
+  const flush = R.blackMarketPurchase({ rarity: 7, rationCards: 2, barterGoods: 0 });
+  equal('rarity 7 with the cards keeps the printed difficulty', flush.difficulty, 'hard');
+  equal('and pays in cards', flush.payingWithCards, true);
+  const broke = R.blackMarketPurchase({ rarity: 7, rationCards: 0, barterGoods: 0 });
+  equal('nothing to trade makes it one step harder', broke.difficulty, 'daunting');
+  equal('and says how short you are', broke.cardsShort, 2);
+  const bartering = R.blackMarketPurchase({ rarity: 7, rationCards: 0, barterGoods: 1 });
+  equal('a barter good covers the demand', bartering.difficulty, 'hard');
+  equal('and is recorded as goods rather than cards', bartering.payingWithGoods, true);
+  const cheap = R.blackMarketPurchase({ rarity: 4, rationCards: 0, barterGoods: 0 });
+  equal('below rarity 6 nothing extra is demanded', cheap.cardsRequired, 0);
+  equal('and the difficulty is untouched', cheap.difficulty, 'average');
+  equal('location modifiers still apply', R.blackMarketPurchase({ rarity: 6, modifierValues: [3], rationCards: 1 }).difficulty, 'daunting');
+
+  // A bad failure at the black market exposes you the way any public dealing does.
+  const H2 = await import('../src/heat.js');
+  equal('three threat on a failed deal raises suspicion',
+    H2.heatFromCheck({ blackMarket: true, failed: true, threat: 3, skillId: 'streetwise' }).personalHeat, 1);
+  equal('two threat does not',
+    H2.heatFromCheck({ blackMarket: true, failed: true, threat: 2, skillId: 'streetwise' }).personalHeat, 0);
+  equal('a successful deal with three threat does not',
+    H2.heatFromCheck({ blackMarket: true, failed: false, threat: 3, skillId: 'streetwise' }).personalHeat, 0);
+  equal('a despair on a black-market Streetwise check counts as an evasion check',
+    H2.heatFromCheck({ blackMarket: true, failed: true, despair: 1, skillId: 'streetwise' }).personalHeat, 2);
+
+  // The three purses are separate and survive normalisation.
+  const buyer = D2.normalise({ inventory: { money: { amount: 120 } } });
+  equal('cash carries through normalisation', buyer.inventory.money.amount, 120);
+  equal('ration cards are back-filled', buyer.inventory.money.rationCards, 0);
+  equal('barter goods are back-filled', buyer.inventory.money.barterGoods, 0);
+
+  // --- single source of truth (CLAUDE.md §13.2): the modules read these, never restate them ---
+  equal('a Critical Injury costs a minion group its share plus one',
+    N.ADVERSARY_TIERS.find((t) => t.id === 'minion').criticalWoundCost(4), 5);
+  equal('the same value comes back through the rules layer', R.minionCriticalWoundCost(4), 5);
+  check('the silhouette rule carries its own thresholds and directions',
+    D.SILHOUETTE_RULE.largerTarget.differenceAtLeast === 2
+    && D.SILHOUETTE_RULE.largerTarget.difficultySteps === -1
+    && D.SILHOUETTE_RULE.smallerTarget.differenceAtLeast === 2
+    && D.SILHOUETTE_RULE.smallerTarget.difficultySteps === 1);
+  check('every Heat threshold declares its personal and cell dice explicitly',
+    D.HEAT.thresholds.every((t) => 'personalEffect' in t || 'cell' in t)
+    && D.HEAT.thresholds[0].cellEffect === null);
+  equal('the cell escalates from a member at Personal Heat 3', D.HEAT.tracks.cellEscalationAtPersonal, 3);
+  equal('suspicion dice come off the threshold table, not a restated level',
+    H.heatSetbackDice({ personalHeat: 1, cellHeat: 0 }), 1);
+  equal('cell suspicion adds its own die from level 2', H.heatSetbackDice({ personalHeat: 1, cellHeat: 2 }), 2);
+  equal('a private check takes no suspicion dice',
+    H.heatSetbackDice({ personalHeat: 5, cellHeat: 5, isPublicCheck: false }), 0);
+  equal('safehouse status is read off the thresholds: clear', H.safehouseFor(0), 'clear');
+  equal('safehouse status is read off the thresholds: watched', H.safehouseFor(3), 'watched');
+  equal('safehouse status is read off the thresholds: blown', H.safehouseFor(5), 'blown');
+  check('the symbol glyphs and names in the UI layer come from the data table',
+    D.SYMBOLS.every((sym) => UI.SYMBOL_GLYPHS[sym.id] === sym.glyph && UI.SYMBOL_NAMES[sym.id] === sym.name));
+
+  // --- Medicine difficulty ladder (§5G) ---
+  const medEasy = R.medicineDifficulty({ wounds: 4, woundThreshold: 10 });
+  equal('treating light wounds is Easy', medEasy.difficulty, 'easy');
+  equal('past half the threshold it is Average', R.medicineDifficulty({ wounds: 6, woundThreshold: 10 }).difficulty, 'average');
+  equal('past the threshold itself it is Hard', R.medicineDifficulty({ wounds: 12, woundThreshold: 10 }).difficulty, 'hard');
+  equal('treating yourself adds two steps',
+    R.medicineDifficulty({ wounds: 4, woundThreshold: 10, selfTreatment: true }).difficulty, 'hard');
+  equal('no medical kit adds one more',
+    R.medicineDifficulty({ wounds: 4, woundThreshold: 10, selfTreatment: true, noEquipment: true }).difficulty, 'daunting');
+  equal('both modifiers are named back to the player',
+    R.medicineDifficulty({ wounds: 4, woundThreshold: 10, selfTreatment: true, noEquipment: true }).applied.length, 2);
+
+  // --- falls (§5I): mitigation first, then soak, and strain is never soaked ---
+  const shortFall = R.fallDamage({ band: 'short', soak: 3, successes: 0, advantages: 0 });
+  equal('a short fall starts at 10 wounds', shortFall.rawWounds, 10);
+  equal('soak comes off the wounds', shortFall.wounds, 7);
+  equal('strain is not reduced by soak', shortFall.strain, 10);
+  equal('each success on the mitigation check saves a wound',
+    R.fallDamage({ band: 'short', soak: 3, successes: 2 }).wounds, 5);
+  equal('each advantage saves a point of strain',
+    R.fallDamage({ band: 'short', soak: 3, advantages: 4 }).strain, 6);
+  equal('a long fall uses the threshold formula',
+    R.fallDamage({ band: 'long', woundThreshold: 12, soak: 0 }).rawWounds, 13);
+  equal('a long fall carries its Critical Injury modifier',
+    R.fallDamage({ band: 'long', woundThreshold: 12 }).criticalModifier, 50);
+  equal('an extreme fall carries the larger one',
+    R.fallDamage({ band: 'extreme', woundThreshold: 12 }).criticalModifier, 75);
+
+  // --- called shots and two-weapon fighting carry structured data, not just prose ---
+  equal('aiming twice halves the called-shot penalty',
+    D.CALLED_SHOTS.setbackByAim.find((a) => a.aimManeuvers === 2).setback, 1);
+  equal('a called shot costs three advantage to pay off', D.CALLED_SHOTS.payoffAdvantageCost, 3);
+  equal('two-weapon fighting raises the difficulty one step', D.COMBAT_VARIANTS.twoWeapon.extraDifficultySteps, 1);
+  equal('the off-hand hit costs two advantage', D.COMBAT_VARIANTS.twoWeapon.secondaryHit.advantage, 2);
+  equal('four group-influence bands', D.SOCIAL_ENCOUNTERS.groupInfluenceLadder.length, 4);
+
+  // --- every extracted table reaches the rules library ---
+  const library = RI.buildIndex();
+  const hasEntry = (re) => library.some((e) => re.test(e.title));
+  check('movement costs are in the library', hasEntry(/^Moving from /));
+  check('the falling mitigation rule is in the library', hasEntry(/^Falling: soak/));
+  check('the character-sheet field reference is in the library', hasEntry(/^On the character sheet: /));
+  check('the weapon Heat note is in the library', hasEntry(/^Carrying a weapon$/));
+  check('the vehicle Heat note is in the library', hasEntry(/^Owning a vehicle$/));
+  check('no library entry leaks a section marker',
+    library.every((e) => !/(?:B?§|D§)[0-9]/.test(`${e.title} ${e.body}`)),
+    (library.find((e) => /(?:B?§|D§)[0-9]/.test(`${e.title} ${e.body}`)) || {}).title);
+
+  // --- the attack chain (§5B): weapon, range, damage ---
+  equal('melee is always an Average check whatever the range',
+    R.attackDifficulty(R.weapon('knife'), 'extreme'), 'average');
+  equal('a shot at short range is Easy', R.attackDifficulty(R.weapon('p38'), 'short'), 'easy');
+  equal('the same shot at medium is Average', R.attackDifficulty(R.weapon('p38'), 'medium'), 'average');
+  equal('at long range it is Hard', R.attackDifficulty(R.weapon('p38'), 'long'), 'hard');
+  equal('at extreme range it is Daunting', R.attackDifficulty(R.weapon('p38'), 'extreme'), 'daunting');
+  equal('a plain firearm deals its printed damage', R.weaponBaseDamage(R.weapon('p38'), 3), 6);
+  equal('a knife adds Brawn to its rating', R.weaponBaseDamage(R.weapon('knife'), 3), 5);
+  equal('unarmed damage is Brawn itself', R.weaponBaseDamage(R.weapon('unarmed'), 3), 3);
+  equal('Pierce is read off the weapon qualities', R.weaponPierce(R.weapon('knife')), 1);
+  equal('a weapon without Pierce reads zero', R.weaponPierce(R.weapon('p38')), 0);
+
+  // --- story point spends: all four on each side, and the two-pool flow ---
+  equal('four player spends', D.STORY_POINTS.playerSpends.length, 4);
+  equal('four GM spends', D.STORY_POINTS.gmSpends.length, 4);
+
+  // --- the conditions a GM can hold an NPC in ---
+  check('the NPC condition list drops the ones that are the character\'s own bookkeeping',
+    D.CONDITIONS.filter((c) => !c.id.startsWith('heat') && !['encumbered', 'incapacitated'].includes(c.id)).length >= 5);
+
+  // --- talents whose printed text names an exact change to your own pool (A-22) ---
+  const rollerTalents = D.TALENTS.filter((t) => t.roller);
+  check('nine talents carry a roller effect', rollerTalents.length === 9, String(rollerTalents.length));
+  check('every roller effect names what it does', rollerTalents.every((t) => !!t.roller.note));
+  equal('Quick Strike adds a Boost per rank', D.TALENTS.find((t) => t.id === 'quickStrike').roller.dice.boost, 'ranks');
+  equal('Knack For It removes two Setback', D.TALENTS.find((t) => t.id === 'knackForIt').roller.dice.setback, -2);
+  equal('Master lowers the difficulty by two', D.TALENTS.find((t) => t.id === 'master').roller.difficultySteps, -2);
+  equal('Rapid Reaction adds Success symbols', D.TALENTS.find((t) => t.id === 'rapidReaction').roller.enteredSymbols.success, 'ranks');
+  check('Natural clears the entry for its reroll', D.TALENTS.find((t) => t.id === 'natural').roller.clearEntry === true);
+
+  // --- the four encounter blocks all carry what a check needs (A-19) ---
+  M.ENCOUNTER_BLOCKS.forEach((block) => {
+    check(`${block.id} names an active skill and an opposing one`,
+      (block.resolution.activeSkills || []).length > 0 && !!block.resolution.opposingSkill);
+    check(`${block.id}'s skills all resolve`,
+      block.resolution.activeSkills.every((sk) => !!R.skill(sk)) && !!R.skill(block.resolution.opposingSkill));
+  });
+
+  // --- the social spend table prices the Motivation reveal ladder (A-24) ---
+  const socialPositive = D.SPEND_TABLES.social.positive;
+  check('two advantage buys a strength or flaw',
+    socialPositive.some((r) => r.cost === 2 && r.effects.some((e) => /Strength or Flaw/i.test(e))));
+  check('three advantage buys a desire or fear',
+    socialPositive.some((r) => r.cost === 3 && r.effects.some((e) => /Desire or Fear/i.test(e))));
+
+  // --- the Oracle asks for a real pool (A-21) ---
+  const pool5050 = S.ORACLE.likelihoods[1];
+  equal('the 50-50 pool is 2 Ability against 2 Difficulty', `${pool5050.ability}v${pool5050.difficulty}`, '2v2');
+
+  // --- the suspicion trail and the revealed facets back-fill on old characters ---
+  const oldSave = D2.normalise({ state: { personalHeat: 3 }, identity: { name: 'Old Save' } });
+  check('the suspicion trail back-fills', Array.isArray(oldSave.state.heatTrail));
+  check('the revealed facets back-fill',
+    oldSave.identity.motivationRevealed && oldSave.identity.motivationRevealed.desire === false);
+
+  // --- the XP engine at creation: no path may leave experience and ranks out of step ---
+  equal('every character gets the same 70', D.XP_COSTS.startingXp, 70);
+  equal('a characteristic to 5 costs 10 times the new rating', D.XP_COSTS.characteristic.cost(5), 50);
+  equal('raising one from 1 to 5 costs 140 in total',
+    [2, 3, 4, 5].reduce((sum, n) => sum + D.XP_COSTS.characteristic.cost(n), 0), 140);
+  equal('a career skill to rank 2 costs 10', D.XP_COSTS.careerSkill.cost(2), 10);
+  equal('a non-career skill to rank 2 costs 15', D.XP_COSTS.nonCareerSkill.cost(2), 15);
+  check('talents cost five times their tier',
+    [1, 2, 3, 4, 5].every((t) => D.XP_COSTS.talent.cost(t) === t * 5));
+  equal('four career skills are picked at creation', D.CREATION_RULES.careerSkillPicks, 4);
+
+  // The pyramid check over a whole held set, which is what a refund can break.
+  check('one talent in each of tiers 1 and 2 is legal', R.pyramidLegal({ grit: 1, basicMilitaryTraining: 1 }).ok);
+  check('a tier 2 talent with nothing in tier 1 is not',
+    R.pyramidLegal({ basicMilitaryTraining: 1 }).ok === false);
+  equal('and the reason names the tier to refund first',
+    R.pyramidLegal({ basicMilitaryTraining: 1 }).tier, 2);
+  // A ranked talent bought N times spreads one purchase per tier, which is always a legal
+  // pyramid on its own; stacking a second tier 2 on top of it is not.
+  check('two ranks of a tier 1 talent spread one per tier and stay legal', R.pyramidLegal({ grit: 2 }).ok);
+  check('a second tier 2 talent on top of that breaks it',
+    R.pyramidLegal({ grit: 2, basicMilitaryTraining: 1 }).ok === false);
 
   // --- solo tables (§18–§20, §23) ---
   equal('3 Oracle likelihoods', S.ORACLE.likelihoods.length, 3);

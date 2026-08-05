@@ -11,13 +11,13 @@ import {
   BASE_WOUND_THRESHOLD, BASE_STRAIN_THRESHOLD
 } from '../data.js';
 import { PREGENS } from '../data-pregens.js';
-import { canBuyTalent, visibleTalents, xpCost, talent, career as careerById } from './rules.js';
+import { canBuyTalent, pyramidLegal, visibleTalents, xpCost, talent, career as careerById } from './rules.js';
 import { blankCharacter, derivedFor, normalise } from './derived.js';
 import { saveCharacter, setActiveCharacter } from './store.js';
 import { Settings } from './settings.js';
 import { rollDie } from './core.js';
 
-const STEPS = ['career', 'skills', 'xp', 'derived', 'motivation', 'gear', 'review'];
+const STEPS = ['start', 'career', 'skills', 'xp', 'derived', 'motivation', 'gear', 'review'];
 
 const XP_TABS = [
   { id: 'characteristics', label: 'Characteristics' },
@@ -27,8 +27,10 @@ const XP_TABS = [
 let xpTab = 'characteristics';
 let skillFilter = '';
 let talentFilter = '';
+let gearFilter = '';
 
 const STEP_HELP = {
+  start: { lede: 'Two ways in: take a character the book already wrote, or build one from scratch.', detail: 'The three ready-made characters come with their characteristics, four skills and their gear already set, but the book prints them with all 70 experience still unspent and no talents or motivation \u2014 so either way you finish the same steps. Building from a career takes a few minutes longer and the choices are all yours.' },
   career: { lede: 'Your background. It decides which skills stay cheap for you, for good.', detail: 'Pick a career, then choose four of its eight skills to start at rank 1. All eight stay cheaper to raise for the rest of this character\'s life, so the four you pick now are a head start rather than a limit.' },
   skills: { lede: 'Choose four of your career\'s eight skills. Each starts at rank 1.', detail: 'There is no wrong answer: the other four are still cheap to buy later.' },
   xp: { lede: 'Every character gets the same 70 experience. Spend it here.', detail: 'Characteristics can only be raised now, at ten times the new rating per step. Skills cost five times the new rank, plus five if they are not career skills, and stop at rank 2 during creation. Talents cost five times their tier and follow the pyramid rule.' },
@@ -99,6 +101,7 @@ function applyPregen(id) {
 // --- legality ---
 export function validateStep(index = step) {
   const name = STEPS[index];
+  if (name === 'start') return null; // either path is legal; the fork itself decides where to go
   if (name === 'career') {
     if (!draft.identity.career) return 'Choose a career first.';
   }
@@ -113,6 +116,14 @@ export function validateStep(index = step) {
     if (overRank) return `Skill ranks cannot pass ${SKILL_RANK_MAX_AT_CREATION} during creation.`;
     const overChar = Object.entries(draft.attributes).find(([, v]) => v > CHARACTERISTIC_MAX);
     if (overChar) return `Characteristics cannot pass ${CHARACTERISTIC_MAX}.`;
+    const pyramid = pyramidLegal(heldTalents());
+    if (!pyramid.ok) return pyramid.reason;
+    // The recorded spends must reconcile with the experience actually gone, so no path can
+    // leave the two out of step.
+    const spent = draft.creation.spend.reduce((sum, e) => sum + e.cost, 0);
+    if (draft.xp.total - spent !== draft.xp.available) {
+      return `Experience does not reconcile: ${spent} recorded as spent but ${draft.xp.total - draft.xp.available} gone.`;
+    }
   }
   if (name === 'motivation') {
     const m = draft.identity.motivation;
@@ -139,6 +150,14 @@ function refundXp(entry) {
   draft.xp.available += entry.cost;
   const index = draft.creation.spend.lastIndexOf(entry);
   if (index >= 0) draft.creation.spend.splice(index, 1);
+}
+
+/** Refund every recorded spend that matches, so a change of mind never leaves experience
+ *  paid for something the character no longer has. */
+function refundAllWhere(predicate) {
+  let refunded = 0;
+  draft.creation.spend.filter(predicate).forEach((entry) => { refunded += entry.cost; refundXp(entry); });
+  return refunded;
 }
 
 export function raiseCharacteristic(id) {
@@ -195,6 +214,15 @@ export function sellTalent(id) {
   if (!entry) return null;
   const held = draft.talents.find((t) => t.id === id);
   if (!held) return null;
+  // Refunding a lower-tier talent can leave more talents in a tier than the one below it,
+  // which the pyramid forbids (§7). The refund is refused rather than silently allowed.
+  const after = {};
+  draft.talents.forEach((t) => { after[t.id] = t.ranks; });
+  after[id] = (after[id] || 1) - 1;
+  if (!after[id]) delete after[id];
+  const legality = pyramidLegal(after);
+  if (!legality.ok) return `${legality.reason} Refund a tier ${legality.tier} talent first.`;
+
   held.ranks -= 1;
   if (held.ranks <= 0) draft.talents = draft.talents.filter((t) => t.id !== id);
   refundXp(entry);
@@ -208,21 +236,45 @@ function heldTalents() {
 }
 
 export function pickCareer(id) {
+  if (draft.identity.career === id) return null;
+  // Changing career wipes every skill rank, so the experience spent on those ranks comes
+  // back with them rather than staying paid for something the character no longer has.
+  const refunded = refundAllWhere((e) => e.kind === 'skill');
   draft.identity.career = id;
   draft.identity.careerSkills = [];
   SKILLS.forEach((s) => { draft.skills[s.id] = { rank: 0, career: false }; });
   careerById(id).skills.forEach((s) => { draft.skills[s].career = true; });
-  return null;
+  return refunded ? { refunded } : null;
 }
 
 export function toggleCareerSkill(id) {
   const picks = draft.identity.careerSkills;
   const at = picks.indexOf(id);
-  if (at >= 0) { picks.splice(at, 1); draft.skills[id].rank = Math.max(0, draft.skills[id].rank - 1); return null; }
+  if (at >= 0) {
+    // Dropping the pick drops the free rank it granted and refunds anything paid on top,
+    // so the rank and the experience never fall out of step.
+    picks.splice(at, 1);
+    refundAllWhere((e) => e.kind === 'skill' && e.id === id);
+    draft.skills[id].rank = 0;
+    return null;
+  }
   if (picks.length >= CREATION_RULES.careerSkillPicks) return `Only ${CREATION_RULES.careerSkillPicks} picks.`;
   picks.push(id);
   draft.skills[id].rank += 1;
   return null;
+}
+
+/** Unspent budget is kept, and a d100 of pocket money is rolled after the gear is
+ *  bought. Pocket money is spending money in play; it cannot buy more starting gear. */
+export function rollPocketMoney() {
+  draft.identity.pocketMoney = rollDie(CREATION_RULES.houseAid.pocketMoney.die);
+  return draft.identity.pocketMoney;
+}
+
+export function startingCash() {
+  const unspent = Math.max(0, Settings.startingBudget() - gearSpent());
+  const pocket = draft.identity.pocketMoney || 0;
+  return { unspent, pocket, total: unspent + pocket };
 }
 
 export function rollMotivation(facet) {
@@ -239,10 +291,17 @@ export function finish() {
   }
   const character = normalise(draft);
   character.creation = { open: false, completedAt: Date.now() };
+  // Whatever was not spent on gear, plus the pocket money, becomes the character's cash.
+  const cash = startingCash();
+  character.inventory.money.amount = (character.inventory.money.amount || 0) + cash.total;
   character.state.wounds = 0;
   character.state.strain = 0;
   const saved = saveCharacter(character);
   setActiveCharacter(saved.id);
+  // The draft is finished, so the wizard starts clean next time rather than reopening the
+  // saved character at its review step and offering to save it a second time.
+  draft = null;
+  step = 0;
   return { ok: true, character: saved };
 }
 
@@ -262,8 +321,9 @@ export function renderWizard(mount) {
 
   const body = el('div', { class: 'card' });
   ({
-    career: renderCareerStep, skills: renderSkillsStep, xp: renderXpStep, derived: renderDerivedStep,
-    motivation: renderMotivationStep, gear: renderGearStep, review: renderReviewStep
+    start: renderStartStep, career: renderCareerStep, skills: renderSkillsStep, xp: renderXpStep,
+    derived: renderDerivedStep, motivation: renderMotivationStep, gear: renderGearStep,
+    review: renderReviewStep
   })[STEPS[step]](body);
   mount.append(body);
 
@@ -290,6 +350,33 @@ export function renderWizard(mount) {
   mount.append(nav);
 }
 
+/** The fork: a ready-made character, or one built from a career (C-3). */
+function renderStartStep(node) {
+  node.append(el('h3', { text: 'Start from a ready-made character' }));
+  node.append(el('p', { class: 'small muted', text: 'The book prints these three with all 70 experience still unspent and no talents or motivation, so picking one drops you straight into spending it.' }));
+  PREGENS.forEach((p) => {
+    node.append(el('div', { class: 'result' }, [
+      el('div', { class: 'result-head' }, [
+        el('span', { class: 'result-title', text: p.name }),
+        el('span', { class: 'cite', text: careerById(p.career).name })
+      ]),
+      el('div', { class: 'result-body', text: `${Object.entries(p.skills).map(([id, r]) => `${titleCase(id)} ${r}`).join(', ')}. Carries ${p.gear.join(', ')}.` }),
+      el('button', {
+        type: 'button', class: 'secondary', id: `pregen-${p.id}`,
+        text: `Play ${p.name}`,
+        onclick: () => { startWizard({ pregenId: p.id }); showToast(`${p.name} loaded — 70 experience still to spend`); rerender(); }
+      })
+    ]));
+  });
+
+  node.append(el('h3', { text: 'Or build one from a career' }));
+  node.append(el('p', { class: 'small muted', text: 'Eleven careers, about five minutes, and the app checks every rule as you go so an illegal character cannot be saved.' }));
+  node.append(el('button', {
+    type: 'button', class: 'primary', id: 'build-from-career', text: 'Build my own',
+    onclick: () => { step = STEPS.indexOf('career'); rerender(); }
+  }));
+}
+
 function renderCareerStep(node) {
   node.append(el('label', { class: 'small', for: 'char-name', text: 'Name' }));
   node.append(el('input', {
@@ -301,7 +388,11 @@ function renderCareerStep(node) {
     node.append(el('div', { class: 'toggle-row' }, [
       el('input', {
         type: 'radio', name: 'career', id: `career-${c.id}`, checked: draft.identity.career === c.id,
-        onchange: () => { pickCareer(c.id); rerender(); }
+        onchange: () => {
+          const result = pickCareer(c.id);
+          if (result && result.refunded) showToast(`Career changed — ${result.refunded} experience refunded with the skill ranks it wiped.`);
+          rerender();
+        }
       }),
       el('label', { for: `career-${c.id}` }, [
         el('span', { text: c.name }),
@@ -310,15 +401,6 @@ function renderCareerStep(node) {
     ]));
   });
 
-  node.append(el('h3', { text: 'Or start from a pregen' }));
-  PREGENS.forEach((p) => {
-    node.append(el('button', {
-      type: 'button', class: 'secondary', text: `${p.name}`,
-      onclick: () => { startWizard({ pregenId: p.id }); showToast(`${p.name} loaded — 70 XP still to spend`); rerender(); }
-    }));
-    node.append(document.createTextNode(' '));
-  });
-  node.append(el('p', { class: 'small muted', text: 'Pregens are printed with 70 XP unspent and no talents or Motivation, so they open here rather than as a finished sheet.' }));
 }
 
 function renderSkillsStep(node) {
@@ -425,7 +507,10 @@ function renderXpStep(node) {
             onclick: () => { const p = buyTalent(t.id); if (p) showToast(p); rerender(); }
           }),
           legality.ok ? null : el('span', { class: 'toggle-desc', text: legality.reason }),
-          ranks ? el('button', { type: 'button', class: 'secondary', text: 'Refund', onclick: () => { sellTalent(t.id); rerender(); } }) : null
+          ranks ? el('button', {
+          type: 'button', class: 'secondary', text: 'Refund', 'aria-label': `Refund ${t.name}`,
+          onclick: () => { const problem = sellTalent(t.id); if (problem) showToast(problem); rerender(); }
+        }) : null
         ]));
       });
       node.append(accordion(`Tier ${tier} — ${TALENT_RULES.costPerTier[tier - 1]} XP each`, [body], {
@@ -440,7 +525,7 @@ function renderDerivedStep(node) {
   const derived = derivedFor(draft);
   node.append(el('p', { class: 'small' }, [
     el('span', { class: 'badge badge-inferred', text: 'inferred' }), ' ',
-    `The manual never prints the human base thresholds. This app uses Wound ${BASE_WOUND_THRESHOLD} + Brawn and Strain ${BASE_STRAIN_THRESHOLD} + Willpower, taken from the pregens that agree.`
+    `Injury limit is ${BASE_WOUND_THRESHOLD} + Brawn and stress limit ${BASE_STRAIN_THRESHOLD} + Willpower. The book states both bases, and flags them as inferred: nothing in the original text printed them, and this pair is what the ready-made characters agree on.`
   ]));
   node.append(el('div', { class: 'stat-grid' }, [
     stat('Wound Threshold', derived.woundThreshold),
@@ -486,37 +571,91 @@ function renderGearStep(node) {
   const budget = Settings.startingBudget();
   node.append(el('p', { class: 'small' }, [
     el('span', { class: 'badge badge-house', text: 'house aid — not a printed rule' }), ' ',
-    `The manual names neither a currency nor a budget (R-8). Spending ${gearSpent()} of ${budget} ${Settings.currencyLabel()}.`
+    `Spending ${gearSpent()} of ${budget} ${Settings.currencyLabel()}.`
   ]));
-  const catalogue = [
-    ...WEAPONS.filter((w) => w.price).map((w) => ({ ...w, kind: 'weapon' })),
-    ...ARMOUR.filter((a) => a.price).map((a) => ({ ...a, kind: 'armour' })),
-    ...GEAR.filter((g) => g.price).map((g) => ({ ...g, kind: 'gear' }))
+
+  // Pocket money: rolled once, after the shopping, and kept apart from the budget.
+  const cash = startingCash();
+  const pocketRow = el('div', { class: 'result' }, [
+    el('div', { class: 'result-head' }, [
+      el('span', { class: 'result-title', text: 'Pocket money' }),
+      el('span', { class: 'cite', text: `d${CREATION_RULES.houseAid.pocketMoney.die}` })
+    ]),
+    el('div', { class: 'result-body', text: draft.identity.pocketMoney
+      ? `Rolled ${draft.identity.pocketMoney} ${Settings.currencyLabel()}. It cannot buy more starting gear, but you keep it to spend in play.`
+      : 'Roll this once you have finished shopping. It cannot buy more starting gear — it is money in your pocket when play begins.' })
+  ]);
+  pocketRow.append(el('button', {
+    type: 'button', class: 'secondary', id: 'roll-pocket-money',
+    text: draft.identity.pocketMoney ? 'Roll again' : 'Roll pocket money',
+    onclick: () => { const rolled = rollPocketMoney(); showToast(`Pocket money: ${rolled} ${Settings.currencyLabel()}`); rerender(); }
+  }));
+  node.append(pocketRow);
+  node.append(el('p', { class: 'small muted', text: `You will start play with ${cash.total} ${Settings.currencyLabel()}: ${cash.unspent} left from the budget${cash.pocket ? ` and ${cash.pocket} in pocket money` : ''}.` }));
+  // 33 priced items in one run is unreadable, so the shop is filtered and grouped the way
+  // the skills and talents steps are (C-2).
+  node.append(el('input', {
+    type: 'search', id: 'gear-filter', placeholder: 'Filter the shop', 'aria-label': 'Filter the shop',
+    value: gearFilter, oninput: (e) => { gearFilter = e.target.value; rerender(); }
+  }));
+  const needle = gearFilter.trim().toLowerCase();
+  const groups = [
+    { id: 'weapon', label: 'Weapons', items: WEAPONS.filter((w) => w.price) },
+    { id: 'armour', label: 'Armour',  items: ARMOUR.filter((a) => a.price) },
+    { id: 'gear',   label: 'Everything else', items: GEAR.filter((g) => g.price) }
   ];
-  catalogue.forEach((item) => {
-    const owned = (draft.inventory.items || []).filter((i) => i.id === item.id).length;
-    node.append(el('div', { class: 'result' }, [
-      el('div', { class: 'result-head' }, [
-        el('span', { class: 'result-title', text: `${item.name}${owned ? ` ×${owned}` : ''}` }),
-        el('span', { class: 'cite', text: `${item.price} · rarity ${item.rarity ?? '—'}` })
-      ]),
-      el('button', {
-        type: 'button', class: 'secondary', text: 'Add',
-        onclick: () => {
-          draft.inventory.items.push({ id: item.id, name: item.name, kind: item.kind, price: item.price, encumbrance: item.encumbrance || 0, qty: 1, equipped: false });
-          rerender();
-        }
-      }),
-      owned ? el('button', {
-        type: 'button', class: 'secondary', text: 'Remove',
-        onclick: () => {
-          const at = draft.inventory.items.findIndex((i) => i.id === item.id);
-          if (at >= 0) draft.inventory.items.splice(at, 1);
-          rerender();
-        }
-      }) : null
-    ]));
+  let matched = 0;
+  groups.forEach((group) => {
+    const items = group.items
+      .filter((i) => !needle || `${i.name} ${i.effect || ''}`.toLowerCase().includes(needle))
+      .map((i) => ({ ...i, kind: group.id }));
+    if (!items.length) return;
+    matched += items.length;
+    const body = el('div', {});
+    items.forEach((item) => {
+      const owned = (draft.inventory.items || []).filter((i) => i.id === item.id).length;
+      const affordable = gearSpent() + item.price <= budget;
+      body.append(el('div', { class: 'result' }, [
+        el('div', { class: 'result-head' }, [
+          el('span', { class: 'result-title', text: `${item.name}${owned ? ` ×${owned}` : ''}` }),
+          el('span', { class: 'cite', text: `${item.price} ${Settings.currencyLabel()} · rarity ${item.rarity ?? '—'}` })
+        ]),
+        el('div', { class: 'result-body', text: group.id === 'weapon'
+          ? `${titleCase(item.skill)}, damage ${item.damage}, crit ${item.crit}, ${item.range} range${item.qualities.length ? `, ${item.qualities.join(', ')}` : ''}.`
+          : group.id === 'armour'
+            ? `Adds ${item.soak} to damage resisted and ${item.defense} to defence. ${item.note || ''}`
+            : (item.effect || '') }),
+        el('button', {
+          type: 'button', class: 'secondary', text: affordable ? 'Add' : 'Too dear',
+          disabled: !affordable, 'aria-label': `Add ${item.name}`,
+          onclick: () => {
+            draft.inventory.items.push({ id: item.id, name: item.name, kind: item.kind, price: item.price, encumbrance: item.encumbrance || 0, qty: 1, equipped: false });
+            rerender();
+          }
+        }),
+        owned ? el('button', {
+          type: 'button', class: 'secondary', text: 'Remove', 'aria-label': `Remove ${item.name}`,
+          onclick: () => {
+            const at = draft.inventory.items.findIndex((i) => i.id === item.id);
+            if (at >= 0) draft.inventory.items.splice(at, 1);
+            rerender();
+          }
+        }) : null
+      ]));
+    });
+    node.append(accordion(`${group.label}`, [body], {
+      key: `wizard-gear-${group.id}`, summary: `${items.length} item${items.length === 1 ? '' : 's'}`,
+      defaultOpen: group.id === 'weapon' || !!needle
+    }));
   });
+  if (!matched) node.append(emptyState('Nothing in the shop matches that.'));
+
+  // What is already in the basket, so it can be undone without hunting the catalogue.
+  const basket = draft.inventory.items || [];
+  if (basket.length) {
+    node.append(el('h3', { text: 'In the basket' }));
+    node.append(el('p', { class: 'small', text: basket.map((i) => i.name).join(', ') }));
+  }
 }
 
 function renderReviewStep(node) {
@@ -534,4 +673,6 @@ function renderReviewStep(node) {
   node.append(el('p', { class: 'small', text: `Talents: ${draft.talents.map((t) => `${talent(t.id).name}${t.ranks > 1 ? ` ×${t.ranks}` : ''}`).join(', ') || 'none'}` }));
   const m = draft.identity.motivation;
   node.append(el('p', { class: 'small', text: `Motivation: ${m.desire} / ${m.fear} / ${m.strength} / ${m.flaw}` }));
+  const cash = startingCash();
+  node.append(el('p', { class: 'small', text: `Starting cash: ${cash.total} ${Settings.currencyLabel()} — ${cash.unspent} unspent from the budget${cash.pocket ? `, plus ${cash.pocket} pocket money` : ', with no pocket money rolled yet'}.` }));
 }

@@ -4,7 +4,10 @@ import { el, clear, $ } from './core.js';
 import { Settings, FLAGS, theme, cycleTheme } from './settings.js';
 import { modal, showToast, confirmModal, panel, subTabs, emptyState } from './ui.js';
 import { PANELS, MODES, TERMS, label as termLabel } from './help.js';
-import { listCharacters, activeCharacter, getCell, exportAll, importAll, setActiveCharacter, deleteCharacter } from './store.js';
+import {
+  listCharacters, activeCharacter, getCell, exportAll, importAll, describeBackup,
+  setActiveCharacter, deleteCharacter
+} from './store.js';
 import { buildIndex, search, SECTIONS } from './rules-index.js';
 import { BASE_WOUND_THRESHOLD, BASE_STRAIN_THRESHOLD, CREATION_RULES, DIE_FACES } from '../data.js';
 
@@ -162,7 +165,7 @@ export function renderRules(mount, params = {}) {
       const body = el('div', {});
       slice.forEach((item) => {
         body.append(el('article', { class: 'rule-entry' }, [
-          el('h4', { text: item.title }),
+          el('h3', { text: item.title }),
           el('p', { text: item.body }),
           item.badge ? el('span', { class: `badge ${item.badgeClass || ''}`, text: item.badge }) : null
         ]));
@@ -268,7 +271,8 @@ export function renderSettings(mount) {
       el('label', { for: `flag-${flag.id}` }, [
         el('span', { text: flag.label }),
         blocked ? el('span', { class: 'badge badge-inferred', text: 'blocked' }) : null,
-        el('span', { class: 'toggle-desc', text: flag.desc })
+        el('span', { class: 'toggle-desc', text: flag.desc }),
+        flag.note ? el('span', { class: 'toggle-desc muted', text: flag.note() }) : null
       ])
     ]));
   });
@@ -280,7 +284,7 @@ export function renderSettings(mount) {
   });
   const currency = el('input', {
     type: 'text', value: Settings.currencyLabel(), id: 'currency-label',
-    onchange: (e) => { Settings.set('currencyLabel', e.target.value.trim() || 'credits'); showToast('Currency label saved'); }
+    onchange: (e) => { Settings.set('currencyLabel', e.target.value.trim() || CREATION_RULES.houseAid.currencyLabel); showToast('Currency label saved'); }
   });
   mount.append(panel('House aids', PANELS.settingsHouse, [
     el('p', {}, [el('span', { class: 'badge badge-house', text: 'not a printed rule' })]),
@@ -298,7 +302,7 @@ export function renderSettings(mount) {
 
   mount.append(panel('Backup', {
     lede: 'Everything lives on this device only. Export a copy before clearing your browser data.',
-    detail: 'The export is a single JSON file holding every character, your network and your settings. Importing one replaces what is on this device, so the app asks first.'
+    detail: 'The export is a single JSON file holding every character, your network, your settings, the roll log, any running encounter and any open progress tasks. Importing one tells you what is in the file and what it will displace before it writes anything, and offers to merge rather than replace.'
   }, [
     el('button', {
       type: 'button', class: 'secondary', text: 'Export JSON',
@@ -311,19 +315,57 @@ export function renderSettings(mount) {
     }),
     ' ',
     el('button', {
-      type: 'button', class: 'secondary', text: 'Import JSON',
+      type: 'button', class: 'secondary', id: 'import-backup', text: 'Import JSON',
       onclick: async () => {
         const input = el('input', { type: 'file', accept: 'application/json' });
         input.addEventListener('change', async () => {
           const file = input.files && input.files[0];
           if (!file) return;
-          if (!(await confirmModal('Importing replaces every character and the Cell on this device. Continue?', { title: 'Import backup' }))) return;
+          let text;
+          let summary;
           try {
-            const result = importAll(await file.text());
-            showToast(`Imported ${result.characters} character(s)`);
+            text = await file.text();
+            summary = describeBackup(text);
           } catch (err) {
             modal({ title: 'Import failed', body: String(err.message || err), actions: [{ label: 'Close', primary: true }] });
+            return;
           }
+          // What is in the file and what it will displace, before anything is written.
+          const { incoming, current } = summary;
+          const body = el('div', { id: 'import-summary' }, [
+            el('h3', { text: 'This file holds' }),
+            el('ul', { class: 'small' }, [
+              el('li', { text: incoming.characters.length ? `${incoming.characters.length} character(s): ${incoming.characters.join(', ')}` : 'no characters' }),
+              incoming.cell ? el('li', { text: `the network "${incoming.cell}", suspicion ${incoming.cellHeat}` }) : null,
+              el('li', { text: `${incoming.rollLog} logged check(s)` }),
+              incoming.combatRound ? el('li', { text: `a running encounter, round ${incoming.combatRound}` }) : null,
+              el('li', { text: `${incoming.tasks} progress task(s)` })
+            ].filter(Boolean)),
+            el('h3', { text: 'On this device now' }),
+            el('ul', { class: 'small' }, [
+              el('li', { text: current.characters.length ? `${current.characters.length} character(s): ${current.characters.join(', ')}` : 'no characters' }),
+              el('li', { text: `${current.rollLog} logged check(s), ${current.tasks} progress task(s)` })
+            ]),
+            el('p', { class: 'small', text: 'Replacing discards everything above. Merging keeps your characters and adds the file\'s alongside them, leaving the log, the encounter and the network as they are.' })
+          ]);
+          const m = modal({
+            title: 'Import a backup',
+            body,
+            actions: [
+              { label: 'Cancel', value: null },
+              { label: 'Merge', value: 'merge' },
+              { label: 'Replace everything', value: 'replace', primary: true }
+            ]
+          });
+          m.onClose((mode) => {
+            if (!mode) return;
+            try {
+              const result = importAll(text, { mode });
+              showToast(mode === 'merge' ? `Merged in ${result.characters} character(s)` : `Replaced everything with ${result.characters} character(s)`);
+            } catch (err) {
+              modal({ title: 'Import failed', body: String(err.message || err), actions: [{ label: 'Close', primary: true }] });
+            }
+          });
         });
         input.click();
       }

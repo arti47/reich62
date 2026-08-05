@@ -7,10 +7,10 @@ import { modal } from './ui.js';
 import { activeCharacterId } from './store.js';
 import { renderHome, renderRules, renderSettings, renderSafety } from './screens.js';
 import { renderWizard } from './wizard.js';
-import { renderSheet, renderResourceHeader } from './sheet.js';
+import { renderSheet, renderResourceHeader, resetSheetTab } from './sheet.js';
 import { renderRoller } from './roller.js';
 import { renderCombat } from './combat.js';
-import { renderGm } from './gm.js';
+import { renderGm, resetGmTab } from './gm.js';
 import { renderSolo } from './solo.js';
 
 const ROUTES = [
@@ -26,10 +26,27 @@ const ROUTES = [
   { id: 'safety',   path: '#/safety',   label: 'Safety',   glyph: '⚑', render: renderSafety, hideInNav: () => true }
 ];
 
-function placeholder(title, body) {
+/** A gated screen explains itself in place rather than silently becoming Home at its own
+ *  URL, and offers the switch that turns it on (A-18). */
+function gatedNotice(route) {
   return (mount) => {
     clear(mount);
-    mount.append(el('div', { class: 'card' }, [el('h2', { text: title }), el('p', { class: 'muted', text: body })]));
+    const flag = route.id === 'solo' ? 'soloMode' : 'gmScreen';
+    const seat = route.id === 'solo' ? 'solo' : 'gm';
+    const seatName = (MODES.find((m) => m.id === seat) || {}).name || seat;
+    const card = el('section', { class: 'card', id: 'gated-notice' }, [
+      el('h2', { text: `${route.label} is switched off` }),
+      el('p', { class: 'lede', text: SCREEN_BLURBS[route.id] || '' }),
+      el('p', { class: 'small', text: `It is off because that option is not enabled and your seat is ${(MODES.find((m) => m.id === Settings.mode()) || MODES[0]).name}.` })
+    ]);
+    card.append(el('button', {
+      type: 'button', class: 'primary', id: 'gated-enable',
+      text: `Turn ${route.label} on`,
+      onclick: () => { Settings.set(flag, true); renderScreen(); }
+    }));
+    card.append(el('p', { class: 'small muted', text: `Or take the ${seatName} seat in Settings and it becomes a tab as well.` }));
+    card.append(el('a', { class: 'small', href: '#/settings', text: 'Open Settings' }));
+    mount.append(card);
   };
 }
 
@@ -51,7 +68,12 @@ export function routableRoutes() {
 
 export function currentRoute() {
   const hash = (location.hash || '#/').split('?')[0];
-  return routableRoutes().find((r) => r.path === hash) || ROUTES[0];
+  const open = routableRoutes().find((r) => r.path === hash);
+  if (open) return open;
+  // A real route whose gate is shut keeps its own identity and explains itself.
+  const shut = ROUTES.find((r) => r.path === hash);
+  if (shut) return { ...shut, render: gatedNotice(shut), gatedOff: true };
+  return ROUTES[0];
 }
 
 /** Query parameters carried on the hash, e.g. #/rules?q=§17.3 from a citation link. */
@@ -83,13 +105,21 @@ export function renderNav() {
   if (!nav) return;
   clear(nav);
   const active = currentRoute();
-  visibleRoutes().forEach((route) => {
+  const routes = visibleRoutes();
+  // The Everything seat shows every screen, which is more than five labels fit across a
+  // phone. Past five the bar drops to glyphs alone, each carrying its accessible name, so
+  // nothing is ever clipped to "OMBAT" (B-7).
+  const glyphOnly = routes.length > 5;
+  nav.classList.toggle('nav-glyph-only', glyphOnly);
+  routes.forEach((route) => {
     nav.append(el('a', {
       href: route.path,
-      'aria-current': route.id === active.id ? 'page' : null
+      'aria-current': route.id === active.id ? 'page' : null,
+      'aria-label': glyphOnly ? route.label : null,
+      title: glyphOnly ? route.label : null
     }, [
       el('span', { class: 'nav-glyph', 'aria-hidden': 'true', text: route.glyph }),
-      el('span', { text: route.label })
+      glyphOnly ? null : el('span', { text: route.label })
     ]));
   });
 }
@@ -106,6 +136,9 @@ export function renderScreen() {
 }
 
 export function startRouter() {
+  // Arriving at a screen from elsewhere opens it at its first sub-tab rather than wherever
+  // it happened to be left (B-6).
+  window.addEventListener('hashchange', () => { resetSheetTab(); resetGmTab(); });
   window.addEventListener('hashchange', renderScreen);
   document.addEventListener('nav:refresh', () => { renderNav(); });
   document.addEventListener('resource:refresh', () => { renderResourceHeader(); });

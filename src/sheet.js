@@ -2,22 +2,26 @@
 // resource header that rides on every in-play screen.
 
 import { el, clear, titleCase, clamp } from './core.js';
-import { showToast, confirmModal, panel, subTabs, emptyState, outcomeBox, numberStepper } from './ui.js';
+import { showToast, confirmModal, promptModal, modal, panel, subTabs, accordion, emptyState, outcomeBox, numberStepper } from './ui.js';
 import { PANELS, label as termLabel, gloss } from './help.js';
 import {
   SKILLS, CHARACTERISTICS, CONDITIONS, HEAT, CRITICAL_INJURIES, SUFFOCATION, RECOVERY,
-  XP_COSTS, SKILL_RANK_MAX
+  XP_COSTS, SKILL_RANK_MAX, FALLING, FALLING_RULES, STORY_POINTS, MOTIVATIONS
 } from '../data.js';
-import { talent, buildPool, canBuyTalent, visibleTalents, xpCost, skill as skillById } from './rules.js';
-import { ITEM_DAMAGE, ATTACHMENTS, DIFFICULTIES } from '../data.js';
+import {
+  talent, buildPool, canBuyTalent, visibleTalents, xpCost, skill as skillById,
+  medicineDifficulty, fallDamage, career as careerById
+} from './rules.js';
+import { ITEM_DAMAGE, ATTACHMENTS, DIFFICULTIES, GEAR, WEAPONS, ARMOUR, RARITY, BLACK_MARKET } from '../data.js';
+import { blackMarketPurchase } from './rules.js';
 import { hardPoints } from './derived.js';
 import { Settings } from './settings.js';
-import { rollCriticalInjury, state as rollerState } from './roller.js';
+import { rollCriticalInjury, spendStoryPoint, applyTalentToCheck, state as rollerState } from './roller.js';
 import {
   derivedFor, woundThreshold, strainThreshold, soak, encumbranceState, criticalModifier
 } from './derived.js';
 import { activeCharacter, saveCharacter, getCell, saveCell as saveCellDirect } from './store.js';
-import { personalEffects, cellEffects } from './heat.js';
+import { personalEffects, cellEffects, applyPersonalHeat } from './heat.js';
 
 /** The persistent resource header: wounds · strain · Story Points · Personal Heat · encumbrance. */
 export function renderResourceHeader() {
@@ -34,11 +38,66 @@ export function renderResourceHeader() {
   node.append(
     chip('Injury', `${character.state.wounds}/${woundThreshold(character)}`, `${termLabel('wounds')} — ${gloss('wounds')}`),
     chip('Stress', `${character.state.strain}/${strainThreshold(character)}`, `${termLabel('strain')} — ${gloss('strain')}`),
-    chip('Story', `${cell.pools.storyPointsPlayer}/${cell.pools.storyPointsGM}`, `${termLabel('storyPoints')}: players / GM. ${gloss('storyPoints')}`),
+    // The story-point chip is the way into the economy, so all eight spends are one tap
+    // from every in-play screen rather than buried on one of them.
+    el('button', {
+      type: 'button', class: 'chip chip-button', id: 'story-points-chip',
+      'aria-label': `Story points: ${cell.pools.storyPointsPlayer} for the players, ${cell.pools.storyPointsGM} for the GM. Open the spend list.`,
+      title: `${termLabel('storyPoints')}: players / GM. ${gloss('storyPoints')}`,
+      text: `Story ${cell.pools.storyPointsPlayer}/${cell.pools.storyPointsGM}`,
+      onclick: () => openStoryPoints()
+    }),
     chip('Heat', `${character.state.personalHeat}·${cell.cellHeat}`, `${termLabel('personalHeat')} · ${termLabel('cellHeat')}. ${gloss('personalHeat')}`),
     chip('Load', `${enc.carried}/${enc.threshold}`, `${termLabel('encumbrance')} — ${gloss('encumbrance')}`)
   );
   if (character.state.incapacitated) node.append(el('span', { class: 'chip', text: 'INCAPACITATED' }));
+}
+
+/** Every Story Point spend the manual prints, both pools, with the two-pool flow enforced:
+ *  a spent point moves to the other pool once its effect resolves (§8, R-4). */
+export function openStoryPoints() {
+  const draw = () => {
+    const cell = getCell();
+    const body = el('div', {});
+    body.append(el('p', { class: 'small', id: 'story-pools', text:
+      `${cell.pools.storyPointsPlayer} in the player pool, ${cell.pools.storyPointsGM} in the GM pool. ${STORY_POINTS.flow}` }));
+
+    const pool = (side, spends, heading) => {
+      body.append(el('h3', { text: heading }));
+      const available = side === 'player' ? cell.pools.storyPointsPlayer : cell.pools.storyPointsGM;
+      if (!available) body.append(el('p', { class: 'small muted', text: 'Nothing in this pool to spend.' }));
+      spends.forEach((spend) => {
+        body.append(el('div', { class: 'result' }, [
+          el('div', { class: 'result-head' }, [el('span', { class: 'result-title', text: spend.label })]),
+          el('button', {
+            type: 'button', class: 'secondary', id: `story-${side}-${spend.id}`,
+            text: 'Spend one', disabled: !available,
+            'aria-label': `${spend.label} — spend one story point from the ${side} pool`,
+            onclick: () => {
+              const result = spendStoryPoint(side, spend.id);
+              if (!result.ok) { showToast(result.reason); return; }
+              // The die-modification spends only mean something on an open check, so that
+              // one hands the upgrade straight to the roller.
+              if (spend.id === 'upgradeDowngrade') {
+                if (side === 'player') rollerState.upgradeAbility += 1;
+                else rollerState.upgradeDifficulty += 1;
+              }
+              showToast(`${spend.label}. Pools now ${result.pools.storyPointsPlayer} player / ${result.pools.storyPointsGM} GM.`);
+              document.dispatchEvent(new CustomEvent('resource:refresh'));
+              dialog.close();
+              openStoryPoints();
+            }
+          })
+        ]));
+      });
+    };
+    pool('player', STORY_POINTS.playerSpends, 'Spend from the player pool');
+    pool('gm', STORY_POINTS.gmSpends, 'Spend from the GM pool');
+    body.append(el('p', { class: 'small muted', text: STORY_POINTS.reset }));
+    return body;
+  };
+  const dialog = modal({ title: 'Story points', body: draw(), actions: [{ label: 'Close', primary: true }] });
+  return dialog;
 }
 
 export const SHEET_TABS = [
@@ -47,9 +106,14 @@ export const SHEET_TABS = [
   { id: 'gear',    label: 'Gear' },
   { id: 'talents', label: 'Talents & injuries' },
   { id: 'care',    label: 'Recovery' },
-  { id: 'advance', label: 'Advance' }
+  { id: 'advance', label: 'Advance' },
+  { id: 'summary', label: 'Summary' }
 ];
 let sheetTab = 'vitals';
+
+/** The sheet opens on Vitals every time it is navigated to, rather than wherever it was
+ *  last left (B-6). Sub-tab choice only survives while you stay on the screen. */
+export function resetSheetTab() { sheetTab = 'vitals'; }
 
 export function renderSheet(mount) {
   clear(mount);
@@ -66,16 +130,41 @@ export function renderSheet(mount) {
 
   const derived = derivedFor(character);
 
-  mount.append(el('div', { class: 'card' }, [
+  const header = el('div', { class: 'card' }, [
     el('h2', { text: character.identity.name || 'Unnamed' }),
-    el('p', { class: 'small muted', text: `${titleCase(character.identity.career || '')} · ${character.xp.available} experience unspent` }),
+    el('p', { class: 'small muted', text: `${careerName(character.identity.career)} · ${character.xp.available} experience unspent` }),
     character.identity.erratum
       ? el('p', { class: 'small' }, [el('span', { class: 'badge badge-inferred', text: 'corrected' }), ' ', character.identity.erratum.note])
-      : null,
-    subTabs(SHEET_TABS, sheetTab, (id) => { sheetTab = id; rerender(); })
-  ]));
+      : null
+  ]);
+  // A name is the one thing you might want to change long after creation.
+  header.append(el('button', {
+    type: 'button', class: 'secondary', id: 'rename-character',
+    text: 'Rename', 'aria-label': `Rename ${character.identity.name || 'this character'}`,
+    onclick: async () => {
+      const next = await promptModal('What should this character be called?', {
+        title: 'Rename', value: character.identity.name || '', confirmLabel: 'Rename'
+      });
+      if (next === null) return;
+      const trimmed = String(next).trim();
+      if (!trimmed) { showToast('A character needs a name.'); return; }
+      if (trimmed === character.identity.name) return;
+      character.identity.name = trimmed;
+      saveCharacter(character);
+      showToast(`Renamed to ${trimmed}`);
+      rerender();
+    }
+  }));
+  header.append(subTabs(SHEET_TABS, sheetTab, (id) => { sheetTab = id; rerender(); }));
+  mount.append(header);
 
   PANES[sheetTab](mount, character, derived, rerender);
+}
+
+/** Careers are stored by id; the printed name is what a reader wants to see (C-1). */
+function careerName(id) {
+  const def = careerById(id);
+  return def ? def.name : (id ? titleCase(id) : 'no career');
 }
 
 function pane_vitals(mount, character, derived, rerender) {
@@ -92,8 +181,10 @@ function pane_vitals(mount, character, derived, rerender) {
     saveCharacter(character); rerender();
   }, 'Stress'));
   vitals.append(stepper(`${termLabel('personalHeat')} — ${gloss('personalHeat')}`, character.state.personalHeat, HEAT.max, (v) => {
-    character.state.personalHeat = clamp(v, HEAT.min, HEAT.max);
-    saveCharacter(character); rerender();
+    // Through applyPersonalHeat so the change is recorded on the trail and the cell
+    // escalation rule still fires (§17.2).
+    applyPersonalHeat(character, clamp(v, HEAT.min, HEAT.max) - character.state.personalHeat, 'Set by hand on the sheet');
+    rerender();
   }, 'Suspicion'));
   if (character.state.incapacitated) {
     vitals.append(outcomeBox(['Out of the fight: injury or stress has reached the limit. Heal below it to act again.'], { tone: 'warn', title: 'Down' }));
@@ -134,37 +225,76 @@ function pane_vitals(mount, character, derived, rerender) {
   if (personal.length) heatCard.append(el('ul', { class: 'small' }, personal.map((t) => el('li', { text: t }))));
   if (cellFx.length) heatCard.append(el('ul', { class: 'small muted' }, cellFx.map((t) => el('li', { text: t }))));
   if (!personal.length && !cellFx.length) heatCard.append(el('p', { class: 'small muted', text: 'No threshold effects in force.' }));
+  // Why the track sits where it does (C-10).
+  const trail = character.state.heatTrail || [];
+  if (trail.length) {
+    const trailBody = el('div', { id: 'heat-trail' });
+    trail.forEach((move) => {
+      trailBody.append(el('p', { class: 'small muted', text:
+        `${new Date(move.ts).toLocaleString()} · ${move.from} → ${move.to} · ${move.reason}` }));
+    });
+    heatCard.append(accordion('How it got here', [trailBody], {
+      key: 'sheet-heat-trail', summary: `last ${trail.length} change${trail.length === 1 ? '' : 's'}`
+    }));
+  }
   mount.append(heatCard);
 
 }
 
+/** The four groups the skill list already carries, so 26 rows read as a contents page
+ *  rather than one run (B-8). */
+const SKILL_GROUPS = [
+  { id: 'combat',    label: 'Combat' },
+  { id: 'general',   label: 'General' },
+  { id: 'social',    label: 'Social' },
+  { id: 'knowledge', label: 'Knowledge' }
+];
+
 function pane_skills(mount, character, derived, rerender) {
-  // skills with pool preview
-  const skillTable = el('table');
-  skillTable.append(el('tr', {}, [el('th', { text: 'Skill' }), el('th', { text: 'Rank' }), el('th', { text: 'Pool' })]));
-  SKILLS.forEach((s) => {
-    const rank = character.skills[s.id].rank;
-    const pool = buildPool(rank, character.attributes[s.characteristic]);
-    skillTable.append(el('tr', {}, [
-      // Tapping a skill selects it on the Roll screen and goes there, so the sheet is the
-      // way into a check rather than a place to read the skill's name and retype it.
-      el('td', {}, [el('button', {
-        type: 'button', class: 'skill-link',
-        'aria-label': `Roll ${s.name}`,
-        text: `${s.name}${character.skills[s.id].career ? ' ●' : ''}`,
-        onclick: () => { rollerState.skillId = s.id; location.hash = '#/roll'; }
-      })]),
-      el('td', { text: String(rank) }),
-      el('td', { class: 'dice-glyph', text: `${pool.ability}A ${pool.proficiency}P` })
-    ]));
+  const skillCard = panel('Skills', PANELS.sheetSkills, []);
+  const trained = SKILLS.filter((s) => character.skills[s.id].rank > 0).length;
+  skillCard.append(el('p', { class: 'small muted', text: `${trained} of ${SKILLS.length} have ranks. Tap any name to take it to the Roll screen.` }));
+
+  const rowsFor = (list) => {
+    const table = el('table');
+    table.append(el('tr', {}, [el('th', { text: 'Skill' }), el('th', { text: 'Rank' }), el('th', { text: 'Dice' })]));
+    list.forEach((s) => {
+      const rank = character.skills[s.id].rank;
+      const pool = buildPool(rank, character.attributes[s.characteristic]);
+      table.append(el('tr', {}, [
+        // Tapping a skill selects it on the Roll screen and goes there, so the sheet is the
+        // way into a check rather than a place to read the skill's name and retype it.
+        el('td', {}, [el('button', {
+          type: 'button', class: 'skill-link',
+          'aria-label': `Roll ${s.name}`,
+          text: `${s.name}${character.skills[s.id].career ? ' ●' : ''}`,
+          onclick: () => { rollerState.skillId = s.id; location.hash = '#/roll'; }
+        })]),
+        el('td', { text: String(rank) }),
+        el('td', { text: `${pool.ability} plain${pool.proficiency ? `, ${pool.proficiency} upgraded` : ''}` })
+      ]));
+    });
+    return el('div', { class: 'table-wrap' }, [table]);
+  };
+
+  SKILL_GROUPS.forEach((group, index) => {
+    const list = SKILLS.filter((s) => s.category === group.id);
+    if (!list.length) return;
+    const withRanks = list.filter((s) => character.skills[s.id].rank > 0).length;
+    skillCard.append(accordion(group.label, [rowsFor(list)], {
+      key: `sheet-skills-${group.id}`,
+      summary: withRanks ? `${withRanks} of ${list.length} trained` : `${list.length}, none trained`,
+      defaultOpen: index === 0
+    }));
   });
-  mount.append(panel('Skills', PANELS.sheetSkills, [el('div', { class: 'table-wrap' }, [skillTable])]));
+  mount.append(skillCard);
 
-
-  // conditions — each auto-applies its effect in the roller
-  const conditionCard = panel('States you are in', PANELS.sheetConditions, []);
-  CONDITIONS.filter((c) => !c.id.startsWith('heat')).forEach((c) => {
-    conditionCard.append(el('div', { class: 'toggle-row' }, [
+  // Conditions fold away behind what is actually ticked, the way the Roll screen's
+  // situation panel and the combat card do (B-9).
+  const condBody = el('div', {});
+  const list = CONDITIONS.filter((c) => !c.id.startsWith('heat'));
+  list.forEach((c) => {
+    condBody.append(el('div', { class: 'toggle-row' }, [
       el('input', {
         type: 'checkbox', id: `cond-${c.id}`, checked: !!character.state.conditions[c.id],
         onchange: (e) => { character.state.conditions[c.id] = e.target.checked; saveCharacter(character); rerender(); }
@@ -176,11 +306,41 @@ function pane_skills(mount, character, derived, rerender) {
       ])
     ]));
   });
+  const on = list.filter((c) => character.state.conditions[c.id]).map((c) => c.name);
+  const conditionCard = panel('States you are in', PANELS.sheetConditions, [
+    accordion('Anything affecting you right now?', [condBody], {
+      key: 'sheet-conditions', summary: on.length ? on.join(', ') : 'nothing'
+    })
+  ]);
   mount.append(conditionCard);
-
 }
 
 function pane_gear(mount, character, derived, rerender) {
+  // --- what you can pay with: three separate pockets ---
+  const money = character.inventory.money;
+  const purse = panel('What you can pay with', {
+    lede: `Cash, ration cards and things worth trading. Above the counter you pay in ${Settings.currencyLabel()}; below it, sellers want the other two.`,
+    detail: 'Ration cards and barter goods are tracked apart from cash because the black-market house rule spends them directly — a seller who wants two ration cards will not take the equivalent in notes.'
+  }, []);
+  purse.append(numberStepper({
+    id: 'purse-cash', label: `Cash (${Settings.currencyLabel()})`, ariaName: 'Cash', value: money.amount || 0,
+    min: 0, max: 99999, steps: [1, 10, 100],
+    onChange: (v) => { character.inventory.money.amount = v; saveCharacter(character); rerender(); }
+  }));
+  purse.append(numberStepper({
+    id: 'purse-cards', label: 'Ration cards', ariaName: 'Ration cards', value: money.rationCards || 0,
+    min: 0, max: 999, steps: [1, 5],
+    onChange: (v) => { character.inventory.money.rationCards = v; saveCharacter(character); rerender(); }
+  }));
+  purse.append(numberStepper({
+    id: 'purse-barter', label: 'Barter goods and favours owed', ariaName: 'Barter goods', value: money.barterGoods || 0,
+    min: 0, max: 999, steps: [1, 5],
+    onChange: (v) => { character.inventory.money.barterGoods = v; saveCharacter(character); rerender(); }
+  }));
+  mount.append(purse);
+
+  mount.append(buyPanel(character, rerender));
+
   // inventory
   const invCard = panel('What you are carrying', PANELS.sheetGear, []);
   const enc = encumbranceState(character);
@@ -279,8 +439,19 @@ function pane_talents(mount, character, derived, rerender) {
         el('span', { class: 'cite', text: `T${def.tier} · ${def.activation}` })
       ]),
       el('div', { class: 'result-body', text: def.summary }),
-      def.activation === 'passive' ? null : el('button', {
-        type: 'button', class: 'secondary', text: 'Use',
+      // A talent with a roller effect always gets a button, even a passive one: the rule
+      // fires automatically but its trigger — engaged with one opponent, a chosen skill,
+      // a target that has not acted — is a judgement call the app cannot make (A-22).
+      def.roller
+        ? el('p', { class: 'small muted', text: def.activation === 'passive'
+            ? 'Passive, but only in the right situation. Tap it when that situation applies and the dice go into the open check.'
+            : 'Tapping this puts it straight into the open check on the Roll screen.' })
+        : def.activation === 'passive' ? null
+          : el('p', { class: 'small muted', text: 'Tapping Use pays the cost and marks it spent; the effect itself is yours to narrate.' }),
+      (def.activation === 'passive' && !def.roller) ? null : el('button', {
+        type: 'button', class: 'secondary',
+        text: def.activation === 'passive' ? 'Apply to this check' : 'Use',
+        'aria-label': `${def.activation === 'passive' ? 'Apply' : 'Use'} ${def.name}`,
         onclick: () => {
           const result = useTalent(character, held.id);
           if (!result.ok) { showToast(result.reason); return; }
@@ -365,6 +536,43 @@ function pane_care(mount, character, derived, rerender) {
   const advantageInput = el('input', { type: 'number', id: 'recovery-advantages', min: '0', value: '0', 'aria-label': 'Uncancelled Advantage' });
   recoveryCard.append(el('label', { class: 'small', for: 'recovery-successes', text: 'Uncancelled Success' }), successInput);
   recoveryCard.append(el('label', { class: 'small', for: 'recovery-advantages', text: 'Uncancelled Advantage' }), advantageInput);
+
+  // How hard the Medicine check is, worked out from the patient's own wounds (§5G).
+  const medBody = el('div', {});
+  const med = medicineDifficulty({
+    wounds: character.state.wounds,
+    woundThreshold: woundThreshold(character),
+    selfTreatment: !!character.state.careFlags.selfTreatment,
+    noEquipment: !!character.state.careFlags.noEquipment
+  });
+  medBody.append(el('p', { class: 'small', id: 'medicine-difficulty' }, [
+    `Treating these ${character.state.wounds} wounds is a `,
+    el('strong', { text: titleCase(med.difficulty) }),
+    ' Medicine check.'
+  ]));
+  med.applied.forEach((line) => medBody.append(el('p', { class: 'small muted', text: line })));
+  [['selfTreatment', 'Treating yourself'], ['noEquipment', 'No medical kit to hand']].forEach(([flag, label]) => {
+    medBody.append(el('div', { class: 'toggle-row' }, [
+      el('input', {
+        type: 'checkbox', id: `medicine-${flag}`, checked: !!character.state.careFlags[flag],
+        onchange: (e) => { character.state.careFlags[flag] = e.target.checked; saveCharacter(character); rerender(); }
+      }),
+      el('label', { for: `medicine-${flag}` }, [el('span', { text: label })])
+    ]));
+  });
+  medBody.append(el('button', {
+    type: 'button', class: 'secondary', id: 'medicine-to-roller',
+    text: 'Set this check up on the Roll screen',
+    onclick: () => {
+      rollerState.skillId = 'medicine';
+      rollerState.difficultyId = med.difficulty;
+      rollerState.opposed = false;
+      rollerState.audienceSize = null;
+      location.hash = '#/roll';
+    }
+  }));
+  recoveryCard.append(el('h3', { text: 'How hard is the check?' }), medBody);
+
   RECOVERY.methods.filter((m) => m.id !== 'vehicleSystemStrain').forEach((method) => {
     const gate = recoveryAvailable(character, method.id);
     recoveryCard.append(el('div', { class: 'result' }, [
@@ -389,6 +597,56 @@ function pane_care(mount, character, derived, rerender) {
   });
   mount.append(recoveryCard);
 
+  // --- falls (§5I): the band sets the damage; the mitigation check trims it ---
+  const fallCard = panel('Taking a fall', PANELS.sheetFall, []);
+  const fallBand = el('select', { id: 'fall-band', 'aria-label': 'How far you fell' });
+  FALLING.forEach((f) => fallBand.append(el('option', { value: f.band, text: `${titleCase(f.band)} range` })));
+  const fallSuccess = el('input', { type: 'number', id: 'fall-successes', min: '0', value: '0', 'aria-label': 'Uncancelled Success on the mitigation check' });
+  const fallAdvantage = el('input', { type: 'number', id: 'fall-advantages', min: '0', value: '0', 'aria-label': 'Uncancelled Advantage on the mitigation check' });
+  fallCard.append(
+    el('label', { class: 'small', for: 'fall-band', text: 'How far you fell' }), fallBand,
+    el('p', { class: 'small muted', text: FALLING_RULES.mitigation }),
+    el('label', { class: 'small', for: 'fall-successes', text: 'Uncancelled Success' }), fallSuccess,
+    el('label', { class: 'small', for: 'fall-advantages', text: 'Uncancelled Advantage' }), fallAdvantage,
+    el('button', {
+      type: 'button', class: 'secondary', id: 'apply-fall', text: 'Apply the fall',
+      onclick: () => {
+        const result = applyFall(character, fallBand.value, {
+          successes: Number(fallSuccess.value), advantages: Number(fallAdvantage.value)
+        });
+        result.events.forEach((e) => showToast(e));
+        rerender();
+      }
+    })
+  );
+  if (character.state.lastFall) {
+    fallCard.append(outcomeBox(character.state.lastFall, { title: 'The last fall', tone: 'bad' }));
+  }
+  mount.append(fallCard);
+}
+
+/** Apply a fall to the sheet: wounds past soak, strain unreduced, and the Critical roll (§5I). */
+export function applyFall(character, band, { successes = 0, advantages = 0 } = {}) {
+  const result = fallDamage({
+    band,
+    woundThreshold: woundThreshold(character),
+    soak: soak(character),
+    successes, advantages
+  });
+  if (!result) return { ok: false, events: ['Unknown fall distance.'] };
+  character.state.wounds = Math.max(0, character.state.wounds + result.wounds);
+  character.state.strain = Math.max(0, character.state.strain + result.strain);
+  character.state.incapacitated = character.state.wounds >= woundThreshold(character)
+    || character.state.strain >= strainThreshold(character);
+  const events = [
+    `${titleCase(band)} fall: ${result.wounds} wounds after soak, ${result.strain} strain.`
+  ];
+  if (result.criticalModifier) events.push(`Roll a Critical Injury at +${result.criticalModifier}.`);
+  if (result.note) events.push(result.note);
+  if (character.state.incapacitated) events.push('Incapacitated.');
+  character.state.lastFall = events;
+  saveCharacter(character);
+  return { ok: true, events, result };
 }
 
 function pane_advance(mount, character, derived, rerender) {
@@ -450,7 +708,173 @@ function pane_advance(mount, character, derived, rerender) {
   ]));
 }
 
-const PANES = { vitals: pane_vitals, skills: pane_skills, gear: pane_gear, talents: pane_talents, care: pane_care, advance: pane_advance };
+/** A read-only account of the whole character on one screen, so it can be printed and
+ *  carried as a paper backup (C-6). Nothing here is editable by design. */
+function pane_summary(mount, character, derived, rerender) {
+  const card = panel('The whole character', PANELS.sheetSummary, [], { id: 'character-summary' });
+  const m = character.identity.motivation || {};
+  const line = (label, value) => el('p', { class: 'small' }, [el('strong', { text: `${label}: ` }), String(value || '—')]);
+
+  card.append(el('h3', { text: character.identity.name || 'Unnamed' }));
+  card.append(line('Career', careerName(character.identity.career)));
+  card.append(line('Experience', `${character.xp.available} unspent of ${character.xp.total} earned`));
+
+  card.append(el('h3', { text: 'Characteristics' }));
+  card.append(el('div', { class: 'stat-grid' }, CHARACTERISTICS.map((c) => statBox(c.name, character.attributes[c.id]))));
+
+  card.append(el('h3', { text: 'Worked-out numbers' }));
+  card.append(el('div', { class: 'stat-grid' }, [
+    statBox('Injury limit', `${character.state.wounds} / ${derived.woundThreshold}`),
+    statBox('Stress limit', `${character.state.strain} / ${derived.strainThreshold}`),
+    statBox(termLabel('soak'), derived.soak),
+    statBox('Close defence', derived.meleeDefense),
+    statBox('Ranged defence', derived.rangedDefense),
+    statBox('Carrying', `${encumbranceState(character).carried} / ${derived.encumbranceThreshold}`)
+  ]));
+
+  card.append(el('h3', { text: 'Skills' }));
+  const trained = SKILLS.filter((sk) => character.skills[sk.id].rank > 0);
+  if (!trained.length) card.append(el('p', { class: 'small muted', text: 'No ranks bought yet.' }));
+  else {
+    const table = el('table');
+    table.append(el('tr', {}, [el('th', { text: 'Skill' }), el('th', { text: 'Rank' }), el('th', { text: 'Pool' })]));
+    trained.forEach((sk) => {
+      const pool = buildPool(character.skills[sk.id].rank, character.attributes[sk.characteristic]);
+      table.append(el('tr', {}, [
+        el('td', { text: `${sk.name}${character.skills[sk.id].career ? ' ●' : ''}` }),
+        el('td', { text: String(character.skills[sk.id].rank) }),
+        el('td', { text: `${pool.ability}A ${pool.proficiency}P` })
+      ]));
+    });
+    card.append(el('div', { class: 'table-wrap' }, [table]));
+  }
+
+  card.append(el('h3', { text: 'Talents' }));
+  card.append(el('p', { class: 'small', text: character.talents.length
+    ? character.talents.map((t) => `${talent(t.id) ? talent(t.id).name : t.id}${t.ranks > 1 ? ` ×${t.ranks}` : ''}`).join(', ')
+    : 'None yet.' }));
+
+  card.append(el('h3', { text: 'What drives them' }));
+  ['desire', 'fear', 'strength', 'flaw'].forEach((facet) => card.append(line(titleCase(facet), m[facet])));
+
+  card.append(el('h3', { text: 'Carried' }));
+  const items = character.inventory.items || [];
+  card.append(el('p', { class: 'small', text: items.length ? items.map((i) => i.name || i.id).join(', ') : 'Nothing.' }));
+  const money = character.inventory.money;
+  card.append(line('Money', `${money.amount || 0} ${Settings.currencyLabel()} · ${money.rationCards || 0} ration cards · ${money.barterGoods || 0} in barter goods`));
+
+  const untreated = (character.state.criticalInjuries || []).filter((c) => !c.healed);
+  card.append(el('h3', { text: 'Lasting injuries' }));
+  card.append(el('p', { class: 'small', text: untreated.length ? untreated.map((c) => `${c.name} (${c.severity})`).join(', ') : 'None untreated.' }));
+
+  card.append(line(termLabel('personalHeat'), `${character.state.personalHeat} of ${HEAT.max}`));
+  if (character.notes) { card.append(el('h3', { text: 'Notes' }), el('p', { class: 'small', text: character.notes })); }
+
+  card.append(el('button', {
+    type: 'button', class: 'secondary', id: 'print-summary', text: 'Print or save as PDF',
+    onclick: () => window.print()
+  }));
+  mount.append(card);
+}
+
+const PANES = { vitals: pane_vitals, skills: pane_skills, gear: pane_gear, talents: pane_talents, care: pane_care, advance: pane_advance, summary: pane_summary };
+
+/** HOUSE RULE — the black-market counter. It reuses the printed rarity ladder and adds the
+ *  barter demand on top; every surface here is badged so it never reads as printed. */
+function buyPanel(character, rerender) {
+  const catalogue = [
+    ...GEAR.filter((g) => g.rarity !== null && g.rarity !== undefined).map((g) => ({ ...g, kind: 'gear' })),
+    ...WEAPONS.filter((w) => w.rarity !== null && w.rarity !== undefined).map((w) => ({ ...w, kind: 'weapon' })),
+    ...ARMOUR.filter((a) => a.rarity !== null && a.rarity !== undefined).map((a) => ({ ...a, kind: 'armour' }))
+  ];
+  const chosen = catalogue.find((i) => i.id === buyState.itemId) || catalogue[0];
+  const money = character.inventory.money;
+
+  const card = panel('Buy something', {
+    lede: 'Work out what a purchase will cost and how hard the check is, then pay for it.',
+    detail: `Legal goods go through Negotiation, illegal ones through Streetwise, at the difficulty their rarity sets. Above rarity ${BLACK_MARKET.barterFromRarity - 1} this table's house rule also demands ration cards or goods in trade: one card per point of rarity above 5. With nothing to trade the check gets one step harder and the shortfall is made up in cash or favours.`
+  }, []);
+  card.append(el('p', {}, [el('span', { class: 'badge badge-house', text: BLACK_MARKET.badge })]));
+
+  const itemSelect = el('select', { id: 'buy-item', 'aria-label': 'What to buy', onchange: (e) => { buyState.itemId = e.target.value; rerender(); } });
+  catalogue.forEach((item) => itemSelect.append(el('option', {
+    value: item.id, selected: chosen && item.id === chosen.id,
+    text: `${item.name} — rarity ${item.rarity}${item.price ? `, ${item.price} ${Settings.currencyLabel()}` : ''}`
+  })));
+  card.append(el('label', { class: 'small', for: 'buy-item', text: 'What are you after?' }), itemSelect);
+
+  const whereSelect = el('select', { id: 'buy-where', 'aria-label': 'Where you are buying', onchange: (e) => { buyState.modifier = e.target.value; rerender(); } });
+  RARITY.modifiers.forEach((m) => whereSelect.append(el('option', {
+    value: m.id, selected: buyState.modifier === m.id,
+    text: `${m.label} (${m.value >= 0 ? '+' : ''}${m.value})`
+  })));
+  card.append(el('label', { class: 'small', for: 'buy-where', text: 'Where are you buying?' }), whereSelect);
+
+  const modifier = RARITY.modifiers.find((m) => m.id === buyState.modifier) || RARITY.modifiers[1];
+  const quote = blackMarketPurchase({
+    rarity: chosen ? chosen.rarity : 0,
+    modifierValues: [modifier.value],
+    rationCards: money.rationCards || 0,
+    barterGoods: money.barterGoods || 0
+  });
+
+  const lines = [
+    `${titleCase(quote.skill)} check at ${quote.difficulty} difficulty${quote.extraSteps ? ` — one step harder, because you have nothing to trade` : ''}.`,
+    chosen && chosen.price ? `Price: ${chosen.price} ${Settings.currencyLabel()}, and you have ${money.amount || 0}.` : 'No printed price; settle it with the GM.'
+  ];
+  if (quote.needsBarter) {
+    lines.push(quote.cardsRequired
+      ? `Ration cards wanted: ${quote.cardsRequired}, and you have ${money.rationCards || 0}.`
+      : 'Trade goods wanted on top of the cash.');
+    if (quote.cardsShort && quote.payingWithGoods) lines.push(`Short ${quote.cardsShort} card(s), so a barter good goes instead.`);
+    if (quote.cardsShort && !quote.payingWithGoods) lines.push(`Short ${quote.cardsShort} card(s) with nothing to trade: the check is one step harder.`);
+  }
+  if (quote.upgrades) lines.push(`Rarity above 10: the difficulty is upgraded ${quote.upgrades} time(s).`);
+  card.append(outcomeBox(lines, { title: 'What this will take' }));
+
+  card.append(el('button', {
+    type: 'button', class: 'primary', id: 'buy-setup',
+    text: 'Set this check up on the Roll screen',
+    onclick: () => {
+      Object.assign(rollerState, {
+        skillId: quote.skill,
+        difficultyId: quote.difficulty,
+        opposed: false,
+        blackMarket: quote.needsBarter,
+        surveilled: quote.needsBarter
+      });
+      location.hash = '#/roll';
+    }
+  }));
+
+  const affordable = (!chosen.price || (money.amount || 0) >= chosen.price)
+    && (!quote.cardsRequired || (money.rationCards || 0) >= quote.cardsRequired || (money.barterGoods || 0) > 0);
+  card.append(el('button', {
+    type: 'button', class: 'secondary', id: 'buy-pay', text: 'Pay and take it', disabled: !affordable,
+    onclick: () => {
+      const paid = [];
+      if (chosen.price) { character.inventory.money.amount = Math.max(0, (money.amount || 0) - chosen.price); paid.push(`${chosen.price} ${Settings.currencyLabel()}`); }
+      if (quote.cardsRequired && (money.rationCards || 0) >= quote.cardsRequired) {
+        character.inventory.money.rationCards = (money.rationCards || 0) - quote.cardsRequired;
+        paid.push(`${quote.cardsRequired} ration card(s)`);
+      } else if (quote.needsBarter && (money.barterGoods || 0) > 0) {
+        character.inventory.money.barterGoods = (money.barterGoods || 0) - 1;
+        paid.push('a barter good');
+      }
+      character.inventory.items.push({
+        id: chosen.id, name: chosen.name, kind: chosen.kind, price: chosen.price || 0,
+        encumbrance: chosen.encumbrance || 0, qty: 1, equipped: false, damageLevel: 'undamaged', attachments: []
+      });
+      saveCharacter(character);
+      showToast(`${chosen.name} bought for ${paid.join(' and ') || 'nothing'}`);
+      rerender();
+    }
+  }));
+  if (!affordable) card.append(el('p', { class: 'small muted', text: 'You cannot cover this yet — more cash, more ration cards, or something to trade.' }));
+  return card;
+}
+
+const buyState = { itemId: null, modifier: 'midSize' };
 
 function stepper(labelText, value, max, onChange, ariaName) {
   return numberStepper({
@@ -720,8 +1144,11 @@ export function useTalent(character, talentId) {
     effects.push(`Healed ${healed} strain.`);
   }
   if (talentId === 'knowSomebody') effects.push(`Reduce the item's rarity by ${held.ranks} for this purchase.`);
-  if (talentId === 'natural') effects.push('Reroll one check with either chosen skill.');
   if (def.derived) effects.push('Passive: already folded into the derived stats.');
+  // Talents whose printed text names an exact change to your own pool push it into the open
+  // check rather than telling you to apply it yourself (A-22).
+  const pushed = applyTalentToCheck(def, held.ranks);
+  if (pushed) effects.push(`${pushed.note} Applied to the open check on the Roll screen.`);
   if (!effects.length) effects.push(def.summary);
 
   if (bucket) {

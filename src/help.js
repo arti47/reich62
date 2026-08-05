@@ -47,15 +47,20 @@ export const PANELS = {
 
   sheetVitals: { lede: 'Injury, stress and suspicion. Nudge them as play goes.', detail: 'Injury and stress each have a limit; reaching either takes you out of the fight until you drop back below it. Type a number straight in, or use the buttons for small changes.' },
   sheetSkills: { lede: 'What your character is good at, and the dice each skill rolls. Tap one to take it to the Roll screen.', detail: 'The pool preview shows how many plain and upgraded dice you get: the higher of skill and its characteristic sets the number of dice, and the lower upgrades that many of them.' },
+  sheetBuy: { lede: 'Work out what a purchase costs and how hard the check is, then pay for it.', detail: 'This table adds a house rule on top of the printed purchasing rules: above rarity 5, sellers want ration cards or goods in trade as well as cash.' },
   sheetGear: { lede: 'What you are carrying, what it weighs, and what state it is in.', detail: 'Going over your carrying limit adds a penalty die to physical checks, and going far over costs you your free move each turn. Items can be damaged and repaired a step at a time, and larger items have slots for attachments.' },
   sheetTalents: { lede: 'Your talents. Tap Use on the ones that do something on demand.', detail: 'Using a talent deducts its cost — stress or a story point — and marks it as spent for the encounter or session where the book says so.' },
   sheetConditions: { lede: 'States your character is in. Anything ticked here changes the dice on the Roll screen automatically.', detail: 'The manual has no single list of conditions, so this one is assembled from the injury table, item effects, suspicion thresholds and the carrying rules. Two of them are marked "inferred": the book uses the words without defining them, so the app states the reading it uses.' },
   sheetCriticals: { lede: 'Lasting injuries. Each untreated one makes the next roll on the injury table worse.', detail: 'Every untreated injury adds ten to future rolls on that table, so they stack up fast. Treating one takes a Medicine check or a week of rest.' },
   sheetDeath: { lede: 'When something on the injury table starts a countdown, run it here.', detail: 'Bleeding out costs a wound and a point of stress each turn. "The end is nigh" kills at the end of the next round unless treated. Suffocation piles on stress and then extra injuries. If you have the Indomitable talent you can spend a story point to hold off going down.' },
   sheetRecovery: { lede: 'Healing, and the limits on how often each kind can be used.', detail: 'The book puts a hard limit on most of these — once per encounter, once a night, once a week per injury — and the app enforces them rather than trusting you to remember.' },
+  sheetFall: { lede: 'Work out what a fall costs you.', detail: 'How far you fell sets the wounds and the stress. An Average Athletics or Coordination check trims it — one wound per success, one stress per advantage — and your soak comes off the wounds afterwards, never off the stress. A long or extreme fall also adds to any injury roll that follows.' },
+  sheetSummary: { lede: 'The whole character on one screen, to read or to print.', detail: 'Nothing here can be edited — it is the sheet as it stands, laid out so it prints cleanly onto a page you can carry as a backup if the phone dies.' },
   sheetAdvance: { lede: 'Spend earned experience on skills and talents.', detail: 'Characteristics can only be raised during creation; afterwards only the Dedication talent raises one, never above 5 and never the same one twice. Talents follow the pyramid: you need as many talents in the tier below as you are about to have in the tier above.' },
 
   rollCheck: { lede: 'Pick the skill and how hard the task is. The pool builds itself.', detail: 'Choose "opposed" when another person is actively resisting you: they never roll, their rating builds the opposing dice instead.' },
+  rollAttack: { lede: 'Pick a weapon and who you are aiming at, and the app does the rest of the arithmetic.', detail: 'The weapon sets which skill you roll. For a ranged weapon the distance sets the difficulty on its own — close is easy, far is not. Picking a target off the combat tracker means the app knows their soak, so once you tap in your dice it can tell you the damage and take it off them in one go.' },
+  rollMotivation: { lede: 'The four things about your character that other people can use against you.', detail: 'In a social encounter an opponent spends leftover advantage to work these out: two buys your strength or flaw, three buys your desire or fear. Tick one once it is out in the open, so you both know what is already known.' },
   rollSituation: { lede: 'Anything about the scene that should change the dice.', detail: 'Cover, darkness, the size of your target and how hard the target is to hit all belong here. Below that you can upgrade or downgrade dice by hand, or spend a story point to do it.' },
   rollPool: { lede: 'The dice this check uses, and why each one is there.', detail: 'Dice are assembled in the order the book gives: build the base pool, add, upgrade, downgrade, then remove.' },
   // rollPool is retained for the "Why these dice" copy; the pool itself now lives in the
@@ -70,7 +75,8 @@ export const PANELS = {
   combatVehicles: { lede: 'Cars, bikes, trucks and trains, on the same engine as everything else.', detail: 'Speed changes by one step at a time. Losing control crashes the vehicle for damage equal to its current speed.' },
   combatTasks: { lede: 'Anything that takes several rolls: a manhunt, a repair job, or a clock you invent.', detail: 'The manhunt is the one the books actually publish: the search gets stronger every hour, and each failed round raises suspicion on both you and your network.' },
 
-  soloOracle: { lede: 'Ask a yes-or-no question when nothing on your sheet decides it.', detail: 'Set how likely the answer is, roll the dice listed, and enter what came up. A best or worst result also triggers a random event.' },
+  soloOracle: { lede: 'Ask a yes-or-no question when nothing on your sheet decides it.', detail: 'Set how likely the answer is and tap Ask. The app rolls the Oracle\'s dice for you — it is the GM\'s roll, not your character\'s — and shows what came up alongside the answer. A best or worst result also triggers a random event. If you would rather roll your own dice, the pad is under "I rolled my own dice".' },
+  soloLog: { lede: 'Every question you have put to the Oracle, newest first.', detail: 'Kept apart from the Roll screen\'s log, because an Oracle answer is not a skill check. Delete any single one, or clear the lot. It holds the last hundred.' },
   soloTables: { lede: 'Prompts when you need one: a phrase, a place, a faction, a complication, a stranger, an encounter.', detail: 'These are the book\'s own tables, rolled for you.' },
 
   gmCell: { lede: 'The network\'s suspicion and its story-point bank.', detail: 'Raising cell suspicion here changes the safehouse status automatically: watched at 3, blown at 5.' },
@@ -89,7 +95,7 @@ export const MODES = [
   { id: 'player', name: 'Player', desc: 'You play one character at a table with a GM.', tabs: ['home', 'sheet', 'roll', 'create', 'rules'] },
   { id: 'gm',     name: 'GM',     desc: 'You run the game for other people.',            tabs: ['home', 'gm', 'combat', 'roll', 'rules'] },
   { id: 'solo',   name: 'Solo',   desc: 'You play on your own, with the Oracle as GM.',  tabs: ['home', 'sheet', 'roll', 'solo', 'combat'] },
-  { id: 'all',    name: 'Everything', desc: 'Show every screen at once — nine tabs, tight on a phone.', tabs: null }
+  { id: 'all',    name: 'Everything', desc: 'Show every screen at once. Past five tabs the bar shows glyphs alone so nothing is clipped.', tabs: null }
 ];
 
 /** One line per screen, for the header menu. */

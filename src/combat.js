@@ -5,17 +5,39 @@ import { el, clear, titleCase, uid, clamp, rollDie } from './core.js';
 import { showToast, confirmModal, modal, panel, accordion, emptyState, outcomeBox } from './ui.js';
 import { PANELS } from './help.js';
 import {
-  MANEUVER_RULES, COMBAT_SEQUENCE, LIFECYCLE, RECOVERY, HEAT, XP_AWARDS, RANGE_BANDS
+  MANEUVER_RULES, COMBAT_SEQUENCE, LIFECYCLE, RECOVERY, HEAT, XP_AWARDS, RANGE_BANDS,
+  MANEUVERS, ACTION_TYPES, CONDITIONS, DIE_FACES
 } from '../data.js';
 import { BESTIARY, ENCOUNTER_BLOCKS } from '../data-monsters.js';
 import { VEHICLES, VEHICLE_RULES } from '../data.js';
-import { minionGroupWoundThreshold, minionGroupSkillRanks, bestiaryEntry, encounterBlock } from './rules.js';
+import {
+  minionGroupWoundThreshold, minionGroupSkillRanks, minionCriticalWoundCost,
+  bestiaryEntry, encounterBlock, criticalInjuryFor, criticalInjuryTotal, adversaryAbility
+} from './rules.js';
 import { woundThreshold, strainThreshold, soak, derivedFor } from './derived.js';
 import {
   getCombat, saveCombat, blankCombat, listTasks, saveTasks, activeCharacter, listCharacters,
   saveCharacter, getCell, saveCell, snapshot, undoSnapshot, lastSnapshot
 } from './store.js';
 import { applyCellHeat, applyPersonalHeat, safehouseFor } from './heat.js';
+import { Settings } from './settings.js';
+
+/** The conditions a GM realistically holds an NPC in. Heat and encumbrance are the
+ *  character's own bookkeeping and never apply to a dropped-in opponent. */
+const COMBAT_CONDITIONS = CONDITIONS.filter((c) =>
+  !c.id.startsWith('heat') && !['encumbered', 'incapacitated'].includes(c.id));
+
+/** A Simple initiative check rolled for an NPC when the simulated roller is on (§5). */
+function rollInitiative(skillRank, characteristic) {
+  const built = { ability: Math.max(skillRank, characteristic) - Math.min(skillRank, characteristic),
+                  proficiency: Math.min(skillRank, characteristic) };
+  let success = 0;
+  let advantage = 0;
+  const roll = (faces) => { const f = faces[Math.floor(Math.random() * faces.length)]; f.forEach((sym) => { if (sym === 'success') success += 1; if (sym === 'advantage') advantage += 1; }); };
+  for (let i = 0; i < built.ability; i += 1) roll(DIE_FACES.ability);
+  for (let i = 0; i < built.proficiency; i += 1) roll(DIE_FACES.proficiency);
+  return { success, advantage };
+}
 
 // ---------------------------------------------------------------------------
 // Initiative slots (§5, §5A')
@@ -78,6 +100,7 @@ function resetTurn(combatant) {
   combatant.actedThisRound = false;
   combatant.maneuversUsed = 0;
   combatant.actionUsed = false;
+  combatant.turnLog = [];
 }
 
 export function endEncounterState() {
@@ -93,7 +116,7 @@ export function endEncounterState() {
 // 2 strain; never more than two maneuvers.
 // ---------------------------------------------------------------------------
 
-export function spendManeuver(combatantId) {
+export function spendManeuver(combatantId, maneuverId = null) {
   const combat = getCombat();
   const c = combat.combatants[combatantId];
   if (!c) return { ok: false, reason: 'Unknown combatant.' };
@@ -106,18 +129,34 @@ export function spendManeuver(combatantId) {
   }
   c.maneuversUsed += 1;
   if (strainCost) c.strain = (c.strain || 0) + strainCost;
+  const def = MANEUVERS.find((m) => m.id === maneuverId);
+  c.turnLog = [...(c.turnLog || []), `${def ? def.name : 'Maneuver'}${strainCost ? ` (${strainCost} strain)` : ''}`];
   saveCombat(combat);
-  return { ok: true, strainCost, maneuversUsed: c.maneuversUsed };
+  return { ok: true, strainCost, maneuversUsed: c.maneuversUsed, name: def ? def.name : 'Maneuver' };
 }
 
-export function spendAction(combatantId) {
+export function spendAction(combatantId, actionId = null) {
   const combat = getCombat();
   const c = combat.combatants[combatantId];
   if (!c) return { ok: false, reason: 'Unknown combatant.' };
   if (c.actionUsed) return { ok: false, reason: 'The action for this turn is already spent.' };
   c.actionUsed = true;
+  const def = ACTION_TYPES.find((a) => a.id === actionId);
+  c.turnLog = [...(c.turnLog || []), def ? def.name : 'Action'];
   saveCombat(combat);
-  return { ok: true };
+  return { ok: true, name: def ? def.name : 'Action' };
+}
+
+/** Conditions on an NPC (§3.9). They are stored per combatant so the GM can hold a rival
+ *  staggered or disoriented for the rounds the rule says. */
+export function setCombatantCondition(combatantId, conditionId, on) {
+  const combat = getCombat();
+  const c = combat.combatants[combatantId];
+  if (!c) return { ok: false, reason: 'Unknown combatant.' };
+  c.conditions = { ...(c.conditions || {}) };
+  if (on) c.conditions[conditionId] = true; else delete c.conditions[conditionId];
+  saveCombat(combat);
+  return { ok: true, conditions: c.conditions };
 }
 
 // ---------------------------------------------------------------------------
@@ -201,7 +240,7 @@ export function promoteToRival(combatantId) {
 }
 
 /** Apply damage. Minion groups drop a member per share of the group threshold (§12C). */
-export function damageCombatant(combatantId, { wounds = 0, strain = 0, critical = false }) {
+export function damageCombatant(combatantId, { wounds = 0, strain = 0, critical = false, vicious = 0 } = {}) {
   const combat = getCombat();
   const c = combat.combatants[combatantId];
   if (!c) return { ok: false, reason: 'Unknown combatant.' };
@@ -221,7 +260,7 @@ export function damageCombatant(combatantId, { wounds = 0, strain = 0, critical 
     const perMember = c.woundThresholdPerMember || 1;
     if (critical) {
       // Any Critical Injury takes one minion out; the group takes that share plus one (§12C).
-      c.wounds += perMember + 1;
+      c.wounds += minionCriticalWoundCost(perMember);
       notes.push('A Critical Injury instantly takes one minion out of the fight.');
     }
     const dropped = Math.min(c.minionCount, Math.floor(c.wounds / perMember));
@@ -230,6 +269,13 @@ export function damageCombatant(combatantId, { wounds = 0, strain = 0, critical 
     c.minionsDown = dropped;
     c.defeated = remaining === 0;
   } else {
+    // Rivals and nemeses suffer Critical Injuries normally (§12C), so the §9 table is rolled
+    // for them, stored on the card, and stacks +10 on their own later rolls like a PC's.
+    if (critical) {
+      const rolled = rollCombatantCritical(c, { vicious });
+      notes.push(`Critical Injury on ${c.name}: ${rolled.injury.name} (${rolled.injury.severity}), rolled ${rolled.roll}${rolled.modifier ? ` +${rolled.modifier}` : ''}.`);
+      if (rolled.condition) notes.push(`${c.name} is now ${rolled.condition}.`);
+    }
     c.defeated = c.wounds >= c.woundThreshold;
     if (c.defeated && c.tier === 'rival') notes.push('The GM may rule a rival killed outright past their threshold.');
     if (c.defeated && c.tier === 'nemesis') notes.push('Incapacitated at the threshold.');
@@ -250,6 +296,44 @@ export function damageCombatant(combatantId, { wounds = 0, strain = 0, critical 
   return { ok: true, combatant: c, notes };
 }
 
+/** Roll the §9 table for an NPC and keep the result on their card. Their own untreated
+ *  injuries add +10 each, exactly as they do for a PC (§9), and Vicious X adds 10 per rank.
+ *  `mutate` is the combatant object, already inside an open `getCombat()` transaction. */
+export function rollCombatantCritical(combatant, { vicious = 0, roll = null } = {}) {
+  combatant.criticalInjuries = combatant.criticalInjuries || [];
+  const untreated = combatant.criticalInjuries.filter((c) => !c.healed).length;
+  const d100 = roll || rollDie(100);
+  const total = criticalInjuryTotal({ roll: d100, untreatedInjuries: untreated, vicious });
+  const injury = criticalInjuryFor(total);
+  const record = { roll: d100, total, severity: injury.severity, name: injury.name, healed: false };
+  combatant.criticalInjuries.push(record);
+  // Three results name a condition; Hardened and Disciplined make their bearers immune (R-19).
+  let applied = null;
+  if (injury.condition && !immuneTo(combatant, injury.condition)) {
+    combatant.conditions = { ...(combatant.conditions || {}), [injury.condition]: true };
+    applied = (CONDITIONS.find((x) => x.id === injury.condition) || { name: injury.condition }).name.toLowerCase();
+  }
+  return { injury, roll: d100, total, modifier: total - d100, condition: applied, record };
+}
+
+/** Adversary abilities that grant immunity to a condition (§12D Hardened, B§2 Disciplined). */
+function immuneTo(combatant, conditionId) {
+  return (combatant.abilities || []).some((id) => {
+    const def = adversaryAbility(id);
+    return def && (def.immunities || []).includes(conditionId);
+  });
+}
+
+/** Mark one of an NPC's injuries treated, so the +10 stack falls back again. */
+export function healCombatantCritical(combatantId, index) {
+  const combat = getCombat();
+  const c = combat.combatants[combatantId];
+  if (!c || !(c.criticalInjuries || [])[index]) return { ok: false, reason: 'No such injury.' };
+  c.criticalInjuries[index].healed = !c.criticalInjuries[index].healed;
+  saveCombat(combat);
+  return { ok: true, healed: c.criticalInjuries[index].healed };
+}
+
 /** Papers-Check Reflex (B§2): a PC who fails a Deception or Cool check against this group
  *  takes a Personal Heat check automatically. */
 export function papersCheckReflex(combatantId, character, { failed }) {
@@ -259,7 +343,7 @@ export function papersCheckReflex(combatantId, character, { failed }) {
     return { ok: false, reason: 'This combatant does not have Papers-Check Reflex.' };
   }
   if (!failed) return { ok: true, triggered: false, note: 'The check held up; no Heat.' };
-  const applied = applyPersonalHeat(character, 1);
+  const applied = applyPersonalHeat(character, 1, `Papers-Check Reflex from ${c.name}`);
   return {
     ok: true, triggered: true, applied,
     note: `Papers-Check Reflex: Personal Heat ${applied.before} → ${applied.after}.`
@@ -291,6 +375,15 @@ export function removeCombatant(combatantId) {
 // ---------------------------------------------------------------------------
 // Vehicle scale (§12) — the same engine, personal-scale damage, five range bands.
 // ---------------------------------------------------------------------------
+
+export function setVehiclePilot(vehicleId, pilotCombatantId) {
+  const combat = getCombat();
+  const v = (combat.vehicles || {})[vehicleId];
+  if (!v) return { ok: false, reason: 'Unknown vehicle.' };
+  v.pilotCombatantId = pilotCombatantId || null;
+  saveCombat(combat);
+  return { ok: true, pilotCombatantId: v.pilotCombatantId };
+}
 
 export function addVehicle(vehicleId, { pilotCombatantId = null } = {}) {
   const source = VEHICLES.find((v) => v.id === vehicleId);
@@ -433,7 +526,7 @@ export function dragnetRound(taskId, { failed, character = null, hoursElapsed = 
   if (failed) {
     task.progress = clamp(task.progress + 1, 0, task.target);
     if (character) {
-      const personal = applyPersonalHeat(character, 1);
+      const personal = applyPersonalHeat(character, 1, `A failed round of ${task.name}`);
       effects.push(`Personal Heat ${personal.before} → ${personal.after}.`);
     }
     const cell = applyCellHeat(1);
@@ -572,10 +665,408 @@ export function renderCombat(mount) {
   const rerender = () => renderCombat(mount);
   const combat = getCombat();
   if (lastBoundaryResult) {
-    mount.append(outcomeBox([`${lastBoundaryResult.name} applied.`, ...lastBoundaryResult.deltas, 'Undo is available below until you fire another boundary.'], { title: 'What just happened' }));
+    mount.append(outcomeBox([`${lastBoundaryResult.name} applied.`, ...lastBoundaryResult.deltas, 'Undo is available below until you fire another boundary.'], { title: 'What just happened', level: 2 }));
   }
 
-  // --- lifecycle controls ---
+  // The fight comes first and the bookkeeping last: turn order, who is in it, vehicles,
+  // long jobs, and only then the boundaries you fire when it is all over (B-2).
+  sectionInitiative(mount, combat, rerender);
+  sectionRoster(mount, combat, rerender);
+  sectionVehicles(mount, combat, rerender);
+  sectionTasks(mount, rerender);
+  sectionLifecycle(mount, rerender);
+}
+
+// --- turn order (§5, §5A') ---
+function sectionInitiative(mount, combat, rerender) {
+  const initiative = panel(combat.active ? `Turn order — round ${combat.round}` : 'Turn order', PANELS.combatInitiative, []);
+
+  if (!combat.active) {
+    // Roster-first: everyone already in the fight is listed by name and side, so a roll is
+    // two numbers rather than four fields and an Add (B-4).
+    const roster = Object.values(combat.combatants);
+    const rolls = {};
+    const extra = [];
+    const rollList = el('div', { id: 'init-roster' });
+
+    const drawRoster = () => {
+      clear(rollList);
+      if (!roster.length && !extra.length) {
+        rollList.append(emptyState('Nobody in the fight yet. Add your character or an opponent below, then come back and roll.'));
+        return;
+      }
+      const table = el('table');
+      table.append(el('tr', {}, [el('th', { text: 'Who' }), el('th', { text: 'Side' }), el('th', { text: 'Success' }), el('th', { text: 'Advantage' })]));
+      [...roster.map((c) => ({ id: c.id, label: c.name, owner: c.side })), ...extra].forEach((who) => {
+        rolls[who.id] = rolls[who.id] || { label: who.label, owner: who.owner, success: 0, advantage: 0 };
+        const num = (key, aria) => el('input', {
+          type: 'number', min: '0', value: String(rolls[who.id][key]),
+          id: `init-${key}-${who.id}`, 'aria-label': `${aria} for ${who.label}`,
+          onchange: (e) => { rolls[who.id][key] = Math.max(0, Number(e.target.value) || 0); }
+        });
+        table.append(el('tr', {}, [
+          el('td', { text: who.label }),
+          el('td', { text: who.owner.toUpperCase() }),
+          el('td', {}, [num('success', 'Uncancelled Success')]),
+          el('td', {}, [num('advantage', 'Uncancelled Advantage')])
+        ]));
+      });
+      rollList.append(el('div', { class: 'table-wrap' }, [table]));
+    };
+
+    initiative.append(el('p', { class: 'small', text: `Everyone rolls a ${titleCase(COMBAT_SEQUENCE.initiative.difficulty)} ${COMBAT_SEQUENCE.initiative.skills.map(titleCase).join(' or ')} check. ${COMBAT_SEQUENCE.initiative.choose}` }));
+    initiative.append(rollList);
+    drawRoster();
+
+    if (Settings.digitalRoller()) {
+      initiative.append(el('button', {
+        type: 'button', class: 'secondary', id: 'init-roll-npcs', text: 'Roll for the NPCs',
+        onclick: () => {
+          Object.entries(rolls).forEach(([id, r]) => {
+            if (r.owner !== 'npc') return;
+            const c = combat.combatants[id];
+            const rank = c && c.skills ? Math.max(0, ...Object.values(c.skills)) : 1;
+            const characteristic = c && c.characteristics ? (c.characteristics.willpower || 2) : 2;
+            const rolled = rollInitiative(rank, characteristic);
+            r.success = rolled.success; r.advantage = rolled.advantage;
+          });
+          drawRoster();
+          showToast('Rolled the NPC side');
+        }
+      }));
+    }
+
+    // Anyone not on the tracker can still be added by hand.
+    const adhocBody = el('div', {});
+    const adLabel = el('input', { type: 'text', id: 'init-label', placeholder: 'Name', 'aria-label': 'Name of someone not on the tracker' });
+    const adOwner = el('select', { id: 'init-owner', 'aria-label': 'Side' }, [
+      el('option', { value: 'pc', text: 'PC slot' }),
+      el('option', { value: 'npc', text: 'NPC slot' })
+    ]);
+    adhocBody.append(adLabel, adOwner, el('button', {
+      type: 'button', class: 'secondary', text: 'Add them',
+      onclick: () => {
+        extra.push({ id: `adhoc-${extra.length}`, label: adLabel.value || 'Participant', owner: adOwner.value });
+        adLabel.value = '';
+        drawRoster();
+      }
+    }));
+    initiative.append(accordion('Someone who is not on the tracker', [adhocBody], { key: 'init-adhoc', summary: 'add by name' }));
+
+    initiative.append(el('button', {
+      type: 'button', class: 'primary', id: 'init-start', text: 'Build the slot order',
+      onclick: () => {
+        const list = Object.values(rolls);
+        if (!list.length) { showToast('Add someone to the fight first'); return; }
+        startEncounter(list);
+        rerender();
+      }
+    }));
+    // A table that tracks initiative on paper still wants the turn budget and the cards.
+    initiative.append(el('button', {
+      type: 'button', class: 'secondary', id: 'init-skip', text: 'Use roster order instead',
+      onclick: () => {
+        const list = Object.values(combat.combatants).map((c, i) => ({ label: c.name, owner: c.side, success: 100 - i, advantage: 0 }));
+        if (!list.length) { showToast('Add someone to the fight first'); return; }
+        startEncounter(list);
+        showToast('Started in roster order — track the real order at the table');
+        rerender();
+      }
+    }));
+  } else {
+    const table = el('table');
+    table.append(el('tr', {}, [el('th', { text: '#' }), el('th', { text: 'Owner' }), el('th', { text: 'Filled by' }), el('th', { text: '' })]));
+    combat.slots.forEach((slot) => {
+      const eligible = Object.values(combat.combatants).filter((c) => c.side === slot.owner && !c.actedThisRound);
+      const picker = el('select', { 'aria-label': `Fill slot ${slot.order}`, disabled: !!slot.filledBy || !eligible.length });
+      picker.append(el('option', { value: '', text: slot.filledBy ? (combat.combatants[slot.filledBy] || {}).name || '—' : 'choose…' }));
+      eligible.forEach((c) => picker.append(el('option', { value: c.id, text: c.name })));
+      picker.addEventListener('change', () => {
+        const result = fillSlot(slot.id, picker.value);
+        if (!result.ok) showToast(result.reason);
+        rerender();
+      });
+      table.append(el('tr', {}, [
+        el('td', { text: String(slot.order) }),
+        el('td', { text: slot.owner.toUpperCase() }),
+        el('td', {}, [picker]),
+        el('td', { text: slot.filledBy ? 'acted' : '' })
+      ]));
+    });
+    initiative.append(el('div', { class: 'table-wrap' }, [table]));
+    initiative.append(el('button', {
+      type: 'button', class: 'secondary', text: 'Next round',
+      onclick: () => { const r = nextRound(); r.notes.forEach((n) => showToast(n)); rerender(); }
+    }));
+    initiative.append(el('button', {
+      type: 'button', class: 'secondary', text: 'End encounter',
+      onclick: () => { endEncounterState(); showToast('Encounter ended — fire End Encounter to run the bundle'); rerender(); }
+    }));
+  }
+  mount.append(initiative);
+}
+
+// --- who is in the fight ---
+function sectionRoster(mount, combat, rerender) {
+  const roster = panel('Who is in the fight', PANELS.combatRoster, []);
+  const character = activeCharacter();
+  if (character) {
+    roster.append(el('button', {
+      type: 'button', class: 'secondary', text: `Add ${character.identity.name || 'active character'}`,
+      onclick: () => { addPlayerCharacter(character.id); rerender(); }
+    }));
+  }
+  const bestiarySelect = el('select', { id: 'bestiary-pick', 'aria-label': 'Bestiary entry' });
+  BESTIARY.forEach((e) => bestiarySelect.append(el('option', { value: e.id, text: `${e.name} (${e.kind})` })));
+  roster.append(bestiarySelect, el('button', {
+    type: 'button', class: 'secondary', text: 'Drop in',
+    onclick: () => { const r = addFromBestiary(bestiarySelect.value); if (!r.ok) showToast(r.reason); rerender(); }
+  }));
+
+  if (!Object.keys(combat.combatants).length) {
+    roster.append(emptyState('Nobody in the fight yet. Add your character, or drop an opponent in from the list above.'));
+  }
+  Object.values(combat.combatants).forEach((c) => roster.append(combatantCard(c, combat, rerender)));
+  mount.append(roster);
+}
+
+/** One combatant. The turn budget is stated in words beside the buttons that enforce it,
+ *  and what is spent is named rather than counted anonymously (C-5). */
+function combatantCard(c, combat, rerender) {
+  const card = el('div', { class: 'result' }, [
+    el('div', { class: 'result-head' }, [
+      el('span', { class: 'result-title', text: `${c.name}${c.minionCount ? ` ×${c.minionCount}` : ''}` }),
+      el('span', { class: 'cite', text: `${c.tier} · ${c.side.toUpperCase()}` })
+    ]),
+    el('div', { class: 'result-body', text: `Wounds ${c.wounds}/${c.woundThreshold ?? '—'}${c.strainThreshold ? ` · Strain ${c.strain}/${c.strainThreshold}` : ''} · Soak ${c.soak} · Def ${c.meleeDef}/${c.rangedDef}${c.adversary ? ` · Adversary ${c.adversary}` : ''}` })
+  ]);
+  if (c.tier === 'minion' && c.woundThresholdPerMember) {
+    card.append(el('p', { class: 'small muted', text: `${c.woundThresholdPerMember} per member × ${c.minionCount} = ${c.woundThreshold} group threshold; group skills at rank ${minionGroupSkillRanks(c.minionCount)}.` }));
+    card.append(el('button', { type: 'button', class: 'secondary', text: '−1 minion', onclick: () => { resizeMinionGroup(c.id, c.minionCount - 1); rerender(); } }));
+    card.append(el('button', { type: 'button', class: 'secondary', text: '+1 minion', onclick: () => { resizeMinionGroup(c.id, c.minionCount + 1); rerender(); } }));
+  }
+  if (c.promotable && c.tier === 'minion') {
+    card.append(el('button', {
+      type: 'button', class: 'secondary', text: 'Promote to Rival',
+      onclick: () => { promoteToRival(c.id); showToast('Promoted: Critical Injuries now resolve normally'); rerender(); }
+    }));
+  }
+
+  // The turn budget, said out loud where it is enforced.
+  const second = MANEUVER_RULES.secondManeuverStrainCost;
+  card.append(el('p', { class: 'small muted', id: `turn-budget-${c.id}`, text:
+    `A turn is one action and ${MANEUVER_RULES.freePerTurn} free maneuver; a second costs ${second} strain, and there is never a third. Used ${c.maneuversUsed || 0} of ${MANEUVER_RULES.maxPerTurn} maneuvers${c.actionUsed ? ', action spent' : ''}.` }));
+
+  const maneuverSelect = el('select', { 'aria-label': `Maneuver for ${c.name}`, id: `maneuver-pick-${c.id}` });
+  MANEUVERS.forEach((m) => maneuverSelect.append(el('option', { value: m.id, text: m.name })));
+  card.append(maneuverSelect, el('button', {
+    type: 'button', class: 'secondary', text: 'Take it',
+    'aria-label': `Take the chosen maneuver for ${c.name}`,
+    onclick: () => {
+      const r = spendManeuver(c.id, maneuverSelect.value);
+      showToast(r.ok ? `${r.name}${r.strainCost ? ` — ${r.strainCost} strain` : ''}` : r.reason);
+      rerender();
+    }
+  }));
+
+  const actionSelect = el('select', { 'aria-label': `Action for ${c.name}`, id: `action-pick-${c.id}` });
+  ACTION_TYPES.forEach((a) => actionSelect.append(el('option', { value: a.id, text: a.name })));
+  card.append(actionSelect, el('button', {
+    type: 'button', class: 'secondary', text: 'Do it',
+    'aria-label': `Take the chosen action for ${c.name}`,
+    onclick: () => { const r = spendAction(c.id, actionSelect.value); showToast(r.ok ? r.name : r.reason); rerender(); }
+  }));
+  if ((c.turnLog || []).length) {
+    card.append(el('p', { class: 'small muted', text: `This turn: ${c.turnLog.join(', ')}.` }));
+  }
+
+  card.append(el('button', { type: 'button', class: 'secondary', text: '+1 wound', 'aria-label': `One more wound on ${c.name}`, onclick: () => { const r = damageCombatant(c.id, { wounds: 1 }); r.notes.forEach((n) => showToast(n)); rerender(); } }));
+  card.append(el('button', {
+    type: 'button', class: 'secondary', text: 'Critical', 'aria-label': `Critical Injury on ${c.name}`,
+    onclick: () => { const r = damageCombatant(c.id, { critical: true }); r.notes.forEach((n) => showToast(n)); rerender(); }
+  }));
+
+  // Lasting injuries on a rival or nemesis, with the +10 each one adds to their next roll.
+  const injuries = c.criticalInjuries || [];
+  if (injuries.length) {
+    const untreated = injuries.filter((i) => !i.healed).length;
+    const body = el('div', {});
+    injuries.forEach((injury, index) => {
+      body.append(el('div', { class: 'result' }, [
+        el('div', { class: 'result-head' }, [
+          el('span', { class: 'result-title', text: `${injury.name} (${injury.severity})` }),
+          el('span', { class: 'cite', text: `rolled ${injury.roll}${injury.total !== injury.roll ? ` → ${injury.total}` : ''}` })
+        ]),
+        el('button', {
+          type: 'button', class: 'secondary',
+          text: injury.healed ? 'Mark untreated' : 'Mark treated',
+          'aria-label': `${injury.healed ? 'Mark untreated' : 'Mark treated'}: ${injury.name} on ${c.name}`,
+          onclick: () => { healCombatantCritical(c.id, index); rerender(); }
+        })
+      ]));
+    });
+    card.append(accordion('Lasting injuries', [body], {
+      key: `combat-crits-${c.id}`,
+      summary: untreated ? `${untreated} untreated, next roll +${untreated * 10}` : 'all treated'
+    }));
+  }
+
+  // Conditions on an NPC, so a staggered rival stays staggered (A-15).
+  const condBody = el('div', {});
+  COMBAT_CONDITIONS.forEach((cond) => {
+    condBody.append(el('div', { class: 'toggle-row' }, [
+      el('input', {
+        type: 'checkbox', id: `cond-${c.id}-${cond.id}`, checked: !!(c.conditions || {})[cond.id],
+        onchange: (e) => { setCombatantCondition(c.id, cond.id, e.target.checked); rerender(); }
+      }),
+      el('label', { for: `cond-${c.id}-${cond.id}` }, [
+        el('span', { text: cond.name }),
+        cond.inferred ? el('span', { class: 'badge badge-inferred', text: 'inferred' }) : null,
+        el('span', { class: 'toggle-desc', text: cond.effect })
+      ])
+    ]));
+  });
+  const on = Object.entries(c.conditions || {}).filter(([, v]) => v).map(([id]) => (CONDITIONS.find((x) => x.id === id) || { name: id }).name);
+  card.append(accordion(`What state are they in?`, [condBody], {
+    key: `combat-conditions-${c.id}`, summary: on.length ? on.join(', ') : 'nothing'
+  }));
+
+  card.append(el('button', {
+    type: 'button', class: 'secondary danger', text: 'Remove',
+    'aria-label': `Remove ${c.name} from the fight`,
+    onclick: async () => {
+      if (!(await confirmModal(`Take ${c.name} out of the fight? Their wounds and state are lost.`, { title: 'Remove combatant', confirmLabel: 'Remove' }))) return;
+      removeCombatant(c.id); rerender();
+    }
+  }));
+  if (c.defeated) card.append(el('p', { class: 'small', text: 'Out of the fight.' }));
+  return card;
+}
+
+// --- vehicles (§12) ---
+function sectionVehicles(mount, combat, rerender) {
+  const vehicleBody = el('div', {});
+  const vehicleCard = panel('Vehicles', PANELS.combatVehicles, [
+    accordion('Add or manage a vehicle', [vehicleBody], { key: 'combat-vehicles', summary: `${Object.keys(combat.vehicles || {}).length} in play` })
+  ]);
+  const vehiclePick = el('select', { id: 'vehicle-pick', 'aria-label': 'Vehicle' });
+  VEHICLES.forEach((v) => vehiclePick.append(el('option', { value: v.id, text: `${v.name} (sil ${v.silhouette})` })));
+  const pilotPick = el('select', { id: 'vehicle-pilot', 'aria-label': 'Who is driving' });
+  pilotPick.append(el('option', { value: '', text: 'Nobody at the wheel yet' }));
+  Object.values(combat.combatants).forEach((c) => pilotPick.append(el('option', { value: c.id, text: c.name })));
+  vehicleBody.append(
+    vehiclePick,
+    el('label', { class: 'small', for: 'vehicle-pilot', text: 'Who is driving' }), pilotPick,
+    el('button', {
+      type: 'button', class: 'secondary', text: 'Add vehicle',
+      onclick: () => { addVehicle(vehiclePick.value, { pilotCombatantId: pilotPick.value || null }); rerender(); }
+    })
+  );
+  Object.values(combat.vehicles || {}).forEach((v) => {
+    vehicleBody.append(el('div', { class: 'result' }, [
+      el('div', { class: 'result-head' }, [
+        el('span', { class: 'result-title', text: v.name }),
+        el('span', { class: 'cite', text: `sil ${v.silhouette} · handling ${v.handling >= 0 ? '+' : ''}${v.handling}` })
+      ]),
+      el('div', { class: 'result-body', text: `Speed ${v.speed}/${v.maxSpeed} · hull ${v.hullTrauma}/${v.hullThreshold} · system strain ${v.systemStrain}/${v.systemStrainThreshold} · armour ${v.armour}${v.disabled ? ' · disabled' : ''}` }),
+      vehicleDriverRow(v, combat, rerender),
+      el('button', { type: 'button', class: 'secondary', text: 'Accelerate', 'aria-label': `Accelerate ${v.name}`, onclick: () => { changeSpeed(v.id, 1); rerender(); } }),
+      el('button', { type: 'button', class: 'secondary', text: 'Decelerate', 'aria-label': `Decelerate ${v.name}`, onclick: () => { changeSpeed(v.id, -1); rerender(); } }),
+      el('button', { type: 'button', class: 'secondary', text: '+1 system strain', 'aria-label': `One more system strain on ${v.name}`, onclick: () => { vehicleDamage(v.id, { systemStrain: 1 }); rerender(); } }),
+      el('button', { type: 'button', class: 'secondary', text: 'Damage Control', 'aria-label': `Damage Control on ${v.name}`, onclick: () => { const r = repairSystemStrain(v.id); showToast(r.note); rerender(); } }),
+      el('button', { type: 'button', class: 'secondary', text: 'Crash', 'aria-label': `Crash ${v.name}`, onclick: () => { const r = crashVehicle(v.id); showToast(r.note); rerender(); } }),
+      el('button', {
+        type: 'button', class: 'secondary danger', text: 'Remove', 'aria-label': `Remove ${v.name}`,
+        onclick: async () => {
+          if (!(await confirmModal(`Remove ${v.name}? Its damage is lost.`, { title: 'Remove vehicle', confirmLabel: 'Remove' }))) return;
+          removeVehicle(v.id); rerender();
+        }
+      })
+    ]));
+  });
+  mount.append(vehicleCard);
+
+  // --- nemesis escalation hook (B§4) ---
+  const escalation = nemesisEscalation();
+  if (escalation.triggered) {
+    mount.append(el('div', { class: 'card' }, [
+      el('h2', { text: 'Nemesis escalation' }),
+      el('p', { class: 'small', text: escalation.note })
+    ]));
+  }
+}
+
+/** Who is at the wheel, and what this vehicle's Handling will do to their checks (§12). */
+function vehicleDriverRow(v, combat, rerender) {
+  const wrap = el('div', {});
+  const pick = el('select', { id: `vehicle-pilot-${v.id}`, 'aria-label': `Who is driving the ${v.name}` });
+  pick.append(el('option', { value: '', text: 'Nobody at the wheel', selected: !v.pilotCombatantId }));
+  Object.values(combat.combatants).forEach((c) => pick.append(el('option', {
+    value: c.id, text: c.name, selected: v.pilotCombatantId === c.id
+  })));
+  pick.addEventListener('change', () => { setVehiclePilot(v.id, pick.value || null); rerender(); });
+  wrap.append(el('label', { class: 'small', for: `vehicle-pilot-${v.id}`, text: 'At the wheel' }), pick);
+  const driver = v.pilotCombatantId ? combat.combatants[v.pilotCombatantId] : null;
+  wrap.append(el('p', { class: 'small muted', text: v.handling === 0
+    ? `Handling 0, so it adds nothing to ${driver ? driver.name + "'s" : 'the driver\'s'} Driving and Piloting checks.`
+    : `Handling ${v.handling > 0 ? '+' : ''}${v.handling} adds ${Math.abs(v.handling)} ${v.handling > 0 ? 'Boost' : 'Setback'} to ${driver ? driver.name + "'s" : 'the driver\'s'} Driving and Piloting checks. Pick this vehicle on the Roll screen and it applies itself.` }));
+  return wrap;
+}
+
+// --- progress tasks ---
+function sectionTasks(mount, rerender) {
+  const tasks = listTasks();
+  const taskCard = panel('Things that take a while', PANELS.combatTasks, []);
+  const taskName = el('input', { type: 'text', id: 'task-name', placeholder: 'Name', 'aria-label': 'Task name' });
+  const taskKind = el('select', { id: 'task-kind', 'aria-label': 'Task kind' }, [
+    el('option', { value: 'clock', text: 'Ad-hoc clock (house aid)' }),
+    el('option', { value: 'repair', text: 'Repair job' }),
+    el('option', { value: 'heat', text: 'Heat track' }),
+    el('option', { value: 'dragnet', text: 'Manhunt / Dragnet' })
+  ]);
+  const taskTarget = el('input', { type: 'number', id: 'task-target', min: '1', value: '4', 'aria-label': 'Target' });
+  taskCard.append(taskName, taskKind, taskTarget, el('button', {
+    type: 'button', class: 'secondary', text: 'Add task',
+    onclick: () => { createTask({ name: taskName.value || 'Task', kind: taskKind.value, target: Number(taskTarget.value) }); rerender(); }
+  }));
+
+  tasks.forEach((task) => {
+    const card = el('div', { class: 'result' }, [
+      el('div', { class: 'result-head' }, [
+        el('span', { class: 'result-title', text: task.name }),
+        el('span', { class: 'cite', text: `${task.progress}/${task.target}${task.kind === 'dragnet' ? ` · ${task.oppositionDice} opposition dice` : ''}` })
+      ]),
+      el('div', { class: 'result-body', text: task.kind === 'dragnet'
+        ? `Stealth or Streetwise against a Perception pool that starts at 2 dice and gains one per in-game hour, capped at 4. Every failed round advances Personal and Cell Heat by 1. Elapsed: ${task.elapsedHours}h.`
+        : `${titleCase(task.kind)} track.` })
+    ]);
+    if (task.kind === 'dragnet') {
+      card.append(el('button', {
+        type: 'button', class: 'secondary', text: 'Failed round',
+        onclick: () => { const r = dragnetRound(task.id, { failed: true, character: activeCharacter() }); r.effects.forEach((e) => showToast(e)); rerender(); }
+      }));
+      card.append(el('button', {
+        type: 'button', class: 'secondary', text: 'Survived round',
+        onclick: () => { const r = dragnetRound(task.id, { failed: false }); r.effects.forEach((e) => showToast(e)); rerender(); }
+      }));
+    } else {
+      card.append(el('button', { type: 'button', class: 'secondary', text: '+1', 'aria-label': `Advance ${task.name}`, onclick: () => { advanceTask(task.id, 1); rerender(); } }));
+      card.append(el('button', { type: 'button', class: 'secondary', text: '−1', 'aria-label': `Roll ${task.name} back`, onclick: () => { advanceTask(task.id, -1); rerender(); } }));
+    }
+    card.append(el('button', {
+      type: 'button', class: 'secondary danger', text: 'Close', 'aria-label': `Close ${task.name}`,
+      onclick: async () => {
+        if (!(await confirmModal(`Close "${task.name}"? Its progress is discarded.`, { title: 'Close task', confirmLabel: 'Close it' }))) return;
+        closeTask(task.id); rerender();
+      }
+    }));
+    taskCard.append(card);
+  });
+  mount.append(taskCard);
+}
+
+// --- the boundaries you fire when it is all over (§3.12) ---
+function sectionLifecycle(mount, rerender) {
   const lifecycle = panel('Wrapping up', PANELS.combatLifecycle, []);
   const sessionOptions = { downtime: false, motivationPlay: false, lengthAdjustment: 0 };
   LIFECYCLE.boundaries.forEach((boundary) => {
@@ -615,219 +1106,6 @@ export function renderCombat(mount) {
     onclick: () => { const r = undoLastBoundary(); showToast(r.ok ? `Undone: ${r.label}` : r.reason); rerender(); }
   }));
   mount.append(lifecycle);
-
-  // --- initiative ---
-  const initiative = panel(combat.active ? `Turn order — round ${combat.round}` : 'Turn order', PANELS.combatInitiative, []);
-
-  if (!combat.active) {
-    const rolls = [];
-    const rollList = el('div');
-    const draw = () => {
-      clear(rollList);
-      rolls.forEach((r, i) => rollList.append(el('p', { class: 'small', text: `${r.label} (${r.owner.toUpperCase()}): ${r.success} Success, ${r.advantage} Advantage` })));
-    };
-    const label = el('input', { type: 'text', id: 'init-label', placeholder: 'Name', 'aria-label': 'Initiative roll name' });
-    const success = el('input', { type: 'number', id: 'init-success', min: '0', value: '0', 'aria-label': 'Uncancelled Success' });
-    const advantage = el('input', { type: 'number', id: 'init-advantage', min: '0', value: '0', 'aria-label': 'Uncancelled Advantage' });
-    const owner = el('select', { id: 'init-owner', 'aria-label': 'Side' }, [
-      el('option', { value: 'pc', text: 'PC slot' }),
-      el('option', { value: 'npc', text: 'NPC slot' })
-    ]);
-    initiative.append(
-      el('p', { class: 'small', text: 'Everyone rolls a Simple Cool or Vigilance check; enter each result to build the slot order.' }),
-      label, success, advantage, owner,
-      el('button', {
-        type: 'button', class: 'secondary', text: 'Add roll',
-        onclick: () => {
-          rolls.push({ label: label.value || 'Participant', owner: owner.value, success: Number(success.value), advantage: Number(advantage.value) });
-          label.value = ''; success.value = '0'; advantage.value = '0';
-          draw();
-        }
-      }),
-      rollList,
-      el('button', {
-        type: 'button', class: 'primary', text: 'Start encounter',
-        onclick: () => { if (!rolls.length) { showToast('Add at least one initiative roll'); return; } startEncounter(rolls); rerender(); }
-      })
-    );
-  } else {
-    const table = el('table');
-    table.append(el('tr', {}, [el('th', { text: '#' }), el('th', { text: 'Owner' }), el('th', { text: 'Filled by' }), el('th', { text: '' })]));
-    combat.slots.forEach((slot) => {
-      const eligible = Object.values(combat.combatants).filter((c) => c.side === slot.owner && !c.actedThisRound);
-      const picker = el('select', { 'aria-label': `Fill slot ${slot.order}`, disabled: !!slot.filledBy || !eligible.length });
-      picker.append(el('option', { value: '', text: slot.filledBy ? (combat.combatants[slot.filledBy] || {}).name || '—' : 'choose…' }));
-      eligible.forEach((c) => picker.append(el('option', { value: c.id, text: c.name })));
-      picker.addEventListener('change', () => {
-        const result = fillSlot(slot.id, picker.value);
-        if (!result.ok) showToast(result.reason);
-        rerender();
-      });
-      table.append(el('tr', {}, [
-        el('td', { text: String(slot.order) }),
-        el('td', { text: slot.owner.toUpperCase() }),
-        el('td', {}, [picker]),
-        el('td', { text: slot.filledBy ? 'acted' : '' })
-      ]));
-    });
-    initiative.append(el('div', { class: 'table-wrap' }, [table]));
-    initiative.append(el('button', {
-      type: 'button', class: 'secondary', text: 'Next round',
-      onclick: () => { const r = nextRound(); r.notes.forEach((n) => showToast(n)); rerender(); }
-    }));
-    initiative.append(el('button', {
-      type: 'button', class: 'secondary', text: 'End encounter',
-      onclick: () => { endEncounterState(); showToast('Encounter ended — fire End Encounter to run the bundle'); rerender(); }
-    }));
-  }
-  mount.append(initiative);
-
-  // --- combatants ---
-  const roster = panel('Who is in the fight', PANELS.combatRoster, []);
-  const character = activeCharacter();
-  if (character) {
-    roster.append(el('button', {
-      type: 'button', class: 'secondary', text: `Add ${character.identity.name || 'active character'}`,
-      onclick: () => { addPlayerCharacter(character.id); rerender(); }
-    }));
-  }
-  const bestiarySelect = el('select', { id: 'bestiary-pick', 'aria-label': 'Bestiary entry' });
-  BESTIARY.forEach((e) => bestiarySelect.append(el('option', { value: e.id, text: `${e.name} (${e.kind})` })));
-  roster.append(bestiarySelect, el('button', {
-    type: 'button', class: 'secondary', text: 'Drop in',
-    onclick: () => { const r = addFromBestiary(bestiarySelect.value); if (!r.ok) showToast(r.reason); rerender(); }
-  }));
-
-  if (!Object.keys(combat.combatants).length) {
-    roster.append(emptyState('Nobody in the fight yet. Add your character, or drop an opponent in from the list above.'));
-  }
-  Object.values(combat.combatants).forEach((c) => {
-    const card = el('div', { class: 'result' }, [
-      el('div', { class: 'result-head' }, [
-        el('span', { class: 'result-title', text: `${c.name}${c.minionCount ? ` ×${c.minionCount}` : ''}` }),
-        el('span', { class: 'cite', text: `${c.tier} · ${c.side.toUpperCase()}` })
-      ]),
-      el('div', { class: 'result-body', text: `Wounds ${c.wounds}/${c.woundThreshold ?? '—'}${c.strainThreshold ? ` · Strain ${c.strain}/${c.strainThreshold}` : ''} · Soak ${c.soak} · Def ${c.meleeDef}/${c.rangedDef}${c.adversary ? ` · Adversary ${c.adversary}` : ''}` })
-    ]);
-    if (c.tier === 'minion' && c.woundThresholdPerMember) {
-      card.append(el('p', { class: 'small muted', text: `${c.woundThresholdPerMember} per member × ${c.minionCount} = ${c.woundThreshold} group threshold; group skills at rank ${minionGroupSkillRanks(c.minionCount)} .` }));
-      card.append(el('button', { type: 'button', class: 'secondary', text: '−1 minion', onclick: () => { resizeMinionGroup(c.id, c.minionCount - 1); rerender(); } }));
-      card.append(el('button', { type: 'button', class: 'secondary', text: '+1 minion', onclick: () => { resizeMinionGroup(c.id, c.minionCount + 1); rerender(); } }));
-    }
-    if (c.promotable && c.tier === 'minion') {
-      card.append(el('button', {
-        type: 'button', class: 'secondary', text: 'Promote to Rival',
-        onclick: () => { promoteToRival(c.id); showToast('Promoted: Critical Injuries now resolve normally (R-16)'); rerender(); }
-      }));
-    }
-    card.append(el('button', { type: 'button', class: 'secondary', text: 'Maneuver', onclick: () => { const r = spendManeuver(c.id); showToast(r.ok ? (r.strainCost ? `Second maneuver: ${r.strainCost} strain` : 'Free maneuver used') : r.reason); rerender(); } }));
-    card.append(el('button', { type: 'button', class: 'secondary', text: 'Action', onclick: () => { const r = spendAction(c.id); showToast(r.ok ? 'Action used' : r.reason); rerender(); } }));
-    card.append(el('button', { type: 'button', class: 'secondary', text: '+1 wound', onclick: () => { const r = damageCombatant(c.id, { wounds: 1 }); r.notes.forEach((n) => showToast(n)); rerender(); } }));
-    card.append(el('button', { type: 'button', class: 'secondary', text: 'Critical', onclick: () => { const r = damageCombatant(c.id, { critical: true }); r.notes.forEach((n) => showToast(n)); rerender(); } }));
-    card.append(el('button', {
-      type: 'button', class: 'secondary', text: 'Remove',
-      onclick: async () => {
-        if (!(await confirmModal(`Take ${c.name} out of the fight? Their wounds and state are lost.`, { title: 'Remove combatant', confirmLabel: 'Remove' }))) return;
-        removeCombatant(c.id); rerender();
-      }
-    }));
-    if (c.defeated) card.append(el('p', { class: 'small', text: 'Out of the fight.' }));
-    roster.append(card);
-  });
-  mount.append(roster);
-
-  // --- vehicles (§12) ---
-  const vehicleBody = el('div', {});
-  const vehicleCard = panel('Vehicles', PANELS.combatVehicles, [
-    accordion('Add or manage a vehicle', [vehicleBody], { key: 'combat-vehicles', summary: `${Object.keys(combat.vehicles || {}).length} in play` })
-  ]);
-  const vehiclePick = el('select', { id: 'vehicle-pick', 'aria-label': 'Vehicle' });
-  VEHICLES.forEach((v) => vehiclePick.append(el('option', { value: v.id, text: `${v.name} (sil ${v.silhouette})` })));
-  vehicleBody.append(vehiclePick, el('button', {
-    type: 'button', class: 'secondary', text: 'Add vehicle',
-    onclick: () => { addVehicle(vehiclePick.value); rerender(); }
-  }));
-  Object.values(combat.vehicles || {}).forEach((v) => {
-    vehicleBody.append(el('div', { class: 'result' }, [
-      el('div', { class: 'result-head' }, [
-        el('span', { class: 'result-title', text: v.name }),
-        el('span', { class: 'cite', text: `sil ${v.silhouette} · handling ${v.handling >= 0 ? '+' : ''}${v.handling}` })
-      ]),
-      el('div', { class: 'result-body', text: `Speed ${v.speed}/${v.maxSpeed} · hull ${v.hullTrauma}/${v.hullThreshold} · system strain ${v.systemStrain}/${v.systemStrainThreshold} · armour ${v.armour}${v.disabled ? ' · disabled' : ''}` }),
-      el('button', { type: 'button', class: 'secondary', text: 'Accelerate', onclick: () => { changeSpeed(v.id, 1); rerender(); } }),
-      el('button', { type: 'button', class: 'secondary', text: 'Decelerate', onclick: () => { changeSpeed(v.id, -1); rerender(); } }),
-      el('button', { type: 'button', class: 'secondary', text: '+1 system strain', onclick: () => { vehicleDamage(v.id, { systemStrain: 1 }); rerender(); } }),
-      el('button', { type: 'button', class: 'secondary', text: 'Damage Control', onclick: () => { const r = repairSystemStrain(v.id); showToast(r.note); rerender(); } }),
-      el('button', { type: 'button', class: 'secondary', text: 'Crash', onclick: () => { const r = crashVehicle(v.id); showToast(r.note); rerender(); } }),
-      el('button', {
-        type: 'button', class: 'secondary', text: 'Remove',
-        onclick: async () => {
-          if (!(await confirmModal(`Remove ${v.name}? Its damage is lost.`, { title: 'Remove vehicle', confirmLabel: 'Remove' }))) return;
-          removeVehicle(v.id); rerender();
-        }
-      })
-    ]));
-  });
-  mount.append(vehicleCard);
-
-  // --- nemesis escalation hook (B§4) ---
-  const escalation = nemesisEscalation();
-  if (escalation.triggered) {
-    mount.append(el('div', { class: 'card' }, [
-      el('h3', { text: 'Nemesis escalation' }),
-      el('p', { class: 'small', text: escalation.note })
-    ]));
-  }
-
-  // --- progress tasks ---
-  const tasks = listTasks();
-  const taskCard = panel('Things that take a while', PANELS.combatTasks, []);
-  const taskName = el('input', { type: 'text', id: 'task-name', placeholder: 'Name', 'aria-label': 'Task name' });
-  const taskKind = el('select', { id: 'task-kind', 'aria-label': 'Task kind' }, [
-    el('option', { value: 'clock', text: 'Ad-hoc clock (house aid)' }),
-    el('option', { value: 'repair', text: 'Repair job' }),
-    el('option', { value: 'heat', text: 'Heat track' }),
-    el('option', { value: 'dragnet', text: 'Manhunt / Dragnet' })
-  ]);
-  const taskTarget = el('input', { type: 'number', id: 'task-target', min: '1', value: '4', 'aria-label': 'Target' });
-  taskCard.append(taskName, taskKind, taskTarget, el('button', {
-    type: 'button', class: 'secondary', text: 'Add task',
-    onclick: () => { createTask({ name: taskName.value || 'Task', kind: taskKind.value, target: Number(taskTarget.value) }); rerender(); }
-  }));
-
-  tasks.forEach((task) => {
-    const card = el('div', { class: 'result' }, [
-      el('div', { class: 'result-head' }, [
-        el('span', { class: 'result-title', text: task.name }),
-        el('span', { class: 'cite', text: `${task.progress}/${task.target}${task.kind === 'dragnet' ? ` · ${task.oppositionDice} opposition dice` : ''}` })
-      ]),
-      el('div', { class: 'result-body', text: task.kind === 'dragnet'
-        ? `Stealth or Streetwise against a Perception pool that starts at 2 dice and gains one per in-game hour, capped at 4. Every failed round advances Personal and Cell Heat by 1. Elapsed: ${task.elapsedHours}h.`
-        : `${titleCase(task.kind)} track.` })
-    ]);
-    if (task.kind === 'dragnet') {
-      card.append(el('button', {
-        type: 'button', class: 'secondary', text: 'Failed round',
-        onclick: () => { const r = dragnetRound(task.id, { failed: true, character: activeCharacter() }); r.effects.forEach((e) => showToast(e)); rerender(); }
-      }));
-      card.append(el('button', {
-        type: 'button', class: 'secondary', text: 'Survived round',
-        onclick: () => { const r = dragnetRound(task.id, { failed: false }); r.effects.forEach((e) => showToast(e)); rerender(); }
-      }));
-    } else {
-      card.append(el('button', { type: 'button', class: 'secondary', text: '+1', onclick: () => { advanceTask(task.id, 1); rerender(); } }));
-      card.append(el('button', { type: 'button', class: 'secondary', text: '−1', onclick: () => { advanceTask(task.id, -1); rerender(); } }));
-    }
-    card.append(el('button', {
-      type: 'button', class: 'secondary', text: 'Close',
-      onclick: async () => {
-        if (!(await confirmModal(`Close "${task.name}"? Its progress is discarded.`, { title: 'Close task', confirmLabel: 'Close it' }))) return;
-        closeTask(task.id); rerender();
-      }
-    }));
-    taskCard.append(card);
-  });
-  mount.append(taskCard);
 }
 
 function checkbox(id, label, onChange) {

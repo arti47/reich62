@@ -5,9 +5,10 @@
 // No src/ module may hardcode a rules value — it belongs here (CLAUDE.md §13.2).
 
 // ---------------------------------------------------------------------------
-// R-1 — the manual never prints the human archetype base thresholds (§6).
-// Confirmed ruling: WT 8 / ST 10. These two constants are the only place the
-// bases appear; a single edit here corrects the whole app.
+// R-1 — the human archetype base thresholds. The manual originally left them unstated;
+// the errata resolved them and §6 now prints "Human base Wound Threshold: 8, Human base
+// Strain Threshold: 10", carrying the errata's own inferred-value badge. These two
+// constants are the only place the bases appear; a single edit here corrects the whole app.
 export const BASE_WOUND_THRESHOLD = 8;   // R-1
 export const BASE_STRAIN_THRESHOLD = 10; // R-1
 
@@ -449,7 +450,10 @@ export const COMBAT_VARIANTS = {
       'Take the higher of the two difficulties and raise it by one more.',
       'On success the primary weapon hits. Spend two Advantage or one Triumph to land the secondary as well.',
       'Each hit deals its own weapon\'s damage.'
-    ]
+    ],
+    extraDifficultySteps: 1,
+    secondaryHit: { advantage: 2, triumph: 1 },
+    usesLowerOf: ['skillRank', 'characteristic']
   },
   unarmed: { skill: 'brawl', damage: 'brawn', crit: 5, range: 'engaged', qualities: ['Knockdown'],
     note: 'May target strain instead of wounds. Brawl weapons such as knuckledusters add to this base rather than replacing it.' },
@@ -495,8 +499,10 @@ export const SILHOUETTE_RULE = {
 
 // T23 — Derived stats — §6, R-1
 export const DERIVED_FORMULAS = [
-  { id: 'woundThreshold',       name: 'Wound Threshold',       formula: 'BASE_WOUND_THRESHOLD + Brawn',      fixedAtCreation: true,  raisedBy: 'Toughened (+2 per rank)', cite: '§6', ruling: 'R-1' },
-  { id: 'strainThreshold',      name: 'Strain Threshold',      formula: 'BASE_STRAIN_THRESHOLD + Willpower', fixedAtCreation: true,  raisedBy: 'Grit (+1 per rank)',      cite: '§6', ruling: 'R-1' },
+  { id: 'woundThreshold',       name: 'Wound Threshold',       formula: 'BASE_WOUND_THRESHOLD + Brawn',      fixedAtCreation: true,  raisedBy: 'Toughened (+2 per rank)', cite: '§6', ruling: 'R-1',
+    baseNote: 'Base 8, stated in §6 and flagged there as an inferred value.' },
+  { id: 'strainThreshold',      name: 'Strain Threshold',      formula: 'BASE_STRAIN_THRESHOLD + Willpower', fixedAtCreation: true,  raisedBy: 'Grit (+1 per rank)',      cite: '§6', ruling: 'R-1',
+    baseNote: 'Base 10, stated in §6 and flagged there as an inferred value.' },
   { id: 'soak',                 name: 'Soak',                  formula: 'Brawn + armour soak',               fixedAtCreation: false, note: 'Recalculates live with Brawn, unlike the two thresholds.', cite: '§6' },
   { id: 'meleeDefense',         name: 'Melee Defence',         formula: '0 + armour + cover + talents',      cite: '§6' },
   { id: 'rangedDefense',        name: 'Ranged Defence',        formula: '0 + armour + cover + talents',      cite: '§6' },
@@ -640,6 +646,12 @@ export const CALLED_SHOTS = {
   cite: '§10A',
   declare: 'Chosen before the roll, aiming at a specific target such as a held weapon, a tyre, or a radio.',
   aimPenalty: 'Uses the Aim maneuver\'s targeted option: one maneuver of aiming this way adds two Setback to the following combat check, two consecutive aim maneuvers reduce that to one Setback.',
+  setbackByAim: [
+    { aimManeuvers: 0, setback: 2, label: 'Called without aiming' },
+    { aimManeuvers: 1, setback: 2, label: 'Aimed once' },
+    { aimManeuvers: 2, setback: 1, label: 'Aimed twice in a row' }
+  ],
+  payoffAdvantageCost: 3,
   payoff: 'On a hit, spending three Advantage (per §5C) disables the opponent or a piece of their gear instead of dealing normal wounds or strain.',
   limit: 'Effects should be temporary and proportionate, agreed between player and GM.'
 };
@@ -704,10 +716,12 @@ export const TALENTS = [
   { id: 'desperateRecovery', name: 'Desperate Recovery', tier: 1, ranked: false, activation: 'passive', hook: 'recoveryBonus',
     summary: 'When healing strain at the end of an encounter with strain above half the threshold, heal two more.' },
   { id: 'duelist', name: 'Duelist', tier: 1, ranked: false, activation: 'passive', hook: 'addDice',
+    roller: { dice: { boost: 1 }, note: 'One Boost while engaged with a single opponent.' },
     summary: 'Adds one Boost to melee checks while engaged with a single opponent, and one Setback to melee checks while engaged with three or more.' },
   { id: 'durable', name: 'Durable', tier: 1, ranked: true, activation: 'passive', hook: 'criticalModifier',
     summary: 'Reduces any Critical Injury result suffered by 10 per rank, to a minimum of 01.' },
   { id: 'forager', name: 'Forager', tier: 1, ranked: false, activation: 'passive', hook: 'removeDice',
+    roller: { dice: { setback: -2 }, note: 'Removes up to two Setback from a check to find food, water or shelter.' },
     summary: 'Removes up to two Setback from checks to find food, water or shelter, and halves the time such searches take.' },
   { id: 'grit', name: 'Grit', tier: 1, ranked: true, activation: 'passive', hook: 'derivedBonus', derived: { strainThreshold: 1 },
     summary: 'Each rank raises the strain threshold by one.' },
@@ -716,6 +730,7 @@ export const TALENTS = [
   { id: 'jumpUp', name: 'Jump Up', tier: 1, ranked: false, activation: 'incidental', hook: 'stateChange', limit: 'perRound',
     summary: 'Once per round on your turn, stand from prone or seated as an incidental.' },
   { id: 'knackForIt', name: 'Knack For It', tier: 1, ranked: true, activation: 'passive', hook: 'removeDice', selects: 'skills',
+    roller: { dice: { setback: -2 }, note: 'Removes two Setback from a check with a chosen skill.' },
     summary: 'Choose one skill on purchase and two more per later rank; remove two Setback from checks with those skills. Combat skills cannot be chosen.' },
   { id: 'knowSomebody', name: 'Know Somebody', tier: 1, ranked: true, activation: 'incidental', hook: 'rarityReduction', limit: 'perSession',
     summary: 'Once per session, reduce the rarity of a legally available item by one per rank when trying to buy it.' },
@@ -726,12 +741,15 @@ export const TALENTS = [
   { id: 'parry', name: 'Parry', tier: 1, ranked: true, activation: 'incidentalOutOfTurn', hook: 'damageReduction', cost: { strain: 3 },
     summary: 'When hit by a melee attack, after damage is worked out but before soak, suffer 3 strain to cut the damage by two plus ranks in Parry. Once per hit, and a Melee weapon must be in hand.' },
   { id: 'properUpbringing', name: 'Proper Upbringing', tier: 1, ranked: true, activation: 'incidental', hook: 'addSymbols', cost: { strainPerRank: 1 },
+    roller: { enteredSymbols: { advantage: 'ranks' }, note: 'Adds that many Advantage to the social check.' },
     summary: 'On a social check in polite company, suffer any number of strain up to your ranks to add that many Advantage.' },
   { id: 'quickDraw', name: 'Quick Draw', tier: 1, ranked: false, activation: 'incidental', hook: 'stateChange', limit: 'perRound',
     summary: 'Once per round on your turn, draw or holster an accessible weapon or item as an incidental. Also lowers a weapon\'s Prepare rating by one, to a minimum of one.' },
   { id: 'quickStrike', name: 'Quick Strike', tier: 1, ranked: true, activation: 'passive', hook: 'addDice',
+    roller: { dice: { boost: 'ranks' }, note: 'One Boost per rank against a target that has not acted yet.' },
     summary: 'Adds one Boost per rank to combat checks against targets that have not yet taken a turn this encounter.' },
   { id: 'rapidReaction', name: 'Rapid Reaction', tier: 1, ranked: true, activation: 'incidentalOutOfTurn', hook: 'addSymbols', cost: { strainPerRank: 1 },
+    roller: { enteredSymbols: { success: 'ranks' }, note: 'Adds that many Success to the Initiative check.' },
     summary: 'Suffer any number of strain up to your ranks to add that many Success to a Vigilance or Cool check for Initiative.' },
   { id: 'secondWind', name: 'Second Wind', tier: 1, ranked: true, activation: 'incidental', hook: 'healStrain', limit: 'perEncounter',
     summary: 'Once per encounter, heal strain equal to your ranks.' },
@@ -762,6 +780,7 @@ export const TALENTS = [
   { id: 'defensiveSysopsImproved', name: 'Defensive Sysops (Improved)', tier: 2, ranked: false, activation: 'incidental', hook: 'addSymbols', requires: 'defensiveSysops', settingApplicable: false, // R-11
     summary: 'Instead of adding Defensive Sysops\' two Setback, add one Failure and one Threat to the intruder\'s result.' },
   { id: 'dualWielder', name: 'Dual Wielder', tier: 2, ranked: false, activation: 'maneuver', hook: 'difficultyReduction',
+    roller: { difficultySteps: -1, note: 'Lowers the difficulty of the combined two-weapon check by one.' },
     summary: 'Lowers the difficulty of the next combined two-weapon check made this turn by one.' },
   { id: 'fanTheHammer', name: 'Fan The Hammer', tier: 2, ranked: false, activation: 'incidental', hook: 'addQuality', limit: 'perEncounter',
     summary: 'Once per encounter, give a pistol the Auto-fire quality for one combat check; the weapon then runs out of ammunition as though an Out of Ammo result had come up.' },
@@ -802,6 +821,7 @@ export const TALENTS = [
   { id: 'inspiringRhetoricImproved', name: 'Inspiring Rhetoric (Improved)', tier: 3, ranked: false, activation: 'passive', hook: 'grantDice', requires: 'inspiringRhetoric',
     summary: 'Allies affected by your Inspiring Rhetoric add one Boost to all skill checks for rounds equal to your Leadership ranks.' },
   { id: 'natural', name: 'Natural', tier: 3, ranked: false, activation: 'incidental', hook: 'reroll', limit: 'perSession', selects: 'twoSkills',
+    roller: { clearEntry: true, note: 'Clears the entered symbols so the check can be rolled again.' },
     summary: 'Once per session, reroll one skill check using either of two skills chosen when the talent was bought.' },
   { id: 'painkillerSpecialization', name: 'Painkiller Specialization', tier: 3, ranked: true, activation: 'passive', hook: 'recoveryBonus',
     summary: 'Painkillers heal one extra wound per rank. The sixth and later doses in a day still do nothing.' },
@@ -843,6 +863,7 @@ export const TALENTS = [
   { id: 'indomitable', name: 'Indomitable', tier: 5, ranked: false, activation: 'incidentalOutOfTurn', hook: 'delayIncapacitation', cost: { storyPoint: 1 }, limit: 'perEncounter',
     summary: 'Once per encounter, when you would be incapacitated by exceeding a threshold, spend a Story Point to delay it until the end of your next turn. Drop back below the threshold in time and it is cancelled entirely.' },
   { id: 'master', name: 'Master', tier: 5, ranked: false, activation: 'incidental', hook: 'difficultyReduction', cost: { strain: 2 }, limit: 'perRound', selects: 'skill',
+    roller: { difficultySteps: -2, note: 'Lowers the difficulty of the next check with the chosen skill by two.' },
     summary: 'Once per round, suffer 2 strain to lower the difficulty of your next check with a chosen skill by two, to a minimum of Easy.' },
   { id: 'overchargeImproved', name: 'Overcharge (Improved)', tier: 5, ranked: false, activation: 'passive', hook: 'extraAction', requires: 'overcharge', settingApplicable: false, // R-11
     summary: 'Spend two Advantage or a Triumph from the Overcharge check to take one extra action immediately. Once per check.' },
@@ -914,7 +935,14 @@ export const CREATION_RULES = {
   skillRankCap: SKILL_RANK_MAX_AT_CREATION,
   careerSkillPicks: 4,
   // R-8 — the manual states neither a budget nor a currency name. House aid, labelled as one.
-  houseAid: { currencyLabel: 'credits', startingBudget: 500, ruling: 'R-8', badge: 'House aid — not a printed rule' }
+  houseAid: {
+    currencyLabel: 'RM', currencyName: 'Reichsmark', startingBudget: 500,
+    ruling: 'R-8', badge: 'House aid — not a printed rule',
+    // Unspent budget is kept as cash, and a d100 of pocket money is rolled once the gear
+    // is bought. Pocket money is spending money in play — it cannot buy more starting gear.
+    unspentKept: true,
+    pocketMoney: { die: 100, usableForStartingGear: false }
+  }
 };
 
 // T36 — Careers — §14. Eight listed skills each; the player picks four at rank 1.
@@ -1140,6 +1168,7 @@ export const HEAT = {
   cite: '§17',
   max: 5,
   min: 0,
+  safehouseDefault: 'clear', // §3.8 — the status before any threshold sets one
   generation: {
     cite: '§17.1',
     scope: 'Only checks made in Reich-surveilled contexts — public spaces, checkpoints, dealings with officials or informants.',
@@ -1154,10 +1183,11 @@ export const HEAT = {
   tracks: {
     cite: '§17.2',
     personal: 'Tracked per character, 0 to 5.',
-    cell: 'Shared across the whole party or network, 0 to 5. Rises when any member reaches Personal Heat 3 or more, or from group-implicating failures such as a blown safehouse or a flipped informant.'
+    cell: 'Shared across the whole party or network, 0 to 5. Rises when any member reaches Personal Heat 3 or more, or from group-implicating failures such as a blown safehouse or a flipped informant.',
+    cellEscalationAtPersonal: 3
   },
   thresholds: [
-    { level: 1, personal: 'One Setback die on public checks', personalEffect: { setback: 1, scope: 'public' }, cell: null },
+    { level: 1, personal: 'One Setback die on public checks', personalEffect: { setback: 1, scope: 'public' }, cell: null, cellEffect: null },
     { level: 2, personal: 'Papers checked on sight — opposed Deception or Cool against Perception', cell: 'One Setback die on every cell member\'s public checks', cellEffect: { setback: 1, scope: 'public' } },
     { level: 3, personal: 'Tailed — an opposed Vigilance check to notice', cell: 'The safehouse is placed under watch, at GM discretion', safehouseStatus: 'watched' },
     { level: 4, personal: 'An informant is assigned and the residence is searched', cell: 'Oracle roll: a cell member is flipped or arrested' },
@@ -1313,3 +1343,35 @@ export const CONDITIONS = [
   { id: 'heatPersonal1', name: 'Personal Heat 1+', effect: 'One Setback die on public checks.', dice: { setback: 1 }, cite: '§17.3' },
   { id: 'heatCell2', name: 'Cell Heat 2+', effect: 'One Setback die on every cell member\'s public checks.', dice: { setback: 1 }, cite: '§17.3' }
 ];
+
+// ---------------------------------------------------------------------------
+// HOUSE RULE — black-market purchasing.
+// Supplied by the table owner; it appears in neither book. It layers on top of the
+// printed purchasing rules (§14A) rather than replacing them, and every surface that
+// uses it is badged as a house rule so nothing invented reads as printed (CLAUDE.md §13.8).
+export const BLACK_MARKET = {
+  houseRule: true,
+  badge: 'house rule — not from the books',
+  builtOn: '§14A purchasing, §15 ration cards, §17.1 suspicion',
+  summary: 'Above rarity 5, cash alone rarely closes a deal: the seller wants ration cards or goods in trade as well.',
+
+  // Rarity 6 and up is where barter starts being demanded.
+  barterFromRarity: 6,
+  skill: 'streetwise',                 // §14A already routes illegal goods through Streetwise
+
+  /** Ration cards demanded on top of the price: one per point of rarity above 5. */
+  rationCardsFor: (rarity) => Math.max(0, Math.min(10, rarity) - 5),
+
+  // Nothing to barter with: the difficulty rises by one and the shortfall is made up in
+  // cash or favours, at the GM's discretion.
+  noBarterDifficultySteps: 1,
+
+  // A deal that goes badly is as exposing as any other public dealing, so it falls under
+  // the printed suspicion rule (§17.1).
+  heat: {
+    failedThreatThreshold: 3,
+    note: 'A failed check showing three threat, or any despair, counts as a surveilled-context check.'
+  },
+
+  alternatives: ['Ration cards', 'Barter goods or a favour owed']
+};
