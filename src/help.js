@@ -60,6 +60,7 @@ export const PANELS = {
 
   rollCheck: { lede: 'Pick the skill and how hard the task is. The pool builds itself.', detail: 'Choose "opposed" when another person is actively resisting you: they never roll, their rating builds the opposing dice instead.' },
   rollAttack: { lede: 'Pick a weapon and who you are aiming at, and the app does the rest of the arithmetic.', detail: 'The weapon sets which skill you roll. For a ranged weapon the distance sets the difficulty on its own — close is easy, far is not. Picking a target off the combat tracker means the app knows their soak, so once you tap in your dice it can tell you the damage and take it off them in one go.' },
+  rollMotivation: { lede: 'The four things about your character that other people can use against you.', detail: 'In a social encounter an opponent spends leftover advantage to work these out: two buys your strength or flaw, three buys your desire or fear. Tick one once it is out in the open, so you both know what is already known.' },
   rollSituation: { lede: 'Anything about the scene that should change the dice.', detail: 'Cover, darkness, the size of your target and how hard the target is to hit all belong here. Below that you can upgrade or downgrade dice by hand, or spend a story point to do it.' },
   rollPool: { lede: 'The dice this check uses, and why each one is there.', detail: 'Dice are assembled in the order the book gives: build the base pool, add, upgrade, downgrade, then remove.' },
   // rollPool is retained for the "Why these dice" copy; the pool itself now lives in the
@@ -93,7 +94,7 @@ export const MODES = [
   { id: 'player', name: 'Player', desc: 'You play one character at a table with a GM.', tabs: ['home', 'sheet', 'roll', 'create', 'rules'] },
   { id: 'gm',     name: 'GM',     desc: 'You run the game for other people.',            tabs: ['home', 'gm', 'combat', 'roll', 'rules'] },
   { id: 'solo',   name: 'Solo',   desc: 'You play on your own, with the Oracle as GM.',  tabs: ['home', 'sheet', 'roll', 'solo', 'combat'] },
-  { id: 'all',    name: 'Everything', desc: 'Show every screen at once — nine tabs, tight on a phone.', tabs: null }
+  { id: 'all',    name: 'Everything', desc: 'Show every screen at once. Past five tabs the bar shows glyphs alone so nothing is clipped.', tabs: null }
 ];
 
 /** One line per screen, for the header menu. */

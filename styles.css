@@ -672,3 +672,9 @@ details.accordion > *:last-child { padding-bottom: 0.6rem; }
   table { border-collapse: collapse; }
   th, td { border-bottom: 1px solid #ccc; }
 }
+
+
+/* The Everything seat shows more than five screens, so the bar drops the labels and gives
+   each glyph the whole tab (B-7). The accessible name rides on the link itself. */
+.bottom-nav.nav-glyph-only a { padding: 0.5rem 0; }
+.bottom-nav.nav-glyph-only .nav-glyph { font-size: 1.3rem; }

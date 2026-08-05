@@ -12,7 +12,7 @@ import { BESTIARY, ENCOUNTER_BLOCKS } from '../data-monsters.js';
 import { VEHICLES, VEHICLE_RULES } from '../data.js';
 import {
   minionGroupWoundThreshold, minionGroupSkillRanks, minionCriticalWoundCost,
-  bestiaryEntry, encounterBlock
+  bestiaryEntry, encounterBlock, criticalInjuryFor, criticalInjuryTotal, adversaryAbility
 } from './rules.js';
 import { woundThreshold, strainThreshold, soak, derivedFor } from './derived.js';
 import {
@@ -240,7 +240,7 @@ export function promoteToRival(combatantId) {
 }
 
 /** Apply damage. Minion groups drop a member per share of the group threshold (§12C). */
-export function damageCombatant(combatantId, { wounds = 0, strain = 0, critical = false }) {
+export function damageCombatant(combatantId, { wounds = 0, strain = 0, critical = false, vicious = 0 } = {}) {
   const combat = getCombat();
   const c = combat.combatants[combatantId];
   if (!c) return { ok: false, reason: 'Unknown combatant.' };
@@ -269,6 +269,13 @@ export function damageCombatant(combatantId, { wounds = 0, strain = 0, critical 
     c.minionsDown = dropped;
     c.defeated = remaining === 0;
   } else {
+    // Rivals and nemeses suffer Critical Injuries normally (§12C), so the §9 table is rolled
+    // for them, stored on the card, and stacks +10 on their own later rolls like a PC's.
+    if (critical) {
+      const rolled = rollCombatantCritical(c, { vicious });
+      notes.push(`Critical Injury on ${c.name}: ${rolled.injury.name} (${rolled.injury.severity}), rolled ${rolled.roll}${rolled.modifier ? ` +${rolled.modifier}` : ''}.`);
+      if (rolled.condition) notes.push(`${c.name} is now ${rolled.condition}.`);
+    }
     c.defeated = c.wounds >= c.woundThreshold;
     if (c.defeated && c.tier === 'rival') notes.push('The GM may rule a rival killed outright past their threshold.');
     if (c.defeated && c.tier === 'nemesis') notes.push('Incapacitated at the threshold.');
@@ -289,6 +296,44 @@ export function damageCombatant(combatantId, { wounds = 0, strain = 0, critical 
   return { ok: true, combatant: c, notes };
 }
 
+/** Roll the §9 table for an NPC and keep the result on their card. Their own untreated
+ *  injuries add +10 each, exactly as they do for a PC (§9), and Vicious X adds 10 per rank.
+ *  `mutate` is the combatant object, already inside an open `getCombat()` transaction. */
+export function rollCombatantCritical(combatant, { vicious = 0, roll = null } = {}) {
+  combatant.criticalInjuries = combatant.criticalInjuries || [];
+  const untreated = combatant.criticalInjuries.filter((c) => !c.healed).length;
+  const d100 = roll || rollDie(100);
+  const total = criticalInjuryTotal({ roll: d100, untreatedInjuries: untreated, vicious });
+  const injury = criticalInjuryFor(total);
+  const record = { roll: d100, total, severity: injury.severity, name: injury.name, healed: false };
+  combatant.criticalInjuries.push(record);
+  // Three results name a condition; Hardened and Disciplined make their bearers immune (R-19).
+  let applied = null;
+  if (injury.condition && !immuneTo(combatant, injury.condition)) {
+    combatant.conditions = { ...(combatant.conditions || {}), [injury.condition]: true };
+    applied = (CONDITIONS.find((x) => x.id === injury.condition) || { name: injury.condition }).name.toLowerCase();
+  }
+  return { injury, roll: d100, total, modifier: total - d100, condition: applied, record };
+}
+
+/** Adversary abilities that grant immunity to a condition (§12D Hardened, B§2 Disciplined). */
+function immuneTo(combatant, conditionId) {
+  return (combatant.abilities || []).some((id) => {
+    const def = adversaryAbility(id);
+    return def && (def.immunities || []).includes(conditionId);
+  });
+}
+
+/** Mark one of an NPC's injuries treated, so the +10 stack falls back again. */
+export function healCombatantCritical(combatantId, index) {
+  const combat = getCombat();
+  const c = combat.combatants[combatantId];
+  if (!c || !(c.criticalInjuries || [])[index]) return { ok: false, reason: 'No such injury.' };
+  c.criticalInjuries[index].healed = !c.criticalInjuries[index].healed;
+  saveCombat(combat);
+  return { ok: true, healed: c.criticalInjuries[index].healed };
+}
+
 /** Papers-Check Reflex (B§2): a PC who fails a Deception or Cool check against this group
  *  takes a Personal Heat check automatically. */
 export function papersCheckReflex(combatantId, character, { failed }) {
@@ -298,7 +343,7 @@ export function papersCheckReflex(combatantId, character, { failed }) {
     return { ok: false, reason: 'This combatant does not have Papers-Check Reflex.' };
   }
   if (!failed) return { ok: true, triggered: false, note: 'The check held up; no Heat.' };
-  const applied = applyPersonalHeat(character, 1);
+  const applied = applyPersonalHeat(character, 1, `Papers-Check Reflex from ${c.name}`);
   return {
     ok: true, triggered: true, applied,
     note: `Papers-Check Reflex: Personal Heat ${applied.before} → ${applied.after}.`
@@ -330,6 +375,15 @@ export function removeCombatant(combatantId) {
 // ---------------------------------------------------------------------------
 // Vehicle scale (§12) — the same engine, personal-scale damage, five range bands.
 // ---------------------------------------------------------------------------
+
+export function setVehiclePilot(vehicleId, pilotCombatantId) {
+  const combat = getCombat();
+  const v = (combat.vehicles || {})[vehicleId];
+  if (!v) return { ok: false, reason: 'Unknown vehicle.' };
+  v.pilotCombatantId = pilotCombatantId || null;
+  saveCombat(combat);
+  return { ok: true, pilotCombatantId: v.pilotCombatantId };
+}
 
 export function addVehicle(vehicleId, { pilotCombatantId = null } = {}) {
   const source = VEHICLES.find((v) => v.id === vehicleId);
@@ -472,7 +526,7 @@ export function dragnetRound(taskId, { failed, character = null, hoursElapsed = 
   if (failed) {
     task.progress = clamp(task.progress + 1, 0, task.target);
     if (character) {
-      const personal = applyPersonalHeat(character, 1);
+      const personal = applyPersonalHeat(character, 1, `A failed round of ${task.name}`);
       effects.push(`Personal Heat ${personal.before} → ${personal.after}.`);
     }
     const cell = applyCellHeat(1);
@@ -826,8 +880,36 @@ function combatantCard(c, combat, rerender) {
     card.append(el('p', { class: 'small muted', text: `This turn: ${c.turnLog.join(', ')}.` }));
   }
 
-  card.append(el('button', { type: 'button', class: 'secondary', text: '+1 wound', onclick: () => { const r = damageCombatant(c.id, { wounds: 1 }); r.notes.forEach((n) => showToast(n)); rerender(); } }));
-  card.append(el('button', { type: 'button', class: 'secondary', text: 'Critical', onclick: () => { const r = damageCombatant(c.id, { critical: true }); r.notes.forEach((n) => showToast(n)); rerender(); } }));
+  card.append(el('button', { type: 'button', class: 'secondary', text: '+1 wound', 'aria-label': `One more wound on ${c.name}`, onclick: () => { const r = damageCombatant(c.id, { wounds: 1 }); r.notes.forEach((n) => showToast(n)); rerender(); } }));
+  card.append(el('button', {
+    type: 'button', class: 'secondary', text: 'Critical', 'aria-label': `Critical Injury on ${c.name}`,
+    onclick: () => { const r = damageCombatant(c.id, { critical: true }); r.notes.forEach((n) => showToast(n)); rerender(); }
+  }));
+
+  // Lasting injuries on a rival or nemesis, with the +10 each one adds to their next roll.
+  const injuries = c.criticalInjuries || [];
+  if (injuries.length) {
+    const untreated = injuries.filter((i) => !i.healed).length;
+    const body = el('div', {});
+    injuries.forEach((injury, index) => {
+      body.append(el('div', { class: 'result' }, [
+        el('div', { class: 'result-head' }, [
+          el('span', { class: 'result-title', text: `${injury.name} (${injury.severity})` }),
+          el('span', { class: 'cite', text: `rolled ${injury.roll}${injury.total !== injury.roll ? ` → ${injury.total}` : ''}` })
+        ]),
+        el('button', {
+          type: 'button', class: 'secondary',
+          text: injury.healed ? 'Mark untreated' : 'Mark treated',
+          'aria-label': `${injury.healed ? 'Mark untreated' : 'Mark treated'}: ${injury.name} on ${c.name}`,
+          onclick: () => { healCombatantCritical(c.id, index); rerender(); }
+        })
+      ]));
+    });
+    card.append(accordion('Lasting injuries', [body], {
+      key: `combat-crits-${c.id}`,
+      summary: untreated ? `${untreated} untreated, next roll +${untreated * 10}` : 'all treated'
+    }));
+  }
 
   // Conditions on an NPC, so a staggered rival stays staggered (A-15).
   const condBody = el('div', {});
@@ -869,10 +951,17 @@ function sectionVehicles(mount, combat, rerender) {
   ]);
   const vehiclePick = el('select', { id: 'vehicle-pick', 'aria-label': 'Vehicle' });
   VEHICLES.forEach((v) => vehiclePick.append(el('option', { value: v.id, text: `${v.name} (sil ${v.silhouette})` })));
-  vehicleBody.append(vehiclePick, el('button', {
-    type: 'button', class: 'secondary', text: 'Add vehicle',
-    onclick: () => { addVehicle(vehiclePick.value); rerender(); }
-  }));
+  const pilotPick = el('select', { id: 'vehicle-pilot', 'aria-label': 'Who is driving' });
+  pilotPick.append(el('option', { value: '', text: 'Nobody at the wheel yet' }));
+  Object.values(combat.combatants).forEach((c) => pilotPick.append(el('option', { value: c.id, text: c.name })));
+  vehicleBody.append(
+    vehiclePick,
+    el('label', { class: 'small', for: 'vehicle-pilot', text: 'Who is driving' }), pilotPick,
+    el('button', {
+      type: 'button', class: 'secondary', text: 'Add vehicle',
+      onclick: () => { addVehicle(vehiclePick.value, { pilotCombatantId: pilotPick.value || null }); rerender(); }
+    })
+  );
   Object.values(combat.vehicles || {}).forEach((v) => {
     vehicleBody.append(el('div', { class: 'result' }, [
       el('div', { class: 'result-head' }, [
@@ -880,11 +969,12 @@ function sectionVehicles(mount, combat, rerender) {
         el('span', { class: 'cite', text: `sil ${v.silhouette} · handling ${v.handling >= 0 ? '+' : ''}${v.handling}` })
       ]),
       el('div', { class: 'result-body', text: `Speed ${v.speed}/${v.maxSpeed} · hull ${v.hullTrauma}/${v.hullThreshold} · system strain ${v.systemStrain}/${v.systemStrainThreshold} · armour ${v.armour}${v.disabled ? ' · disabled' : ''}` }),
-      el('button', { type: 'button', class: 'secondary', text: 'Accelerate', onclick: () => { changeSpeed(v.id, 1); rerender(); } }),
-      el('button', { type: 'button', class: 'secondary', text: 'Decelerate', onclick: () => { changeSpeed(v.id, -1); rerender(); } }),
-      el('button', { type: 'button', class: 'secondary', text: '+1 system strain', onclick: () => { vehicleDamage(v.id, { systemStrain: 1 }); rerender(); } }),
-      el('button', { type: 'button', class: 'secondary', text: 'Damage Control', onclick: () => { const r = repairSystemStrain(v.id); showToast(r.note); rerender(); } }),
-      el('button', { type: 'button', class: 'secondary', text: 'Crash', onclick: () => { const r = crashVehicle(v.id); showToast(r.note); rerender(); } }),
+      vehicleDriverRow(v, combat, rerender),
+      el('button', { type: 'button', class: 'secondary', text: 'Accelerate', 'aria-label': `Accelerate ${v.name}`, onclick: () => { changeSpeed(v.id, 1); rerender(); } }),
+      el('button', { type: 'button', class: 'secondary', text: 'Decelerate', 'aria-label': `Decelerate ${v.name}`, onclick: () => { changeSpeed(v.id, -1); rerender(); } }),
+      el('button', { type: 'button', class: 'secondary', text: '+1 system strain', 'aria-label': `One more system strain on ${v.name}`, onclick: () => { vehicleDamage(v.id, { systemStrain: 1 }); rerender(); } }),
+      el('button', { type: 'button', class: 'secondary', text: 'Damage Control', 'aria-label': `Damage Control on ${v.name}`, onclick: () => { const r = repairSystemStrain(v.id); showToast(r.note); rerender(); } }),
+      el('button', { type: 'button', class: 'secondary', text: 'Crash', 'aria-label': `Crash ${v.name}`, onclick: () => { const r = crashVehicle(v.id); showToast(r.note); rerender(); } }),
       el('button', {
         type: 'button', class: 'secondary danger', text: 'Remove', 'aria-label': `Remove ${v.name}`,
         onclick: async () => {
@@ -904,6 +994,23 @@ function sectionVehicles(mount, combat, rerender) {
       el('p', { class: 'small', text: escalation.note })
     ]));
   }
+}
+
+/** Who is at the wheel, and what this vehicle's Handling will do to their checks (§12). */
+function vehicleDriverRow(v, combat, rerender) {
+  const wrap = el('div', {});
+  const pick = el('select', { id: `vehicle-pilot-${v.id}`, 'aria-label': `Who is driving the ${v.name}` });
+  pick.append(el('option', { value: '', text: 'Nobody at the wheel', selected: !v.pilotCombatantId }));
+  Object.values(combat.combatants).forEach((c) => pick.append(el('option', {
+    value: c.id, text: c.name, selected: v.pilotCombatantId === c.id
+  })));
+  pick.addEventListener('change', () => { setVehiclePilot(v.id, pick.value || null); rerender(); });
+  wrap.append(el('label', { class: 'small', for: `vehicle-pilot-${v.id}`, text: 'At the wheel' }), pick);
+  const driver = v.pilotCombatantId ? combat.combatants[v.pilotCombatantId] : null;
+  wrap.append(el('p', { class: 'small muted', text: v.handling === 0
+    ? `Handling 0, so it adds nothing to ${driver ? driver.name + "'s" : 'the driver\'s'} Driving and Piloting checks.`
+    : `Handling ${v.handling > 0 ? '+' : ''}${v.handling} adds ${Math.abs(v.handling)} ${v.handling > 0 ? 'Boost' : 'Setback'} to ${driver ? driver.name + "'s" : 'the driver\'s'} Driving and Piloting checks. Pick this vehicle on the Roll screen and it applies itself.` }));
+  return wrap;
 }
 
 // --- progress tasks ---

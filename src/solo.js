@@ -2,16 +2,28 @@
 // rather than invented; it stays behind the soloMode flag.
 
 import { el, clear, titleCase, rollDie, newTally, outcome } from './core.js';
-import { showToast, modal, renderTally, panel, emptyState } from './ui.js';
+import { showToast, modal, renderTally, panel, emptyState, symbolGlyph } from './ui.js';
 import { PANELS } from './help.js';
 import { ORACLE, MEANING, ELEMENTS, RANDOM_EVENT, SOLO_LOOP } from '../data-solo.js';
+import { SYMBOLS } from '../data.js';
 import { NPC_QUICKGEN } from '../data-npcs.js';
 import { RANDOM_ENCOUNTERS, MINION_GROUPS } from '../data-monsters.js';
 import { activeCharacter, getCell } from './store.js';
 import { applyPersonalHeat } from './heat.js';
-import { writeLog } from './roller.js';
+import { writeLog, rollPool, diceToRoll, rolledSymbols, SYMBOL_HELP } from './roller.js';
+import { Settings } from './settings.js';
 
-const state = { likelihood: 'fiftyFifty', surveilled: false, history: [] };
+const ORACLE_SYMBOLS = SYMBOLS.map((s) => s.id);
+
+// The entered tally lives at module scope so it survives navigation, the way the Roll
+// screen's does — an Oracle question part-way through entry is not lost by tapping Home.
+const state = { likelihood: 'fiftyFifty', surveilled: false, entered: newTally(), lastAnswer: null };
+
+/** The pool the chosen likelihood asks for (§18), in the same shape the roller uses. */
+export function oraclePool(likelihoodId = state.likelihood) {
+  const l = ORACLE.likelihoods.find((x) => x.id === likelihoodId) || ORACLE.likelihoods[1];
+  return { ability: l.ability, proficiency: 0, difficulty: l.difficulty, challenge: 0, boost: 0, setback: 0 };
+}
 
 /** The Oracle answers from entered symbols, exactly like every other check (R-B1). */
 export function interpretOracle(tally) {
@@ -80,51 +92,79 @@ export function renderSolo(mount) {
     el('label', { for: 'oracle-surveilled' }, [el('span', { text: 'The question concerns somewhere the regime is watching, so a despair draws attention' })])
   ]));
 
-  const entered = newTally();
-  const tallyRow = el('div');
-  const drawTally = () => {
-    clear(tallyRow);
-    ['success', 'advantage', 'triumph', 'failure', 'threat', 'despair'].forEach((sym) => {
-      tallyRow.append(el('div', { class: 'toggle-row' }, [
-        el('label', { for: `oracle-${sym}` }, [el('span', { text: titleCase(sym) })]),
-        el('button', { type: 'button', class: 'secondary', text: '−', 'aria-label': `One less oracle ${sym}`, onclick: () => { entered[sym] = Math.max(0, entered[sym] - 1); drawTally(); } }),
+  // The Oracle is a check like any other, so it shows the dice it asks for and — when the
+  // simulated roller is on — rolls them (A-21).
+  const pool = oraclePool();
+  const entered = state.entered;
+  oracleCard.append(diceToRoll(pool, [`${ORACLE.likelihoods.find((l) => l.id === state.likelihood).name} asks for this pool.`]));
+
+  if (Settings.digitalRoller()) {
+    oracleCard.append(el('button', {
+      type: 'button', class: 'secondary', id: 'oracle-roll', text: 'Roll these dice',
+      onclick: () => {
+        const rolled = rollPool(pool);
+        if (!rolled.ok) { showToast(rolled.reason); return; }
+        Object.keys(entered).forEach((k) => { entered[k] = rolled.tally[k] || 0; });
+        rerender();
+      }
+    }));
+    oracleCard.append(rolledSymbols(entered));
+  } else {
+    oracleCard.append(el('p', { class: 'small', text: 'Roll the dice above and tap in what came up. Switch on the simulated roller in Settings to have the app roll them for you.' }));
+    // The same labelled pad the Roll screen uses: a symbol is never shown bare.
+    ORACLE_SYMBOLS.forEach((sym) => {
+      oracleCard.append(el('div', { class: 'toggle-row' }, [
+        el('label', { for: `oracle-${sym}` }, [
+          symbolGlyph(sym, entered[sym]),
+          el('span', { class: 'toggle-desc', text: SYMBOL_HELP[sym] })
+        ]),
+        el('button', { type: 'button', class: 'secondary', text: '−', 'aria-label': `One less oracle ${sym}`, onclick: () => { entered[sym] = Math.max(0, entered[sym] - 1); rerender(); } }),
         el('span', { id: `oracle-${sym}`, class: 'stat-value', text: String(entered[sym]) }),
-        el('button', { type: 'button', class: 'secondary', text: '+', 'aria-label': `One more oracle ${sym}`, onclick: () => { entered[sym] += 1; drawTally(); } })
+        el('button', { type: 'button', class: 'secondary', text: '+', 'aria-label': `One more oracle ${sym}`, onclick: () => { entered[sym] += 1; rerender(); } })
       ]));
     });
-  };
-  drawTally();
-  oracleCard.append(el('p', { class: 'small' }, [
-    'Roll the listed dice physically and enter what came up; the Oracle reads them with the normal resolution rules.'
-  ]), tallyRow);
+  }
 
   const answerNode = el('div', { id: 'oracle-answer', 'aria-live': 'polite' });
+  // The last answer stays on screen across a rerender rather than vanishing.
+  if (state.lastAnswer) {
+    answerNode.append(el('h3', { text: state.lastAnswer.answer }));
+    answerNode.append(el('p', {}, [renderTally(state.lastAnswer.net)]));
+    (state.lastAnswer.lines || []).forEach((line) => answerNode.append(el('p', { class: 'small', text: line })));
+  }
   oracleCard.append(el('button', {
-    type: 'button', class: 'primary', text: 'Ask the Oracle',
+    type: 'button', class: 'primary', id: 'oracle-ask', text: 'Ask the Oracle',
+    disabled: !Object.values(entered).some((n) => n > 0),
     onclick: () => {
       const verdict = interpretOracle(entered);
+      const lines = [];
       clear(answerNode);
       answerNode.append(el('h3', { text: verdict.answer }));
       answerNode.append(el('p', {}, [renderTally(verdict.result.net)]));
 
       if (state.surveilled && verdict.result.despair > 0 && character) {
-        const applied = applyPersonalHeat(character, 1);
-        answerNode.append(el('p', { class: 'small', text: `Despair in a surveilled context: Personal Heat ${applied.before} → ${applied.after}.` }));
+        const applied = applyPersonalHeat(character, 1, 'A despair from the Oracle in a watched place');
+        const line = `Despair in a surveilled context: Personal Heat ${applied.before} → ${applied.after}.`;
+        lines.push(line);
+        answerNode.append(el('p', { class: 'small', text: line }));
         document.dispatchEvent(new CustomEvent('resource:refresh'));
       }
       if (verdict.event) {
         const event = rollRandomEvent();
-        answerNode.append(el('p', { class: 'small', text: `Random Event: ${event.category} (${event.categoryRoll}) concerning ${event.subject.toLowerCase()} (${event.subjectRoll}).${event.complication ? ` Complication: ${event.complication}.` : ''} ${RANDOM_EVENT.skew}` }));
+        const line = `Random Event: ${event.category} (${event.categoryRoll}) concerning ${event.subject.toLowerCase()} (${event.subjectRoll}).${event.complication ? ` Complication: ${event.complication}.` : ''} ${RANDOM_EVENT.skew}`;
+        lines.push(line);
+        answerNode.append(el('p', { class: 'small', text: line }));
       }
       writeLog({
         ts: Date.now(), by: character ? character.id : null,
         characterName: character ? character.identity.name : 'Solo',
-        skill: 'oracle', difficulty: state.likelihood, poolInputs: {}, symbols: { ...entered },
+        skill: 'oracle', difficulty: state.likelihood, poolInputs: pool, symbols: { ...entered },
         net: verdict.result.net, outcome: verdict.answer, surveilled: state.surveilled,
         heatDelta: state.surveilled && verdict.result.despair > 0 ? 1 : 0, notes: ['Oracle']
       });
+      state.lastAnswer = { answer: verdict.answer, net: verdict.result.net, lines };
       Object.keys(entered).forEach((k) => { entered[k] = 0; });
-      drawTally();
+      rerender();
     }
   }), answerNode);
   mount.append(oracleCard);

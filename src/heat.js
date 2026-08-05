@@ -58,10 +58,21 @@ export function heatSetbackDice({ personalHeat = 0, cellHeat = 0, isPublicCheck 
   return sum(personalHeat, 'personalEffect') + sum(cellHeat, 'cellEffect');
 }
 
-export function applyPersonalHeat(character, delta) {
+/** How many moves the track remembers. Enough to answer "why am I at 3?" without becoming
+ *  a second log. */
+const HEAT_TRAIL_CAP = 12;
+
+export function applyPersonalHeat(character, delta, reason = null) {
   const before = character.state.personalHeat || 0;
   const after = clamp(before + delta, HEAT.min, HEAT.max);
   character.state.personalHeat = after;
+  // A reason trail, so the track can say how it got where it is (C-10).
+  if (after !== before) {
+    character.state.heatTrail = [
+      { ts: Date.now(), from: before, to: after, delta: after - before, reason: reason || 'Adjusted by hand' },
+      ...(character.state.heatTrail || [])
+    ].slice(0, HEAT_TRAIL_CAP);
+  }
   saveCharacter(character);
   const escalation = escalateCell(after);
   return { before, after, crossed: HEAT.thresholds.filter((t) => t.level > before && t.level <= after), escalation };

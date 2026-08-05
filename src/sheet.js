@@ -2,7 +2,7 @@
 // resource header that rides on every in-play screen.
 
 import { el, clear, titleCase, clamp } from './core.js';
-import { showToast, confirmModal, modal, panel, subTabs, emptyState, outcomeBox, numberStepper } from './ui.js';
+import { showToast, confirmModal, modal, panel, subTabs, accordion, emptyState, outcomeBox, numberStepper } from './ui.js';
 import { PANELS, label as termLabel, gloss } from './help.js';
 import {
   SKILLS, CHARACTERISTICS, CONDITIONS, HEAT, CRITICAL_INJURIES, SUFFOCATION, RECOVERY,
@@ -16,12 +16,12 @@ import { ITEM_DAMAGE, ATTACHMENTS, DIFFICULTIES, GEAR, WEAPONS, ARMOUR, RARITY, 
 import { blackMarketPurchase } from './rules.js';
 import { hardPoints } from './derived.js';
 import { Settings } from './settings.js';
-import { rollCriticalInjury, spendStoryPoint, state as rollerState } from './roller.js';
+import { rollCriticalInjury, spendStoryPoint, applyTalentToCheck, state as rollerState } from './roller.js';
 import {
   derivedFor, woundThreshold, strainThreshold, soak, encumbranceState, criticalModifier
 } from './derived.js';
 import { activeCharacter, saveCharacter, getCell, saveCell as saveCellDirect } from './store.js';
-import { personalEffects, cellEffects } from './heat.js';
+import { personalEffects, cellEffects, applyPersonalHeat } from './heat.js';
 
 /** The persistent resource header: wounds · strain · Story Points · Personal Heat · encumbrance. */
 export function renderResourceHeader() {
@@ -162,8 +162,10 @@ function pane_vitals(mount, character, derived, rerender) {
     saveCharacter(character); rerender();
   }, 'Stress'));
   vitals.append(stepper(`${termLabel('personalHeat')} — ${gloss('personalHeat')}`, character.state.personalHeat, HEAT.max, (v) => {
-    character.state.personalHeat = clamp(v, HEAT.min, HEAT.max);
-    saveCharacter(character); rerender();
+    // Through applyPersonalHeat so the change is recorded on the trail and the cell
+    // escalation rule still fires (§17.2).
+    applyPersonalHeat(character, clamp(v, HEAT.min, HEAT.max) - character.state.personalHeat, 'Set by hand on the sheet');
+    rerender();
   }, 'Suspicion'));
   if (character.state.incapacitated) {
     vitals.append(outcomeBox(['Out of the fight: injury or stress has reached the limit. Heal below it to act again.'], { tone: 'warn', title: 'Down' }));
@@ -204,37 +206,76 @@ function pane_vitals(mount, character, derived, rerender) {
   if (personal.length) heatCard.append(el('ul', { class: 'small' }, personal.map((t) => el('li', { text: t }))));
   if (cellFx.length) heatCard.append(el('ul', { class: 'small muted' }, cellFx.map((t) => el('li', { text: t }))));
   if (!personal.length && !cellFx.length) heatCard.append(el('p', { class: 'small muted', text: 'No threshold effects in force.' }));
+  // Why the track sits where it does (C-10).
+  const trail = character.state.heatTrail || [];
+  if (trail.length) {
+    const trailBody = el('div', { id: 'heat-trail' });
+    trail.forEach((move) => {
+      trailBody.append(el('p', { class: 'small muted', text:
+        `${new Date(move.ts).toLocaleString()} · ${move.from} → ${move.to} · ${move.reason}` }));
+    });
+    heatCard.append(accordion('How it got here', [trailBody], {
+      key: 'sheet-heat-trail', summary: `last ${trail.length} change${trail.length === 1 ? '' : 's'}`
+    }));
+  }
   mount.append(heatCard);
 
 }
 
+/** The four groups the skill list already carries, so 26 rows read as a contents page
+ *  rather than one run (B-8). */
+const SKILL_GROUPS = [
+  { id: 'combat',    label: 'Combat' },
+  { id: 'general',   label: 'General' },
+  { id: 'social',    label: 'Social' },
+  { id: 'knowledge', label: 'Knowledge' }
+];
+
 function pane_skills(mount, character, derived, rerender) {
-  // skills with pool preview
-  const skillTable = el('table');
-  skillTable.append(el('tr', {}, [el('th', { text: 'Skill' }), el('th', { text: 'Rank' }), el('th', { text: 'Pool' })]));
-  SKILLS.forEach((s) => {
-    const rank = character.skills[s.id].rank;
-    const pool = buildPool(rank, character.attributes[s.characteristic]);
-    skillTable.append(el('tr', {}, [
-      // Tapping a skill selects it on the Roll screen and goes there, so the sheet is the
-      // way into a check rather than a place to read the skill's name and retype it.
-      el('td', {}, [el('button', {
-        type: 'button', class: 'skill-link',
-        'aria-label': `Roll ${s.name}`,
-        text: `${s.name}${character.skills[s.id].career ? ' ●' : ''}`,
-        onclick: () => { rollerState.skillId = s.id; location.hash = '#/roll'; }
-      })]),
-      el('td', { text: String(rank) }),
-      el('td', { class: 'dice-glyph', text: `${pool.ability}A ${pool.proficiency}P` })
-    ]));
+  const skillCard = panel('Skills', PANELS.sheetSkills, []);
+  const trained = SKILLS.filter((s) => character.skills[s.id].rank > 0).length;
+  skillCard.append(el('p', { class: 'small muted', text: `${trained} of ${SKILLS.length} have ranks. Tap any name to take it to the Roll screen.` }));
+
+  const rowsFor = (list) => {
+    const table = el('table');
+    table.append(el('tr', {}, [el('th', { text: 'Skill' }), el('th', { text: 'Rank' }), el('th', { text: 'Dice' })]));
+    list.forEach((s) => {
+      const rank = character.skills[s.id].rank;
+      const pool = buildPool(rank, character.attributes[s.characteristic]);
+      table.append(el('tr', {}, [
+        // Tapping a skill selects it on the Roll screen and goes there, so the sheet is the
+        // way into a check rather than a place to read the skill's name and retype it.
+        el('td', {}, [el('button', {
+          type: 'button', class: 'skill-link',
+          'aria-label': `Roll ${s.name}`,
+          text: `${s.name}${character.skills[s.id].career ? ' ●' : ''}`,
+          onclick: () => { rollerState.skillId = s.id; location.hash = '#/roll'; }
+        })]),
+        el('td', { text: String(rank) }),
+        el('td', { text: `${pool.ability} plain${pool.proficiency ? `, ${pool.proficiency} upgraded` : ''}` })
+      ]));
+    });
+    return el('div', { class: 'table-wrap' }, [table]);
+  };
+
+  SKILL_GROUPS.forEach((group, index) => {
+    const list = SKILLS.filter((s) => s.category === group.id);
+    if (!list.length) return;
+    const withRanks = list.filter((s) => character.skills[s.id].rank > 0).length;
+    skillCard.append(accordion(group.label, [rowsFor(list)], {
+      key: `sheet-skills-${group.id}`,
+      summary: withRanks ? `${withRanks} of ${list.length} trained` : `${list.length}, none trained`,
+      defaultOpen: index === 0
+    }));
   });
-  mount.append(panel('Skills', PANELS.sheetSkills, [el('div', { class: 'table-wrap' }, [skillTable])]));
+  mount.append(skillCard);
 
-
-  // conditions — each auto-applies its effect in the roller
-  const conditionCard = panel('States you are in', PANELS.sheetConditions, []);
-  CONDITIONS.filter((c) => !c.id.startsWith('heat')).forEach((c) => {
-    conditionCard.append(el('div', { class: 'toggle-row' }, [
+  // Conditions fold away behind what is actually ticked, the way the Roll screen's
+  // situation panel and the combat card do (B-9).
+  const condBody = el('div', {});
+  const list = CONDITIONS.filter((c) => !c.id.startsWith('heat'));
+  list.forEach((c) => {
+    condBody.append(el('div', { class: 'toggle-row' }, [
       el('input', {
         type: 'checkbox', id: `cond-${c.id}`, checked: !!character.state.conditions[c.id],
         onchange: (e) => { character.state.conditions[c.id] = e.target.checked; saveCharacter(character); rerender(); }
@@ -246,8 +287,13 @@ function pane_skills(mount, character, derived, rerender) {
       ])
     ]));
   });
+  const on = list.filter((c) => character.state.conditions[c.id]).map((c) => c.name);
+  const conditionCard = panel('States you are in', PANELS.sheetConditions, [
+    accordion('Anything affecting you right now?', [condBody], {
+      key: 'sheet-conditions', summary: on.length ? on.join(', ') : 'nothing'
+    })
+  ]);
   mount.append(conditionCard);
-
 }
 
 function pane_gear(mount, character, derived, rerender) {
@@ -374,8 +420,19 @@ function pane_talents(mount, character, derived, rerender) {
         el('span', { class: 'cite', text: `T${def.tier} · ${def.activation}` })
       ]),
       el('div', { class: 'result-body', text: def.summary }),
-      def.activation === 'passive' ? null : el('button', {
-        type: 'button', class: 'secondary', text: 'Use',
+      // A talent with a roller effect always gets a button, even a passive one: the rule
+      // fires automatically but its trigger — engaged with one opponent, a chosen skill,
+      // a target that has not acted — is a judgement call the app cannot make (A-22).
+      def.roller
+        ? el('p', { class: 'small muted', text: def.activation === 'passive'
+            ? 'Passive, but only in the right situation. Tap it when that situation applies and the dice go into the open check.'
+            : 'Tapping this puts it straight into the open check on the Roll screen.' })
+        : def.activation === 'passive' ? null
+          : el('p', { class: 'small muted', text: 'Tapping Use pays the cost and marks it spent; the effect itself is yours to narrate.' }),
+      (def.activation === 'passive' && !def.roller) ? null : el('button', {
+        type: 'button', class: 'secondary',
+        text: def.activation === 'passive' ? 'Apply to this check' : 'Use',
+        'aria-label': `${def.activation === 'passive' ? 'Apply' : 'Use'} ${def.name}`,
         onclick: () => {
           const result = useTalent(character, held.id);
           if (!result.ok) { showToast(result.reason); return; }
@@ -1068,8 +1125,11 @@ export function useTalent(character, talentId) {
     effects.push(`Healed ${healed} strain.`);
   }
   if (talentId === 'knowSomebody') effects.push(`Reduce the item's rarity by ${held.ranks} for this purchase.`);
-  if (talentId === 'natural') effects.push('Reroll one check with either chosen skill.');
   if (def.derived) effects.push('Passive: already folded into the derived stats.');
+  // Talents whose printed text names an exact change to your own pool push it into the open
+  // check rather than telling you to apply it yourself (A-22).
+  const pushed = applyTalentToCheck(def, held.ranks);
+  if (pushed) effects.push(`${pushed.note} Applied to the open check on the Roll screen.`);
   if (!effects.length) effects.push(def.summary);
 
   if (bucket) {

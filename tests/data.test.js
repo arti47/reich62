@@ -358,6 +358,41 @@ export async function dataChecks({ check, equal }) {
   check('the NPC condition list drops the ones that are the character\'s own bookkeeping',
     D.CONDITIONS.filter((c) => !c.id.startsWith('heat') && !['encumbered', 'incapacitated'].includes(c.id)).length >= 5);
 
+  // --- talents whose printed text names an exact change to your own pool (A-22) ---
+  const rollerTalents = D.TALENTS.filter((t) => t.roller);
+  check('nine talents carry a roller effect', rollerTalents.length === 9, String(rollerTalents.length));
+  check('every roller effect names what it does', rollerTalents.every((t) => !!t.roller.note));
+  equal('Quick Strike adds a Boost per rank', D.TALENTS.find((t) => t.id === 'quickStrike').roller.dice.boost, 'ranks');
+  equal('Knack For It removes two Setback', D.TALENTS.find((t) => t.id === 'knackForIt').roller.dice.setback, -2);
+  equal('Master lowers the difficulty by two', D.TALENTS.find((t) => t.id === 'master').roller.difficultySteps, -2);
+  equal('Rapid Reaction adds Success symbols', D.TALENTS.find((t) => t.id === 'rapidReaction').roller.enteredSymbols.success, 'ranks');
+  check('Natural clears the entry for its reroll', D.TALENTS.find((t) => t.id === 'natural').roller.clearEntry === true);
+
+  // --- the four encounter blocks all carry what a check needs (A-19) ---
+  M.ENCOUNTER_BLOCKS.forEach((block) => {
+    check(`${block.id} names an active skill and an opposing one`,
+      (block.resolution.activeSkills || []).length > 0 && !!block.resolution.opposingSkill);
+    check(`${block.id}'s skills all resolve`,
+      block.resolution.activeSkills.every((sk) => !!R.skill(sk)) && !!R.skill(block.resolution.opposingSkill));
+  });
+
+  // --- the social spend table prices the Motivation reveal ladder (A-24) ---
+  const socialPositive = D.SPEND_TABLES.social.positive;
+  check('two advantage buys a strength or flaw',
+    socialPositive.some((r) => r.cost === 2 && r.effects.some((e) => /Strength or Flaw/i.test(e))));
+  check('three advantage buys a desire or fear',
+    socialPositive.some((r) => r.cost === 3 && r.effects.some((e) => /Desire or Fear/i.test(e))));
+
+  // --- the Oracle asks for a real pool (A-21) ---
+  const pool5050 = S.ORACLE.likelihoods[1];
+  equal('the 50-50 pool is 2 Ability against 2 Difficulty', `${pool5050.ability}v${pool5050.difficulty}`, '2v2');
+
+  // --- the suspicion trail and the revealed facets back-fill on old characters ---
+  const oldSave = D2.normalise({ state: { personalHeat: 3 }, identity: { name: 'Old Save' } });
+  check('the suspicion trail back-fills', Array.isArray(oldSave.state.heatTrail));
+  check('the revealed facets back-fill',
+    oldSave.identity.motivationRevealed && oldSave.identity.motivationRevealed.desire === false);
+
   // --- solo tables (§18–§20, §23) ---
   equal('3 Oracle likelihoods', S.ORACLE.likelihoods.length, 3);
   equal('Likely is 2 Ability against 1 Difficulty', `${S.ORACLE.likelihoods[0].ability}v${S.ORACLE.likelihoods[0].difficulty}`, '2v1');

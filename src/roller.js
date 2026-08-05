@@ -14,7 +14,7 @@ import {
 import {
   skill as skillById, buildPool, buildOpposedDifficulty, modifyPool, difficultyDice,
   criticalInjuryFor, criticalInjuryTotal, attackDifficulty, rangedDifficultyFor,
-  weaponBaseDamage, weaponPierce, weapon as weaponById
+  weaponBaseDamage, weaponPierce, weapon as weaponById, encounterBlock, stepDifficulty
 } from './rules.js';
 import { getCombat } from './store.js';
 import { damageCombatant } from './combat.js';
@@ -26,7 +26,7 @@ import { Settings } from './settings.js';
 import { STORAGE_PREFIX } from './core.js';
 
 /** One line per symbol, so the entry pad doubles as the legend. */
-const SYMBOL_HELP = {
+export const SYMBOL_HELP = {
   success: 'Cancels a failure. One left over means the check works.',
   advantage: 'Cancels a threat. Left over, you spend it on something good.',
   triumph: 'Never cancels, always happens. The best result on the dice.',
@@ -39,6 +39,8 @@ const SYMBOL_ORDER = ['success', 'advantage', 'triumph', 'failure', 'threat', 'd
 
 const LOG_KEY = STORAGE_PREFIX + 'rollLog';
 const LOG_CAP = 100;
+const LOG_PAGE = 12;
+let logShown = LOG_PAGE;
 
 export function readLog() {
   try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch { return []; }
@@ -103,6 +105,11 @@ export const state = {
   weaponId: null,
   rangeBand: null,
   targetId: null,
+  // Which of the target's skills is resisting, on an opposed check (§3A).
+  opposedSkillId: 'discipline',
+  // Dice a tapped talent has put into this check, and the talents that did it (§12A).
+  talentDice: { boost: 0, setback: 0 },
+  talentNotes: [],
   // When `advancedAutomation` is off the automatic dice are shown as confirmable rows
   // rather than applied silently; the flag turns the prompting off.
   autoDice: { conditions: true, encumbrance: true, heat: true },
@@ -211,6 +218,12 @@ export function assemblePool(character = activeCharacter()) {
     }
   }
 
+  // Dice a talent has contributed, added before the upgrade stage like any other addition.
+  if (state.talentDice.boost) { modifications.push({ stage: 'add', die: 'boost', count: state.talentDice.boost }); }
+  if (state.talentDice.setback > 0) { modifications.push({ stage: 'add', die: 'setback', count: state.talentDice.setback }); }
+  if (state.talentDice.setback < 0) { modifications.push({ stage: 'remove', die: 'setback', count: -state.talentDice.setback }); }
+  state.talentNotes.forEach((n) => notes.push(n));
+
   // Upgrades and downgrades resolve after every addition, per the modification order (§2.4).
   if (state.upgradeAbility) { modifications.push({ stage: 'upgrade', die: 'ability', count: state.upgradeAbility }); notes.push(`${state.upgradeAbility} Ability upgraded to Proficiency`); }
   if (state.upgradeDifficulty) { modifications.push({ stage: 'upgrade', die: 'difficulty', count: state.upgradeDifficulty }); notes.push(`${state.upgradeDifficulty} Difficulty upgraded to Challenge`); }
@@ -260,12 +273,64 @@ export function chooseRangeBand(band) {
   return state.difficultyId;
 }
 
-/** Point the check at a combatant: their Adversary rank feeds the pool, their soak the damage. */
+/** Point the check at a combatant: their Adversary rank feeds the pool, their soak the
+ *  damage, and — on an opposed check — their own rating builds the difficulty side (§3A). */
 export function chooseTarget(combatantId) {
   state.targetId = combatantId || null;
   const target = currentTarget();
   state.targetAdversary = target ? (target.adversary || 0) : 0;
+  if (target && state.opposed) applyTargetOpposition();
   return target;
+}
+
+/** The best rating the target has for resisting this check, read off their loaded stat
+ *  block. Printed NPC stats are used as printed and never recomputed (R-15). */
+export function targetOpposition(skillId = state.opposedSkillId) {
+  const target = currentTarget();
+  if (!target) return null;
+  const skills = target.skills || {};
+  const chars = target.characteristics || {};
+  const def = skillById(skillId);
+  const rank = Number(skills[skillId] || 0);
+  const characteristic = def ? Number(chars[def.characteristic] || 0) : 0;
+  return { skillId, rank, characteristic, name: target.name, skillName: def ? def.name : skillId };
+}
+
+/** Copy that rating into the opposed fields, which stay editable afterwards. */
+export function applyTargetOpposition(skillId = state.opposedSkillId) {
+  const opp = targetOpposition(skillId);
+  if (!opp) return null;
+  state.opposedSkillId = opp.skillId;
+  state.opponent.skill = opp.rank;
+  state.opponent.characteristic = opp.characteristic;
+  return opp;
+}
+
+/** Set a check up from a published encounter block (B§6): the skill, the opposed side and
+ *  the difficulty the block prints, so it is deployable rather than read out (A-19). */
+export function setUpEncounterBlock(blockId) {
+  const block = encounterBlock(blockId);
+  if (!block) return { ok: false, reason: 'Unknown encounter block.' };
+  const res = block.resolution;
+  state.skillId = res.activeSkills[0];
+  state.context = 'social';
+  state.surveilled = true;
+  state.weaponId = null;
+  state.rangeBand = null;
+  state.audienceSize = null;
+  const dice = Array.isArray(res.oppositionDice) ? res.oppositionDice[0] : res.oppositionDice;
+  if (dice) {
+    // The block prints its opposition as a flat number of Difficulty dice.
+    state.opposed = false;
+    const level = DIFFICULTIES.find((d) => d.dice === dice);
+    if (level) state.difficultyId = level.id;
+  } else {
+    // No printed pool: build the difficulty side from the opposing skill instead (§3A).
+    state.opposed = true;
+    state.opposedSkillId = res.opposingSkill;
+    if (currentTarget()) applyTargetOpposition(res.opposingSkill);
+  }
+  return { ok: true, block, skill: res.activeSkills[0], opposing: res.opposingSkill, dice };
 }
 
 /** What this attack does on a hit: weapon base + net Success, less soak after Pierce (§5B). */
@@ -311,7 +376,9 @@ export function resolve(character = activeCharacter()) {
 export function commit(character = activeCharacter()) {
   const { pool, notes, result, heat } = resolve(character);
   let heatApplied = null;
-  if (character && heat.personalHeat) heatApplied = applyPersonalHeat(character, heat.personalHeat);
+  if (character && heat.personalHeat) {
+    heatApplied = applyPersonalHeat(character, heat.personalHeat, heat.reasons[0] || `A ${state.skillId} check`);
+  }
 
   const entry = {
     ts: Date.now(),
@@ -479,9 +546,26 @@ export function renderRoller(mount) {
   setup.append(el('label', { class: 'small', for: 'roller-context', text: 'What kind of check is this?' }), contextSelect);
   setup.append(el('p', { class: 'small muted', text: 'It decides which list of things you can spend leftover advantage and threat on.' }));
 
-  setup.append(toggle('roller-opposed', 'Opposed check', state.opposed, (v) => { state.opposed = v; rerender(); }));
+  setup.append(toggle('roller-opposed', 'Opposed check', state.opposed, (v) => {
+    state.opposed = v;
+    if (v && currentTarget()) applyTargetOpposition();
+    rerender();
+  }));
   if (state.opposed) {
     setup.append(el('p', { class: 'small muted', text: 'Only you roll. The difficulty side is built from the opponent\'s rating: the higher value sets Difficulty dice, the lower upgrades that many to Challenge.' }));
+    // Which of their skills is resisting, and — when the target is on the tracker — its
+    // rating read straight off their stat block rather than typed in (A-20).
+    const oppSkill = el('select', {
+      id: 'opp-resist-skill', 'aria-label': 'Which of their skills resists',
+      onchange: (e) => { state.opposedSkillId = e.target.value; if (currentTarget()) applyTargetOpposition(); rerender(); }
+    });
+    SKILLS.forEach((sk) => oppSkill.append(el('option', { value: sk.id, text: `${sk.name} (${titleCase(sk.characteristic)})`, selected: state.opposedSkillId === sk.id })));
+    setup.append(el('label', { class: 'small', for: 'opp-resist-skill', text: 'What are they resisting with?' }), oppSkill);
+    const opp = targetOpposition();
+    if (opp) {
+      setup.append(el('p', { class: 'small muted', id: 'opp-from-target', text:
+        `${opp.name} has ${opp.skillName} ${opp.rank} with ${titleCase(skillById(opp.skillId).characteristic)} ${opp.characteristic}, so the difficulty side is built from those. Change either number if the situation differs.` }));
+    }
     setup.append(numberField('opp-skill', 'Their skill rank', state.opponent.skill, (v) => { state.opponent.skill = v; rerender(); }));
     setup.append(numberField('opp-char', 'Their characteristic', state.opponent.characteristic, (v) => { state.opponent.characteristic = v; rerender(); }));
   }
@@ -493,6 +577,9 @@ export function renderRoller(mount) {
 
   // --- the attack: weapon, range and target (§5B) ---
   mount.append(attackPanel(character, rerender));
+
+  // --- what an opponent can lever on you, on a social check (§11) ---
+  if (state.context === 'social' && character) mount.append(motivationPanel(character, rerender));
 
   // --- situational modifiers (§5E, §5J) and die modifications (§2.4, §8) ---
   const situationBody = el('div', {});
@@ -734,14 +821,18 @@ export function renderRoller(mount) {
       }
       state.lastOutcome = lines;
       state.entered = newTally();
+      clearTalentDice();
       rerender();
       document.dispatchEvent(new CustomEvent('resource:refresh'));
     }
   }));
-  resultCard.append(el('button', { type: 'button', class: 'secondary', text: 'Clear symbols', onclick: () => { state.entered = newTally(); rerender(); } }));
+  resultCard.append(el('button', {
+    type: 'button', class: 'secondary', text: 'Clear symbols',
+    onclick: () => { state.entered = newTally(); clearTalentDice(); rerender(); }
+  }));
   mount.append(resultCard);
 
-  const log = readLog().slice(0, 12);
+  const log = readLog().slice(0, logShown);
   const logBody = el('div', {});
   const logCard = panel('Recent checks', PANELS.rollLog, []);
   if (!log.length) {
@@ -757,6 +848,14 @@ export function renderRoller(mount) {
     }));
   }
   logCard.append(logBody);
+  // The log holds up to 100; show more rather than hiding the rest (C-9).
+  if (readLog().length > log.length) {
+    logCard.append(el('button', {
+      type: 'button', class: 'secondary', id: 'log-show-more',
+      text: `Show more (${readLog().length - log.length} older)`,
+      onclick: () => { logShown += LOG_PAGE; rerender(); }
+    }));
+  }
   log.forEach((item) => {
     const verdict = item.outcome === 'success' ? 'Success' : 'Failure';
     const row = el('div', { class: 'result log-row' }, [
@@ -786,6 +885,46 @@ export function renderRoller(mount) {
 /** The dice this check uses, as live per-type numbers: anything that feeds the pool —
  *  skill, characteristic, difficulty, opposition, cover, concealment, size, conditions,
  *  encumbrance, suspicion, upgrades — moves these the moment you touch it. */
+/** Push a talent's printed effect into the open check (§12A). Only the talents whose text
+ *  names an exact change to your own pool carry a `roller` block; the rest still deduct
+ *  their cost and state what they do. */
+export function applyTalentToCheck(talentDef, ranks = 1) {
+  const spec = talentDef.roller;
+  if (!spec) return null;
+  const applied = [];
+  const count = (v) => (v === 'ranks' ? ranks : Number(v) || 0);
+  if (spec.dice) {
+    Object.entries(spec.dice).forEach(([die, value]) => {
+      const n = count(value);
+      state.talentDice[die] = (state.talentDice[die] || 0) + n;
+      applied.push(`${n > 0 ? 'added' : 'removed'} ${Math.abs(n)} ${die}`);
+    });
+  }
+  if (spec.enteredSymbols) {
+    Object.entries(spec.enteredSymbols).forEach(([symbol, value]) => {
+      const n = count(value);
+      state.entered[symbol] += n;
+      applied.push(`added ${n} ${symbol}`);
+    });
+  }
+  if (spec.difficultySteps) {
+    state.difficultyId = stepDifficulty(state.difficultyId, spec.difficultySteps);
+    applied.push(`difficulty now ${state.difficultyId}`);
+  }
+  if (spec.clearEntry) {
+    state.entered = newTally();
+    applied.push('symbols cleared for the reroll');
+  }
+  state.talentNotes = [...state.talentNotes, `${talentDef.name}: ${spec.note}`];
+  return { applied, note: spec.note };
+}
+
+/** Talent contributions are per-check, so they clear when the check is logged or reset. */
+export function clearTalentDice() {
+  state.talentDice = { boost: 0, setback: 0 };
+  state.talentNotes = [];
+}
+
 /** A one-line account of what is currently pushing the dice around, so the collapsed
  *  situation panel never hides a modifier the player has forgotten about. */
 function situationSummary(character) {
@@ -798,6 +937,7 @@ function situationSummary(character) {
   if (state.twoWeapon) set.push('two weapons');
   if (state.audienceSize) set.push(`crowd of ${state.audienceSize}`);
   if (state.upgradeAbility || state.upgradeDifficulty || state.downgradeAbility || state.downgradeDifficulty) set.push('hand-changed dice');
+  if (state.talentNotes.length) set.push(`${state.talentNotes.length} talent${state.talentNotes.length === 1 ? '' : 's'}`);
   if (character) {
     const conditions = Object.entries(character.state.conditions || {}).filter(([, on]) => on);
     if (state.autoDice.conditions && conditions.length) set.push('your condition');
@@ -807,6 +947,46 @@ function situationSummary(character) {
     })) set.push('suspicion');
   }
   return set.length ? set.join(' · ') : 'nothing set';
+}
+
+/** The four Motivation facets are what a social opponent works on, and the social spend
+ *  table prices learning each of them. Ticking one records that it is out (§11, §12B). */
+function motivationPanel(character, rerender) {
+  const m = character.identity.motivation || {};
+  const revealed = character.identity.motivationRevealed || {};
+  const table = SPEND_TABLES.social.positive;
+  // The costs come off the printed table rather than being restated (§13.2).
+  const costFor = (facet) => {
+    const row = table.find((r) => r.effects.some((e) => new RegExp(facet, 'i').test(e)));
+    return row ? row.cost : null;
+  };
+  const body = el('div', {});
+  [['strength', 'Strength'], ['flaw', 'Flaw'], ['desire', 'Desire'], ['fear', 'Fear']].forEach(([facet, label]) => {
+    const cost = costFor(label);
+    body.append(el('div', { class: 'toggle-row' }, [
+      el('input', {
+        type: 'checkbox', id: `motiv-${facet}`, checked: !!revealed[facet],
+        onchange: (e) => {
+          character.identity.motivationRevealed = { ...revealed, [facet]: e.target.checked };
+          saveCharacter(character);
+          rerender();
+        }
+      }),
+      el('label', { for: `motiv-${facet}` }, [
+        el('span', { text: `${label}: ${m[facet] || 'not chosen'}` }),
+        el('span', { class: 'toggle-desc', text: cost
+          ? `An opponent learns this by spending ${cost} advantage on a social check against you.`
+          : 'Not priced on the social spend table.' })
+      ])
+    ]));
+  });
+  const out = Object.entries(revealed).filter(([, v]) => v).length;
+  return panel('What they can work on', PANELS.rollMotivation, [
+    accordion('Your desire, fear, strength and flaw', [body], {
+      key: 'roll-motivation',
+      summary: out ? `${out} of 4 already known` : 'none known yet'
+    })
+  ], { id: 'roll-motivation' });
 }
 
 /** The four spend tables the manual prints, named in the words a player would use. */
@@ -885,7 +1065,7 @@ function attackPanel(character, rerender) {
   ], { id: 'roll-attack' });
 }
 
-function diceToRoll(pool, notes) {
+export function diceToRoll(pool, notes = []) {
   const wrap = el('div', { class: 'dice-to-roll' });
   wrap.append(el('h3', { class: 'dice-to-roll-title', text: 'Dice to roll' }));
   const grid = el('div', { class: 'dice-grid' });
@@ -912,7 +1092,7 @@ function diceToRoll(pool, notes) {
 
 /** What the app rolled, read-only: one row per symbol that actually came up, with its
  *  count and what it does. Symbols at zero are left out entirely. */
-function rolledSymbols(entered) {
+export function rolledSymbols(entered) {
   const wrap = el('div', { class: 'rolled-symbols', id: 'rolled-symbols', 'aria-live': 'polite' });
   const shown = SYMBOL_ORDER.filter((sym) => entered[sym] > 0);
   if (!shown.length) {

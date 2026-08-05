@@ -871,16 +871,162 @@ async function main() {
     check('the backup note says the log and the encounter travel with it',
       /roll log/i.test(await page.locator('#screen').innerText()));
 
+    // --- A-17: a Critical Injury on a rival is rolled, stored and stacks ---
+    await go('#/combat');
+    await page.selectOption('#bestiary-pick', 'gestapoInterrogator');
+    await page.getByRole('button', { name: 'Drop in', exact: true }).click();
+    await page.waitForTimeout(140);
+    const rival = () => page.locator('.result', { hasText: 'Gestapo Interrogator' }).first();
+    await rival().getByRole('button', { name: /^Critical Injury on/ }).click();
+    await page.waitForTimeout(180);
+    await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+    await page.waitForTimeout(80);
+    const rivalText = await rival().innerText();
+    check('a rival takes a real Critical Injury off the §9 table',
+      /Lasting injuries/i.test(rivalText) && /rolled \d+/.test(rivalText), rivalText.replace(/\n/g, ' | ').slice(0, 200));
+    check('and it says what the next roll on them will take',
+      /next roll \+10/.test(rivalText), rivalText.replace(/\n/g, ' | ').slice(0, 220));
+    const storedCrits = await page.evaluate(() => {
+      const c = JSON.parse(localStorage.getItem('reich62:combat') || '{}');
+      return Object.values(c.combatants || {}).filter((x) => x.tier === 'rival')
+        .reduce((n, x) => n + (x.criticalInjuries || []).length, 0);
+    });
+    check('the injury is stored on the combatant, not just announced', storedCrits >= 1, String(storedCrits));
+
+    // --- A-18: a gated screen explains itself at its own URL ---
+    await go('#/settings');
+    if (await page.locator('#flag-gmScreen').isChecked()) await page.locator('#flag-gmScreen').uncheck();
+    await page.waitForTimeout(80);
+    await go('#/gm');
+    check('a gated screen says why it is off instead of silently showing Home',
+      (await page.locator('#gated-notice').count()) === 1,
+      (await page.locator('#screen h2').first().innerText()));
+    equal('and keeps its own URL', new URL(page.url()).hash, '#/gm');
+    await page.locator('#gated-enable').click();
+    await page.waitForTimeout(140);
+    check('the button on it turns the screen on', (await page.locator('#bestiary-list').count()) === 1);
+
+    // --- A-19: the three non-dragnet encounter blocks are deployable ---
+    await subtab('Encounters');
+    check('each ready-made encounter can be set up as a check',
+      (await page.locator('[id^="deploy-"]').count()) === 3,
+      String(await page.locator('[id^="deploy-"]').count()));
+    await page.locator('#deploy-interrogation').click();
+    await page.waitForTimeout(160);
+    equal('the Interrogation block lands on the Roll screen as a Discipline check',
+      await page.inputValue('#roller-skill'), 'discipline');
+    check('and as an opposed check, since the block prints no dice pool',
+      await page.locator('#roller-opposed').isChecked());
+
+    // --- A-20: the opposed side comes off the target's own stat block ---
+    await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+    await page.waitForTimeout(80);
+    const rivalOption = await page.evaluate(() =>
+      [...document.querySelectorAll('#roller-target option')].find((o) => /Gestapo/.test(o.textContent))?.value);
+    await page.selectOption('#roller-target', rivalOption);
+    await page.waitForTimeout(120);
+    await page.selectOption('#opp-resist-skill', 'coercion');
+    await page.waitForTimeout(120);
+    check('the app reads their rating rather than asking you to type it',
+      /Gestapo Interrogator has Coercion \d/.test(await page.locator('#opp-from-target').innerText()),
+      await page.locator('#opp-from-target').innerText());
+    const oppSkillValue = await page.inputValue('#opp-skill');
+    check('and fills the opposed fields with it', Number(oppSkillValue) > 0, oppSkillValue);
+
+    // --- A-22: a talent puts its dice into the open check ---
+    await go('#/sheet');
+    await subtab('Advance');
+    await page.selectOption('#advance-talent', 'quickStrike').catch(() => {});
+    // Buying needs XP; award a session first.
+    await go('#/combat');
+    await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+    await page.getByRole('button', { name: 'End Session', exact: true }).click();
+    await page.waitForSelector('.modal-backdrop');
+    await page.getByRole('button', { name: 'Apply' }).click();
+    await page.waitForTimeout(200);
+    await go('#/sheet');
+    await subtab('Advance');
+    await page.selectOption('#advance-talent', 'quickStrike');
+    await page.getByRole('button', { name: 'Buy talent' }).click();
+    await page.waitForTimeout(180);
+    await subtab('Talents & injuries');
+    const boostBefore = await page.evaluate(() => 0);
+    await page.getByRole('button', { name: 'Apply Quick Strike' }).click();
+    await page.waitForTimeout(180);
+    await go('#/roll');
+    await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+    await page.waitForTimeout(90);
+    equal('the talent has put its Boost into the open check', await dieCount('Boost'), boostBefore + 1);
+    check('and the check says which talent did it',
+      /Quick Strike/.test(await page.locator('#roll-pool').innerText()),
+      await page.locator('#roll-pool').innerText().then((t) => t.replace(/\n/g, ' | ').slice(0, 200)));
+
+    // --- C-10: the suspicion track says how it got where it is ---
+    await go('#/sheet');
+    await subtab('Vitals');
+    await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+    await page.waitForTimeout(80);
+    check('the suspicion track records why it moved',
+      (await page.locator('#heat-trail').count()) === 1 && /→/.test(await page.locator('#heat-trail').innerText()),
+      await page.locator('#heat-trail').innerText().then((t) => t.replace(/\n/g, ' | ').slice(0, 160)).catch(() => 'no trail'));
+
+    // --- B-8, B-9: skills grouped, conditions folded ---
+    await subtab('Skills');
+    check('skills are grouped into their four categories',
+      (await page.locator('#screen details').count()) >= 5,
+      String(await page.locator('#screen details').count()));
+    const skillsHeight = await page.evaluate(() => document.querySelector('#screen').scrollHeight);
+    check('which brings the tab under 2,000px', skillsHeight < 2000, `${skillsHeight}px`);
+
+    // --- A-21: the Oracle shows its dice and rolls them ---
+    await go('#/settings');
+    if (!(await page.locator('#flag-soloMode').isChecked())) await page.locator('#flag-soloMode').check();
+    if (!(await page.locator('#flag-digitalRoller').isChecked())) await page.locator('#flag-digitalRoller').check();
+    await page.waitForTimeout(90);
+    await go('#/solo');
+    check('the Oracle shows the dice it asks for',
+      (await page.locator('#screen .die-count').count()) >= 6,
+      String(await page.locator('#screen .die-count').count()));
+    await page.locator('#oracle-roll').click();
+    await page.waitForTimeout(160);
+    check('and rolls them when the simulated roller is on',
+      (await page.locator('#rolled-symbols').innerText()).length > 0
+      && !/nothing rolled yet/i.test(await page.locator('#rolled-symbols').innerText()),
+      (await page.locator('#rolled-symbols').innerText()).replace(/\n/g, ' | '));
+    await page.locator('#oracle-ask').click();
+    await page.waitForTimeout(160);
+    check('the answer stays on screen',
+      /Yes|No/.test(await page.locator('#oracle-answer').innerText()),
+      (await page.locator('#oracle-answer').innerText()).replace(/\n/g, ' | '));
+
+    // --- B-7: past five tabs the bar drops the labels rather than clipping them ---
+    await go('#/settings');
+    await page.locator('#mode-all').check();
+    await page.waitForTimeout(120);
+    const navCount = await page.locator('#bottom-nav a').count();
+    check('the Everything seat shows every screen', navCount > 5, String(navCount));
+    check('and drops to glyphs so nothing is clipped',
+      await page.locator('#bottom-nav').evaluate((n) => n.classList.contains('nav-glyph-only')));
+    check('each glyph still carries its name',
+      (await page.locator('#bottom-nav a[aria-label]').count()) === navCount);
+    await page.locator('#mode-player').check();
+    await page.waitForTimeout(120);
+
     // --- safety-tools note (§20A) ---
     await go('#/settings');
     await page.getByRole('link', { name: 'Open the safety-tools note' }).click();
-    await page.waitForSelector('#screen .card');
+    // Wait for the safety screen itself, not for any card — the previous screen's cards are
+    // still mounted for a beat and the assertion used to race the render.
+    await page.waitForSelector('text=/Session zero and safety tools/');
     check('the safety-tools note covers session zero and rule zero',
       /Rule zero/.test(await page.locator('#screen').innerText()));
 
     // --- a skill on the sheet selects itself on the Roll screen and goes there ---
     await go('#/sheet');
     await subtab('Skills');
+    // Skills are grouped into their four categories now; open them before reaching in.
+    await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+    await page.waitForTimeout(80);
     await page.getByRole('button', { name: 'Roll Medicine' }).click();
     await page.waitForTimeout(120);
     equal('tapping a skill jumps to the Roll screen', new URL(page.url()).hash, '#/roll');
@@ -888,6 +1034,8 @@ async function main() {
     check('the pool is built from that skill', (await page.locator('.die-count').first().count()) === 1);
     await go('#/sheet');
     await subtab('Skills');
+    await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+    await page.waitForTimeout(80);
     await page.getByRole('button', { name: 'Roll Stealth' }).click();
     await page.waitForTimeout(120);
     equal('a second skill replaces the first', await page.inputValue('#roller-skill'), 'stealth');
