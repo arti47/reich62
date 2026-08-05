@@ -14,10 +14,23 @@ export const ORACLE = {
   interpretation: [
     { id: 'yes',    when: 'Net Success',                              answer: 'Yes' },
     { id: 'no',     when: 'Net Failure',                              answer: 'No' },
-    { id: 'yesAnd', when: 'Uncancelled Triumph',                      answer: 'Yes, and…', note: 'A favourable complication; roll a Random Event.' },
-    { id: 'noAnd',  when: 'Uncancelled Despair',                      answer: 'No, and…', note: 'An adverse complication; roll a Random Event. Feeds Heat if the question concerned a surveilled context.', heatHook: true },
+    { id: 'yesAnd', when: 'An emphatic yes — 2 or more net Success with no Threat left over, or an uncancelled Triumph', answer: 'Yes, and…', note: 'A favourable complication; roll a Random Event.', ruling: 'R-22' },
+    { id: 'noAnd',  when: 'An emphatic no — 2 or more net Failure with no Advantage left over, or an uncancelled Despair', answer: 'No, and…', note: 'An adverse complication; roll a Random Event. Feeds Heat if the question concerned a surveilled context.', heatHook: true, ruling: 'R-22' },
     { id: 'yesBut', when: 'Net Advantage with no net Success or Failure', answer: 'Yes, but… / No, but…', note: 'Interpret narratively.' }
   ],
+  // R-22 — §18.1 keys "Yes, and" to a Triumph and "No, and" to a Despair, but its own pools
+  // are Ability against Difficulty, and per D§ Triumph appears only on the Proficiency die
+  // and Despair only on the Challenge die. As printed the two rows, the §19 Random Event
+  // chain and the §17.1 Oracle Heat hook can never fire. The confirmed reading is by
+  // magnitude: an emphatic result stands in for the symbol. A Triumph or Despair that does
+  // occur — on a pool upgraded by a Story Point — still reads the same way.
+  magnitude: {
+    ruling: 'R-22',
+    andThreshold: 2,
+    yesAnd: 'Two or more net Success with no Threat left over.',
+    noAnd: 'Two or more net Failure with no Advantage left over.',
+    badge: 'inferred — the printed pool cannot roll a Triumph or a Despair'
+  },
   procedure: [
     'Frame the question and set its likelihood.',
     'Roll the listed Ability dice against the listed Difficulty dice.',

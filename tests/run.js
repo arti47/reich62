@@ -576,6 +576,21 @@ async function main() {
     check('Oracle Despair in a surveilled context raises Heat (§17.1)',
       (await page.locator('#resource-header').innerText()) !== heatBeforeOracle);
 
+    // R-22 — the printed pool holds no die that can show a Triumph or a Despair, so the two
+    // emphatic rungs are reached by weight of result instead, and the screen says so.
+    check('R-22: the Oracle says the strongest answers are read by weight',
+      /read by weight/i.test(await page.locator('#screen').innerText()));
+    const heatBeforeEmphatic = await page.locator('#resource-header').innerText();
+    await page.getByRole('button', { name: 'One more oracle failure' }).click();
+    await page.getByRole('button', { name: 'One more oracle failure' }).click();
+    await page.locator('#oracle-ask-entered').click();
+    await page.waitForTimeout(140);
+    const emphatic = await page.locator('#oracle-answer').innerText();
+    check('R-22: two net failures with no advantage answer "No, and…"', /No, and/.test(emphatic), emphatic.replace(/\n/g, ' | '));
+    check('R-22: an emphatic answer chains a Random Event', /Random Event/.test(emphatic), emphatic.replace(/\n/g, ' | '));
+    check('R-22: it feeds Heat in a surveilled context like a Despair would',
+      (await page.locator('#resource-header').innerText()) !== heatBeforeEmphatic);
+
     // --- the Oracle keeps its own log, separate from the Roll screen's ---
     check('answers land in the Oracle log', (await page.locator('#oracle-log .log-row').count()) >= 2,
       String(await page.locator('#oracle-log .log-row').count()));
