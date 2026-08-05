@@ -5,6 +5,7 @@ import {
   GEAR, VEHICLES, ITEM_QUALITIES, CRITICAL_INJURIES, CRITICAL_INJURY_RULES, CONDITIONS,
   RARITY, POOL_BUILD, UPGRADE_MAP, DOWNGRADE_MAP, MODIFICATION_ORDER, XP_COSTS
 } from '../data.js';
+import { BLACK_MARKET } from '../data.js';
 import { ADVERSARY_ABILITIES, ADVERSARY_TIERS } from '../data-npcs.js';
 import { BESTIARY, ENCOUNTER_BLOCKS, RANDOM_ENCOUNTERS } from '../data-monsters.js';
 
@@ -107,6 +108,34 @@ export function rarityDifficulty(baseRarity, modifierValues = []) {
   const level = RARITY.difficultyFor(Math.min(effective, 10));
   const upgrades = Math.max(0, effective - 10); // R: above 10 stays Formidable but upgrades
   return { effectiveRarity: effective, difficulty: level, upgrades };
+}
+
+/** HOUSE RULE — resolve a black-market purchase (see BLACK_MARKET in data.js).
+ *  It reuses the printed rarity ladder and adds the barter demand on top. */
+export function blackMarketPurchase({ rarity, modifierValues = [], rationCards = 0, barterGoods = 0 }) {
+  const base = rarityDifficulty(rarity, modifierValues);
+  const needsBarter = rarity >= BLACK_MARKET.barterFromRarity;
+  const cardsRequired = needsBarter ? BLACK_MARKET.rationCardsFor(rarity) : 0;
+  const canPayInCards = rationCards >= cardsRequired;
+  // Anything in trade covers the demand at the GM's discretion; short of both, the deal
+  // gets harder and the shortfall is made up in cash or favours.
+  const covered = canPayInCards || (needsBarter && barterGoods > 0);
+  const extraSteps = needsBarter && !covered ? BLACK_MARKET.noBarterDifficultySteps : 0;
+
+  return {
+    houseRule: true,
+    skill: BLACK_MARKET.skill,
+    effectiveRarity: base.effectiveRarity,
+    difficulty: extraSteps ? stepDifficulty(base.difficulty, extraSteps) : base.difficulty,
+    baseDifficulty: base.difficulty,
+    upgrades: base.upgrades,
+    needsBarter,
+    cardsRequired,
+    cardsShort: Math.max(0, cardsRequired - rationCards),
+    payingWithCards: canPayInCards && cardsRequired > 0,
+    payingWithGoods: !canPayInCards && needsBarter && barterGoods > 0,
+    extraSteps
+  };
 }
 
 /** Talent pyramid legality (§7, §12A). `held` maps talentId -> ranks held. */

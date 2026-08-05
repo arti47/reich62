@@ -914,7 +914,7 @@ export const CREATION_RULES = {
   skillRankCap: SKILL_RANK_MAX_AT_CREATION,
   careerSkillPicks: 4,
   // R-8 — the manual states neither a budget nor a currency name. House aid, labelled as one.
-  houseAid: { currencyLabel: 'credits', startingBudget: 500, ruling: 'R-8', badge: 'House aid — not a printed rule' }
+  houseAid: { currencyLabel: 'RM', currencyName: 'Reichsmark', startingBudget: 500, ruling: 'R-8', badge: 'House aid — not a printed rule' }
 };
 
 // T36 — Careers — §14. Eight listed skills each; the player picks four at rank 1.
@@ -1313,3 +1313,35 @@ export const CONDITIONS = [
   { id: 'heatPersonal1', name: 'Personal Heat 1+', effect: 'One Setback die on public checks.', dice: { setback: 1 }, cite: '§17.3' },
   { id: 'heatCell2', name: 'Cell Heat 2+', effect: 'One Setback die on every cell member\'s public checks.', dice: { setback: 1 }, cite: '§17.3' }
 ];
+
+// ---------------------------------------------------------------------------
+// HOUSE RULE — black-market purchasing.
+// Supplied by the table owner; it appears in neither book. It layers on top of the
+// printed purchasing rules (§14A) rather than replacing them, and every surface that
+// uses it is badged as a house rule so nothing invented reads as printed (CLAUDE.md §13.8).
+export const BLACK_MARKET = {
+  houseRule: true,
+  badge: 'house rule — not from the books',
+  builtOn: '§14A purchasing, §15 ration cards, §17.1 suspicion',
+  summary: 'Above rarity 5, cash alone rarely closes a deal: the seller wants ration cards or goods in trade as well.',
+
+  // Rarity 6 and up is where barter starts being demanded.
+  barterFromRarity: 6,
+  skill: 'streetwise',                 // §14A already routes illegal goods through Streetwise
+
+  /** Ration cards demanded on top of the price: one per point of rarity above 5. */
+  rationCardsFor: (rarity) => Math.max(0, Math.min(10, rarity) - 5),
+
+  // Nothing to barter with: the difficulty rises by one and the shortfall is made up in
+  // cash or favours, at the GM's discretion.
+  noBarterDifficultySteps: 1,
+
+  // A deal that goes badly is as exposing as any other public dealing, so it falls under
+  // the printed suspicion rule (§17.1).
+  heat: {
+    failedThreatThreshold: 3,
+    note: 'A failed check showing three threat, or any despair, counts as a surveilled-context check.'
+  },
+
+  alternatives: ['Ration cards', 'Barter goods or a favour owed']
+};

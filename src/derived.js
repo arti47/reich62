@@ -21,7 +21,9 @@ export function blankCharacter(over = {}) {
     attributes,
     skills,
     talents: [],
-    inventory: { items: [], tiny: [], money: { amount: 0 } },
+    // Cash, ration cards and barter goods are three separate pockets: the black-market
+    // house rule spends the last two, and they are not interchangeable with cash.
+    inventory: { items: [], tiny: [], money: { amount: 0, rationCards: 0, barterGoods: 0 } },
     state: {
       wounds: 0, strain: 0, criticalInjuries: [], critModifier: 0, conditions: {},
       incapacitated: false, deathState: null, personalHeat: 0, surveilledContext: false,
@@ -44,6 +46,7 @@ export function normalise(character) {
   out.attributes = { ...base.attributes, ...(character.attributes || {}) };
   out.state = { ...base.state, ...(character.state || {}) };
   out.inventory = { ...base.inventory, ...(character.inventory || {}) };
+  out.inventory.money = { ...base.inventory.money, ...((character.inventory || {}).money || {}) };
   out.xp = { ...base.xp, ...(character.xp || {}) };
   out.skills = { ...base.skills };
   for (const [id, value] of Object.entries(character.skills || {})) {

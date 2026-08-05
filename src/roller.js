@@ -80,6 +80,9 @@ export const state = {
   lastOutcome: null,
   context: 'combat',
   spendTriumphOnHeat: false,
+  // Set when the check came from a black-market purchase, so the house rule's exposure
+  // trigger applies on a bad failure.
+  blackMarket: false,
   // Situational modifiers the manual defines (§5E, §5J) and the two Story Point die
   // modifications (§8), all applied in the §2.4 modification order.
   targetAdversary: 0,      // §12C — the Adversary talent upgrades checks against that NPC
@@ -192,7 +195,10 @@ export function resolve(character = activeCharacter()) {
     triumph: result.triumph,
     surveilled: state.surveilled,
     skillId: state.skillId,
-    spendTriumphOnHeat: state.spendTriumphOnHeat
+    spendTriumphOnHeat: state.spendTriumphOnHeat,
+    blackMarket: state.blackMarket,
+    failed: !result.success,
+    threat: result.netThreat
   });
   return { pool, notes, result, heat };
 }
@@ -365,6 +371,7 @@ export function renderRoller(mount) {
     setup.append(numberField('opp-skill', 'Their skill rank', state.opponent.skill, (v) => { state.opponent.skill = v; rerender(); }));
     setup.append(numberField('opp-char', 'Their characteristic', state.opponent.characteristic, (v) => { state.opponent.characteristic = v; rerender(); }));
   }
+  setup.append(toggle('roller-blackmarket', 'Black-market deal (house rule)', state.blackMarket, (v) => { state.blackMarket = v; rerender(); }));
   setup.append(toggle('roller-surveilled', 'Surveilled context', state.surveilled, (v) => { state.surveilled = v; rerender(); }));
   setup.append(toggle('roller-triumph-heat', 'Spend a Triumph to reduce Personal Heat by 1', state.spendTriumphOnHeat, (v) => { state.spendTriumphOnHeat = v; rerender(); }));
   setup.append(toggle('roller-public', 'Public check (Heat Setbacks apply)', state.publicCheck, (v) => { state.publicCheck = v; rerender(); }));

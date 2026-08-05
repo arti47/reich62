@@ -570,6 +570,39 @@ async function main() {
       check(`${hash} carries no section numbers or ruling codes`, markers.length === 0, [...new Set(markers)].join(', '));
     }
 
+    // --- HOUSE RULE: the black-market counter on the Gear tab ---
+    await go('#/sheet');
+    await subtab('Gear');
+    check('the purchase panel is badged as a house rule',
+      /house rule/i.test(await page.locator('#screen').innerText()));
+    check('cash, ration cards and barter goods are tracked apart',
+      (await page.locator('#purse-cash').count()) === 1
+      && (await page.locator('#purse-cards').count()) === 1
+      && (await page.locator('#purse-barter').count()) === 1);
+
+    await page.selectOption('#buy-item', 'shortwaveRadio');   // rarity 6
+    await page.waitForTimeout(90);
+    const quoteEmpty = await page.locator('.outcome', { hasText: 'What this will take' }).innerText();
+    check('with nothing to trade the check is one step harder',
+      /one step harder/i.test(quoteEmpty), quoteEmpty.replace(/\n/g, ' | '));
+
+    await page.fill('#purse-cards', '2');
+    await page.locator('#purse-cards').blur();
+    await page.waitForTimeout(120);
+    const quoteCards = await page.locator('.outcome', { hasText: 'What this will take' }).innerText();
+    check('holding the cards drops the penalty and names the cost',
+      !/one step harder/i.test(quoteCards) && /Ration cards wanted: 1/.test(quoteCards), quoteCards.replace(/\n/g, ' | '));
+
+    await page.fill('#purse-cash', '900');
+    await page.locator('#purse-cash').blur();
+    await page.waitForTimeout(120);
+    await page.getByRole('button', { name: 'Pay and take it' }).click();
+    await page.waitForTimeout(150);
+    equal('paying deducts the price in RM', await page.inputValue('#purse-cash'), '400');
+    equal('and spends the ration card', await page.inputValue('#purse-cards'), '1');
+    check('the item lands in the inventory',
+      (await page.locator('.result', { hasText: 'Shortwave radio' }).count()) >= 1);
+
     // --- item damage ladder and attachments (§14B, §14C) ---
     await go('#/sheet');
     await subtab('Gear');

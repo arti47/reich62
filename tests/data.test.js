@@ -222,6 +222,46 @@ export async function dataChecks({ check, equal }) {
   equal('R-15: a recipe rival derives soak from Brawn', recipe.combatant.soak, 3);
   C.removeCombatant(recipe.combatant.id);
 
+  // --- HOUSE RULE: black-market purchasing (not from either book) ---
+  check('the black-market rule is flagged as a house rule', D.BLACK_MARKET.houseRule === true);
+  equal('barter starts at rarity 6', D.BLACK_MARKET.barterFromRarity, 6);
+  equal('rarity 7 wants 2 ration cards', D.BLACK_MARKET.rationCardsFor(7), 2);
+  equal('rarity 6 wants 1 ration card', D.BLACK_MARKET.rationCardsFor(6), 1);
+  equal('rarity 5 wants none', D.BLACK_MARKET.rationCardsFor(5), 0);
+  equal('rarity 10 wants 5', D.BLACK_MARKET.rationCardsFor(10), 5);
+  equal('it routes through Streetwise', D.BLACK_MARKET.skill, 'streetwise');
+
+  const flush = R.blackMarketPurchase({ rarity: 7, rationCards: 2, barterGoods: 0 });
+  equal('rarity 7 with the cards keeps the printed difficulty', flush.difficulty, 'hard');
+  equal('and pays in cards', flush.payingWithCards, true);
+  const broke = R.blackMarketPurchase({ rarity: 7, rationCards: 0, barterGoods: 0 });
+  equal('nothing to trade makes it one step harder', broke.difficulty, 'daunting');
+  equal('and says how short you are', broke.cardsShort, 2);
+  const bartering = R.blackMarketPurchase({ rarity: 7, rationCards: 0, barterGoods: 1 });
+  equal('a barter good covers the demand', bartering.difficulty, 'hard');
+  equal('and is recorded as goods rather than cards', bartering.payingWithGoods, true);
+  const cheap = R.blackMarketPurchase({ rarity: 4, rationCards: 0, barterGoods: 0 });
+  equal('below rarity 6 nothing extra is demanded', cheap.cardsRequired, 0);
+  equal('and the difficulty is untouched', cheap.difficulty, 'average');
+  equal('location modifiers still apply', R.blackMarketPurchase({ rarity: 6, modifierValues: [3], rationCards: 1 }).difficulty, 'daunting');
+
+  // A bad failure at the black market exposes you the way any public dealing does.
+  const H2 = await import('../src/heat.js');
+  equal('three threat on a failed deal raises suspicion',
+    H2.heatFromCheck({ blackMarket: true, failed: true, threat: 3, skillId: 'streetwise' }).personalHeat, 1);
+  equal('two threat does not',
+    H2.heatFromCheck({ blackMarket: true, failed: true, threat: 2, skillId: 'streetwise' }).personalHeat, 0);
+  equal('a successful deal with three threat does not',
+    H2.heatFromCheck({ blackMarket: true, failed: false, threat: 3, skillId: 'streetwise' }).personalHeat, 0);
+  equal('a despair on a black-market Streetwise check counts as an evasion check',
+    H2.heatFromCheck({ blackMarket: true, failed: true, despair: 1, skillId: 'streetwise' }).personalHeat, 2);
+
+  // The three purses are separate and survive normalisation.
+  const buyer = D2.normalise({ inventory: { money: { amount: 120 } } });
+  equal('cash carries through normalisation', buyer.inventory.money.amount, 120);
+  equal('ration cards are back-filled', buyer.inventory.money.rationCards, 0);
+  equal('barter goods are back-filled', buyer.inventory.money.barterGoods, 0);
+
   // --- solo tables (§18–§20, §23) ---
   equal('3 Oracle likelihoods', S.ORACLE.likelihoods.length, 3);
   equal('Likely is 2 Ability against 1 Difficulty', `${S.ORACLE.likelihoods[0].ability}v${S.ORACLE.likelihoods[0].difficulty}`, '2v1');

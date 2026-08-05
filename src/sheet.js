@@ -9,7 +9,8 @@ import {
   XP_COSTS, SKILL_RANK_MAX
 } from '../data.js';
 import { talent, buildPool, canBuyTalent, visibleTalents, xpCost, skill as skillById } from './rules.js';
-import { ITEM_DAMAGE, ATTACHMENTS, DIFFICULTIES } from '../data.js';
+import { ITEM_DAMAGE, ATTACHMENTS, DIFFICULTIES, GEAR, WEAPONS, ARMOUR, RARITY, BLACK_MARKET } from '../data.js';
+import { blackMarketPurchase } from './rules.js';
 import { hardPoints } from './derived.js';
 import { Settings } from './settings.js';
 import { rollCriticalInjury, state as rollerState } from './roller.js';
@@ -181,6 +182,31 @@ function pane_skills(mount, character, derived, rerender) {
 }
 
 function pane_gear(mount, character, derived, rerender) {
+  // --- what you can pay with: three separate pockets ---
+  const money = character.inventory.money;
+  const purse = panel('What you can pay with', {
+    lede: `Cash, ration cards and things worth trading. Above the counter you pay in ${Settings.currencyLabel()}; below it, sellers want the other two.`,
+    detail: 'Ration cards and barter goods are tracked apart from cash because the black-market house rule spends them directly — a seller who wants two ration cards will not take the equivalent in notes.'
+  }, []);
+  purse.append(numberStepper({
+    id: 'purse-cash', label: `Cash (${Settings.currencyLabel()})`, ariaName: 'Cash', value: money.amount || 0,
+    min: 0, max: 99999, steps: [1, 10, 100],
+    onChange: (v) => { character.inventory.money.amount = v; saveCharacter(character); rerender(); }
+  }));
+  purse.append(numberStepper({
+    id: 'purse-cards', label: 'Ration cards', ariaName: 'Ration cards', value: money.rationCards || 0,
+    min: 0, max: 999, steps: [1, 5],
+    onChange: (v) => { character.inventory.money.rationCards = v; saveCharacter(character); rerender(); }
+  }));
+  purse.append(numberStepper({
+    id: 'purse-barter', label: 'Barter goods and favours owed', ariaName: 'Barter goods', value: money.barterGoods || 0,
+    min: 0, max: 999, steps: [1, 5],
+    onChange: (v) => { character.inventory.money.barterGoods = v; saveCharacter(character); rerender(); }
+  }));
+  mount.append(purse);
+
+  mount.append(buyPanel(character, rerender));
+
   // inventory
   const invCard = panel('What you are carrying', PANELS.sheetGear, []);
   const enc = encumbranceState(character);
@@ -451,6 +477,103 @@ function pane_advance(mount, character, derived, rerender) {
 }
 
 const PANES = { vitals: pane_vitals, skills: pane_skills, gear: pane_gear, talents: pane_talents, care: pane_care, advance: pane_advance };
+
+/** HOUSE RULE — the black-market counter. It reuses the printed rarity ladder and adds the
+ *  barter demand on top; every surface here is badged so it never reads as printed. */
+function buyPanel(character, rerender) {
+  const catalogue = [
+    ...GEAR.filter((g) => g.rarity !== null && g.rarity !== undefined).map((g) => ({ ...g, kind: 'gear' })),
+    ...WEAPONS.filter((w) => w.rarity !== null && w.rarity !== undefined).map((w) => ({ ...w, kind: 'weapon' })),
+    ...ARMOUR.filter((a) => a.rarity !== null && a.rarity !== undefined).map((a) => ({ ...a, kind: 'armour' }))
+  ];
+  const chosen = catalogue.find((i) => i.id === buyState.itemId) || catalogue[0];
+  const money = character.inventory.money;
+
+  const card = panel('Buy something', {
+    lede: 'Work out what a purchase will cost and how hard the check is, then pay for it.',
+    detail: `Legal goods go through Negotiation, illegal ones through Streetwise, at the difficulty their rarity sets. Above rarity ${BLACK_MARKET.barterFromRarity - 1} this table's house rule also demands ration cards or goods in trade: one card per point of rarity above 5. With nothing to trade the check gets one step harder and the shortfall is made up in cash or favours.`
+  }, []);
+  card.append(el('p', {}, [el('span', { class: 'badge badge-house', text: BLACK_MARKET.badge })]));
+
+  const itemSelect = el('select', { id: 'buy-item', 'aria-label': 'What to buy', onchange: (e) => { buyState.itemId = e.target.value; rerender(); } });
+  catalogue.forEach((item) => itemSelect.append(el('option', {
+    value: item.id, selected: chosen && item.id === chosen.id,
+    text: `${item.name} — rarity ${item.rarity}${item.price ? `, ${item.price} ${Settings.currencyLabel()}` : ''}`
+  })));
+  card.append(el('label', { class: 'small', for: 'buy-item', text: 'What are you after?' }), itemSelect);
+
+  const whereSelect = el('select', { id: 'buy-where', 'aria-label': 'Where you are buying', onchange: (e) => { buyState.modifier = e.target.value; rerender(); } });
+  RARITY.modifiers.forEach((m) => whereSelect.append(el('option', {
+    value: m.id, selected: buyState.modifier === m.id,
+    text: `${m.label} (${m.value >= 0 ? '+' : ''}${m.value})`
+  })));
+  card.append(el('label', { class: 'small', for: 'buy-where', text: 'Where are you buying?' }), whereSelect);
+
+  const modifier = RARITY.modifiers.find((m) => m.id === buyState.modifier) || RARITY.modifiers[1];
+  const quote = blackMarketPurchase({
+    rarity: chosen ? chosen.rarity : 0,
+    modifierValues: [modifier.value],
+    rationCards: money.rationCards || 0,
+    barterGoods: money.barterGoods || 0
+  });
+
+  const lines = [
+    `${titleCase(quote.skill)} check at ${quote.difficulty} difficulty${quote.extraSteps ? ` — one step harder, because you have nothing to trade` : ''}.`,
+    chosen && chosen.price ? `Price: ${chosen.price} ${Settings.currencyLabel()}, and you have ${money.amount || 0}.` : 'No printed price; settle it with the GM.'
+  ];
+  if (quote.needsBarter) {
+    lines.push(quote.cardsRequired
+      ? `Ration cards wanted: ${quote.cardsRequired}, and you have ${money.rationCards || 0}.`
+      : 'Trade goods wanted on top of the cash.');
+    if (quote.cardsShort && quote.payingWithGoods) lines.push(`Short ${quote.cardsShort} card(s), so a barter good goes instead.`);
+    if (quote.cardsShort && !quote.payingWithGoods) lines.push(`Short ${quote.cardsShort} card(s) with nothing to trade: the check is one step harder.`);
+  }
+  if (quote.upgrades) lines.push(`Rarity above 10: the difficulty is upgraded ${quote.upgrades} time(s).`);
+  card.append(outcomeBox(lines, { title: 'What this will take' }));
+
+  card.append(el('button', {
+    type: 'button', class: 'primary', id: 'buy-setup',
+    text: 'Set this check up on the Roll screen',
+    onclick: () => {
+      Object.assign(rollerState, {
+        skillId: quote.skill,
+        difficultyId: quote.difficulty,
+        opposed: false,
+        blackMarket: quote.needsBarter,
+        surveilled: quote.needsBarter
+      });
+      location.hash = '#/roll';
+    }
+  }));
+
+  const affordable = (!chosen.price || (money.amount || 0) >= chosen.price)
+    && (!quote.cardsRequired || (money.rationCards || 0) >= quote.cardsRequired || (money.barterGoods || 0) > 0);
+  card.append(el('button', {
+    type: 'button', class: 'secondary', id: 'buy-pay', text: 'Pay and take it', disabled: !affordable,
+    onclick: () => {
+      const paid = [];
+      if (chosen.price) { character.inventory.money.amount = Math.max(0, (money.amount || 0) - chosen.price); paid.push(`${chosen.price} ${Settings.currencyLabel()}`); }
+      if (quote.cardsRequired && (money.rationCards || 0) >= quote.cardsRequired) {
+        character.inventory.money.rationCards = (money.rationCards || 0) - quote.cardsRequired;
+        paid.push(`${quote.cardsRequired} ration card(s)`);
+      } else if (quote.needsBarter && (money.barterGoods || 0) > 0) {
+        character.inventory.money.barterGoods = (money.barterGoods || 0) - 1;
+        paid.push('a barter good');
+      }
+      character.inventory.items.push({
+        id: chosen.id, name: chosen.name, kind: chosen.kind, price: chosen.price || 0,
+        encumbrance: chosen.encumbrance || 0, qty: 1, equipped: false, damageLevel: 'undamaged', attachments: []
+      });
+      saveCharacter(character);
+      showToast(`${chosen.name} bought for ${paid.join(' and ') || 'nothing'}`);
+      rerender();
+    }
+  }));
+  if (!affordable) card.append(el('p', { class: 'small muted', text: 'You cannot cover this yet — more cash, more ration cards, or something to trade.' }));
+  return card;
+}
+
+const buyState = { itemId: null, modifier: 'midSize' };
 
 function stepper(labelText, value, max, onChange, ariaName) {
   return numberStepper({

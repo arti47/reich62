@@ -280,7 +280,7 @@ export function renderSettings(mount) {
   });
   const currency = el('input', {
     type: 'text', value: Settings.currencyLabel(), id: 'currency-label',
-    onchange: (e) => { Settings.set('currencyLabel', e.target.value.trim() || 'credits'); showToast('Currency label saved'); }
+    onchange: (e) => { Settings.set('currencyLabel', e.target.value.trim() || CREATION_RULES.houseAid.currencyLabel); showToast('Currency label saved'); }
   });
   mount.append(panel('House aids', PANELS.settingsHouse, [
     el('p', {}, [el('span', { class: 'badge badge-house', text: 'not a printed rule' })]),

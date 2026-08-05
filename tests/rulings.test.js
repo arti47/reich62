@@ -63,7 +63,8 @@ export async function pinChecks({ check, equal }) {
   check('R-6/R-7: both are flagged inferred', staggered.inferred === true && disoriented.inferred === true);
 
   // R-8 — house-aid gear budget.
-  equal('R-8: currency label default', D.CREATION_RULES.houseAid.currencyLabel, 'credits');
+  equal('R-8: currency label default', D.CREATION_RULES.houseAid.currencyLabel, 'RM');
+  equal('R-8: the currency has a name behind the abbreviation', D.CREATION_RULES.houseAid.currencyName, 'Reichsmark');
   equal('R-8: starting budget default', D.CREATION_RULES.houseAid.startingBudget, 500);
 
   // R-9 — the week-rest extra heal fires on Triumph, never Despair.
