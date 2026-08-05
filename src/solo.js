@@ -66,12 +66,12 @@ export function oracleIntensity(result, answerId) {
   return {
     weight,
     level: level.id,
-    label: level.label,
     note: level.note,
     rider: rider ? {
       count: riderCount,
       id: rider.id,
-      text: `${rider.label} ${yes ? ORACLE.intensity.riderNote.threat : ORACLE.intensity.riderNote.advantage}`
+      text: (yes ? ORACLE.intensity.riderNote.threat : ORACLE.intensity.riderNote.advantage)
+        .replace('{x}', yes ? rider.againstYou : rider.yourWay)
     } : null
   };
 }
@@ -213,18 +213,13 @@ export function renderSolo(mount) {
 
   // The last answer stays on screen: what the dice showed, then what it means.
   if (state.lastAnswer) {
-    const heading = el('h3', { text: state.lastAnswer.answer });
+    // The answer, then one plain sentence saying how hard it landed, then the string
+    // attached if there is one. No grading word on screen — it says what happened (R-22a).
+    answerNode.append(el('h3', { text: state.lastAnswer.answer }));
     const power = state.lastAnswer.intensity;
     if (power) {
-      // How hard it lands, graded by how many symbols survived cancelling (R-22).
-      heading.append(el('span', { class: `status-chip intensity-${power.level}`, text: power.label }));
-    }
-    answerNode.append(heading);
-    if (power) {
-      answerNode.append(el('p', { class: 'small', text: power.note }));
-      if (power.rider) {
-        answerNode.append(el('p', { class: 'small', text: `And ${power.rider.text}.` }));
-      }
+      answerNode.append(el('p', { class: 'oracle-degree', text: power.note }));
+      if (power.rider) answerNode.append(el('p', { class: 'oracle-rider', text: power.rider.text }));
     }
     answerNode.append(el('p', { class: 'small muted', text: 'What the dice showed' }));
     answerNode.append(rolledSymbols(state.lastAnswer.symbols || {}));
@@ -311,11 +306,16 @@ export function renderSolo(mount) {
     shown.forEach((item) => {
       const row = el('div', { class: 'result log-row' }, [
         el('div', { class: 'result-head' }, [
-          el('span', { class: 'result-title', text: `${item.likelihoodName} — ${item.answer}${item.intensity ? ` (${item.intensity.label.toLowerCase()})` : ''}` }),
+          el('span', { class: 'result-title', text: item.answer }),
           el('span', { class: 'cite', text: new Date(item.ts).toLocaleTimeString() })
         ]),
         el('div', { class: 'log-symbols' }, [renderTally(item.net || {})])
       ]);
+      // The row reads back the way it played: the answer, then how hard it landed.
+      if (item.intensity) {
+        row.append(el('p', { class: 'small', text: item.intensity.note }));
+        if (item.intensity.rider) row.append(el('p', { class: 'small', text: item.intensity.rider.text }));
+      }
       if (item.surveilled) row.append(el('p', { class: 'small muted', text: 'Asked about somewhere the regime is watching.' }));
       (item.lines || []).forEach((line) => row.append(el('p', { class: 'small muted', text: line })));
       row.append(el('button', {

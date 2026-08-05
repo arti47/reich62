@@ -185,6 +185,14 @@ export async function pinChecks({ check, equal }) {
     grade(tal({ success: 2, threat: 2 })).rider.id, 'notable');
   equal('R-22: leftover Advantage on a no is graded as a rider',
     grade(tal({ failure: 3, advantage: 1 })).rider.id, 'minor');
+  check('R-22: a yes rider reads as something going against you',
+    /goes against you/.test(grade(tal({ success: 2, threat: 2 })).rider.text));
+  check('R-22: a no rider reads as a consolation',
+    /still goes your way/.test(grade(tal({ failure: 3, advantage: 1 })).rider.text));
+  check('R-22: no wording leaves a template placeholder',
+    !S.ORACLE.intensity.riders.some((r) => /\{x\}/.test(grade(tal({ success: 2, threat: r.min })).rider.text)));
+  check('R-22: the degree wording never repeats the yes or no above it',
+    S.ORACLE.intensity.levels.every((l) => !/^(yes|no)\b/i.test(l.note)));
   check('R-22: a clean answer carries no rider', grade(tal({ success: 3 })).rider === null);
   check('R-22: intensity rises with the count',
     grade(tal({ success: 4 })).weight > grade(tal({ success: 1 })).weight);

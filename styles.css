@@ -606,12 +606,9 @@ details.accordion > *:last-child { padding-bottom: 0.6rem; }
 .status-success { color: var(--brass); }
 .status-failure { color: var(--oxblood); }
 
-/* How hard an Oracle answer landed: the chip darkens as the result gets more emphatic. */
-.intensity-marginal     { color: var(--ink-soft); }
-.intensity-slight       { color: var(--ink-soft); }
-.intensity-clear        { color: var(--brass); }
-.intensity-strong       { color: var(--brass); font-weight: 600; }
-.intensity-overwhelming { color: var(--oxblood); font-weight: 600; }
+/* How hard an Oracle answer landed, and the string attached to it. */
+.oracle-degree { font-size: 0.95rem; margin-bottom: 0.2rem; }
+.oracle-rider { font-size: 0.9rem; color: var(--oxblood); }
 
 /* --- rules library, grouped by section --- */
 .rule-section { margin: 0 0 0.6rem; }
