@@ -56,8 +56,14 @@ export function oraclePool(likelihoodId = state.likelihood) {
 /** The Oracle answers from entered symbols, exactly like every other check (R-B1). */
 export function interpretOracle(tally) {
   const result = outcome(tally);
+  const emphatic = ORACLE.magnitude.andThreshold;
+  // R-22 — the printed Oracle pool holds no Proficiency or Challenge die, so it can never
+  // roll the Triumph or Despair §18.1 keys these two rows to. An emphatic result stands in
+  // for the symbol; a symbol that does occur on an upgraded pool still reads the same way.
   if (result.triumph > 0) return { answer: 'Yes, and…', id: 'yesAnd', event: true, result };
   if (result.despair > 0) return { answer: 'No, and…', id: 'noAnd', event: true, result };
+  if (result.netSuccess >= emphatic && result.netThreat === 0) return { answer: 'Yes, and…', id: 'yesAnd', event: true, result, byMagnitude: true };
+  if (result.netFailure >= emphatic && result.netAdvantage === 0) return { answer: 'No, and…', id: 'noAnd', event: true, result, byMagnitude: true };
   if (result.success) return { answer: 'Yes', id: 'yes', event: false, result };
   if (result.netFailure > 0) return { answer: 'No', id: 'no', event: false, result };
   if (result.netAdvantage > 0) return { answer: 'Yes, but…', id: 'yesBut', event: false, result };
@@ -125,15 +131,21 @@ export function renderSolo(mount) {
   // anyone using physical dice.
   const pool = oraclePool();
   oracleCard.append(diceToRoll(pool, [`${ORACLE.likelihoods.find((l) => l.id === state.likelihood).name} asks for this pool.`]));
+  // R-22 is a substitution for a printed rule, so it says so where it applies.
+  oracleCard.append(el('p', { class: 'small' }, [
+    el('span', { class: 'badge badge-inferred', text: 'inferred' }), ' ',
+    `The book gives the strongest answers to the best and worst symbols, but this pool holds no die that can show them. They are read by weight instead: ${ORACLE.magnitude.yesAnd.toLowerCase()} answers "Yes, and", ${ORACLE.magnitude.noAnd.toLowerCase()} answers "No, and".`
+  ]));
 
   const answerNode = el('div', { id: 'oracle-answer', 'aria-live': 'polite' });
   const ask = (tally, { rolled = true } = {}) => {
     const verdict = interpretOracle(tally);
     const lines = [];
 
-    if (state.surveilled && verdict.result.despair > 0 && character) {
-      const applied = applyPersonalHeat(character, 1, 'A despair from the Oracle in a watched place');
-      lines.push(`Despair in a surveilled context: Personal Heat ${applied.before} → ${applied.after}.`);
+    // The Heat hook rides on the "No, and…" rung, however it was reached (R-22).
+    if (state.surveilled && verdict.id === 'noAnd' && character) {
+      const applied = applyPersonalHeat(character, 1, 'An emphatic no from the Oracle in a watched place');
+      lines.push(`${verdict.byMagnitude ? 'An emphatic no' : 'Despair'} in a surveilled context: Personal Heat ${applied.before} → ${applied.after}.`);
       document.dispatchEvent(new CustomEvent('resource:refresh'));
     }
     let event = null;

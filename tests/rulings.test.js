@@ -150,6 +150,27 @@ export async function pinChecks({ check, equal }) {
   equal('R-21: never more than two maneuvers', D.MANEUVER_RULES.maxPerTurn, 2);
   equal('R-21: the second maneuver costs 2 strain', D.MANEUVER_RULES.secondManeuverStrainCost, 2);
 
+  // R-22 — the printed Oracle pool cannot roll a Triumph or a Despair, so the two emphatic
+  // rungs are read by magnitude instead.
+  const oraclePools = S.ORACLE.likelihoods.every((l) => !l.proficiency && !l.challenge);
+  check('R-22: no Oracle likelihood rolls a Proficiency or Challenge die', oraclePools);
+  equal('R-22: the emphatic threshold is 2', S.ORACLE.magnitude.andThreshold, 2);
+  const Solo = await import('../src/solo.js');
+  equal('R-22: 2 net Success with no Threat answers "Yes, and"',
+    Solo.interpretOracle({ success: 2, advantage: 0, triumph: 0, failure: 0, threat: 0, despair: 0 }).id, 'yesAnd');
+  equal('R-22: 2 net Failure with no Advantage answers "No, and"',
+    Solo.interpretOracle({ success: 0, advantage: 0, triumph: 0, failure: 2, threat: 0, despair: 0 }).id, 'noAnd');
+  check('R-22: an emphatic answer still chains a Random Event',
+    Solo.interpretOracle({ success: 2, advantage: 0, triumph: 0, failure: 0, threat: 0, despair: 0 }).event === true);
+  equal('R-22: leftover Threat holds it to a plain Yes',
+    Solo.interpretOracle({ success: 2, advantage: 0, triumph: 0, failure: 0, threat: 1, despair: 0 }).id, 'yes');
+  equal('R-22: leftover Advantage holds it to a plain No',
+    Solo.interpretOracle({ success: 0, advantage: 1, triumph: 0, failure: 2, threat: 0, despair: 0 }).id, 'no');
+  equal('R-22: one net Success is still a plain Yes',
+    Solo.interpretOracle({ success: 1, advantage: 0, triumph: 0, failure: 0, threat: 0, despair: 0 }).id, 'yes');
+  equal('R-22: a Despair still reads "No, and" where one can occur',
+    Solo.interpretOracle({ success: 1, advantage: 0, triumph: 0, failure: 0, threat: 0, despair: 1 }).id, 'noAnd');
+
   // Compendium inventory (CLAUDE.md §13.5).
   equal('bestiary: 10 minion groups', M.MINION_GROUPS.length, 10);
   equal('bestiary: 12 rivals', M.RIVALS.length, 12);
