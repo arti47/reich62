@@ -281,6 +281,21 @@ input[type="search"], input[type="text"], input[type="number"], select, textarea
 .result-title { font-weight: 600; }
 .result-body { font-size: 0.9rem; color: var(--ink-soft); }
 
+/* Controls on a result card share one wrapping row, so a link and a button beside it
+   line up on their centres instead of colliding. */
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+/* Bare buttons on a card get the same breathing room without needing the wrapper. */
+.result > button { margin: 0.5rem 0.4rem 0 0; }
+
+button.danger { border-color: var(--oxblood); color: var(--oxblood); }
+button.danger:hover { background: var(--oxblood); color: var(--paper); }
+
 .table-wrap { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
 th, td { text-align: left; padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--rule); }

@@ -48,6 +48,8 @@ export function renderHome(mount) {
           el('span', { class: 'cite', text: isActive ? 'active' : '' })
         ]),
         el('div', { class: 'result-body', text: `${titleCaseCareer(c.identity.career)} · ${c.xp.available} experience unspent` }),
+        // The controls share a row of their own so the link and the button cannot collide.
+        el('div', { class: 'result-actions' }, [
         isActive
           ? el('a', { class: 'small', href: '#/sheet', text: 'Open the sheet' })
           : el('button', {
@@ -56,7 +58,7 @@ export function renderHome(mount) {
             }),
         // Deleting a character cannot be undone, so it confirms by name first.
         el('button', {
-          type: 'button', class: 'secondary', text: 'Delete',
+          type: 'button', class: 'secondary danger', text: 'Delete',
           'aria-label': `Delete ${c.identity.name || 'Unnamed'}`,
           onclick: async () => {
             const name = c.identity.name || 'this character';
@@ -69,6 +71,7 @@ export function renderHome(mount) {
             renderHome(mount);
           }
         })
+        ])
       ]));
     });
   } else {
