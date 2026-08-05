@@ -479,6 +479,22 @@ async function main() {
     await page.locator('#screen-menu').click();
     await page.waitForSelector('.modal');
     check('the header menu lists every screen', (await page.locator('.menu-item').count()) >= 8);
+    // The screen name and its blurb are separate lines, not run together as "HOMESet-up…".
+    const menuRow = await page.locator('.menu-item').first().innerText();
+    check('menu blurbs sit on their own line', /\n/.test(menuRow), JSON.stringify(menuRow));
+    const menuTitleBox = await page.locator('.menu-item').first().locator('.menu-title').boundingBox();
+    const menuDescBox = await page.locator('.menu-item').first().locator('.toggle-desc').boundingBox();
+    check('the blurb starts below the name, not beside it',
+      menuDescBox.y >= menuTitleBox.y + menuTitleBox.height, `${menuTitleBox.y + menuTitleBox.height} vs ${menuDescBox.y}`);
+    // A long list scrolls inside the dialog; the heading and Close stay put.
+    check('the dialog keeps its heading and buttons in view while the list scrolls',
+      await page.evaluate(() => {
+        const m = document.querySelector('.modal');
+        const body = m.querySelector('.modal-body');
+        return m.scrollHeight <= m.clientHeight + 1 && body.scrollHeight > 0;
+      }));
+    check('the close button is reachable without scrolling the dialog',
+      await page.getByRole('button', { name: 'Close' }).isVisible());
     await page.getByRole('button', { name: 'Close' }).click();
 
     // Destructive actions confirm first.

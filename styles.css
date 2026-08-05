@@ -382,6 +382,8 @@ th { font-family: var(--font-head); text-transform: uppercase; font-size: 0.7rem
   padding: 1rem;
   z-index: 60;
 }
+/* The dialog itself does not scroll: its heading and its buttons stay put and only the
+   body scrolls, so a long list never pushes the title or Close out of reach. */
 .modal {
   background: var(--panel);
   border: 1px solid var(--rule);
@@ -390,13 +392,24 @@ th { font-family: var(--font-head); text-transform: uppercase; font-size: 0.7rem
   width: min(30rem, 100%);
   max-height: 85vh;
   max-height: 85dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modal > h2 { flex: none; }
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .modal-actions {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-top: 0.8rem;
+  flex: none;
 }
 
 .dice-glyph { font-family: var(--font-mono); }
@@ -521,15 +534,20 @@ details.accordion > *:last-child { padding-bottom: 0.6rem; }
 .checklist .done > a { color: var(--ink-soft); text-decoration: line-through; }
 .checklist .done .toggle-desc { text-decoration: none; }
 
+/* Screen menu: the name on one line, what the screen is for on the next. `.toggle-desc`
+   is only a block inside a toggle row, so it needs saying here too. */
 .menu-item {
-  display: block;
-  padding: 0.6rem 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.7rem 0.4rem;
   border-bottom: 1px solid var(--rule);
   text-decoration: none;
   color: var(--ink);
 }
 .menu-item:last-child { border-bottom: 0; }
 .menu-title { font-family: var(--font-head); text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.85rem; }
+.menu-item .toggle-desc { display: block; font-size: 0.8rem; line-height: 1.35; color: var(--ink-soft); }
 
 /* --- symbols are always labelled, never a bare glyph --- */
 .sym {
