@@ -75,7 +75,6 @@ export const state = {
   surveilled: false,
   publicCheck: true,
   entered: newTally(),
-  lastDice: null,
   lastOutcome: null,
   context: 'combat',
   spendTriumphOnHeat: false,
@@ -434,14 +433,10 @@ export function renderRoller(mount) {
         const rolled = rollPool(pool);
         if (!rolled.ok) { showToast(rolled.reason); return; }
         state.entered = rolled.tally;
-        state.lastDice = rolled.dice;
-        showToast(`Rolled ${rolled.dice.length} dice from the supplied face table (D§)`);
+        showToast(`Rolled ${rolled.dice.length} dice`);
         rerender();
       }
     }));
-    if (state.lastDice && state.lastDice.length) {
-      entry.append(el('p', { class: 'small muted', text: state.lastDice.map((d) => `${titleCase(d.die)} ${d.face}: ${d.symbols.length ? d.symbols.join(' + ') : 'blank'}`).join(' · ') }));
-    }
   }
   ['success', 'advantage', 'triumph', 'failure', 'threat', 'despair'].forEach((sym) => {
     entry.append(el('div', { class: 'toggle-row' }, [
@@ -510,12 +505,11 @@ export function renderRoller(mount) {
       }
       state.lastOutcome = lines;
       state.entered = newTally();
-      state.lastDice = null;
       rerender();
       document.dispatchEvent(new CustomEvent('resource:refresh'));
     }
   }));
-  resultCard.append(el('button', { type: 'button', class: 'secondary', text: 'Clear symbols', onclick: () => { state.entered = newTally(); state.lastDice = null; rerender(); } }));
+  resultCard.append(el('button', { type: 'button', class: 'secondary', text: 'Clear symbols', onclick: () => { state.entered = newTally(); rerender(); } }));
   mount.append(resultCard);
 
   const log = readLog().slice(0, 12);

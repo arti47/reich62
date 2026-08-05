@@ -260,7 +260,8 @@ async function main() {
     await page.getByRole('button', { name: 'Roll this pool' }).click();
     await page.waitForTimeout(80);
     const rolledText = await page.locator('#screen').innerText();
-    check('a digital roll reports each die and its face (D§)', /Ability \d+:|Proficiency \d+:|Difficulty \d+:/.test(rolledText), rolledText.slice(0, 160));
+    check('a digital roll fills the symbol entry without a per-die readout',
+      !/Ability \d+:|Proficiency \d+:|Difficulty \d+:/.test(rolledText), rolledText.slice(0, 160));
     await page.getByRole('button', { name: 'Clear symbols' }).click();
     await go('#/settings');
     await page.locator('#flag-digitalRoller').uncheck();
