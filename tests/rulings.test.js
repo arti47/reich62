@@ -171,6 +171,24 @@ export async function pinChecks({ check, equal }) {
   equal('R-22: a Despair still reads "No, and" where one can occur',
     Solo.interpretOracle({ success: 1, advantage: 0, triumph: 0, failure: 0, threat: 0, despair: 1 }).id, 'noAnd');
 
+  // R-22 intensity — the same magnitude reading carried up and down the scale.
+  const grade = (t) => Solo.interpretOracle(t).intensity;
+  const tal = (o) => ({ success: 0, advantage: 0, triumph: 0, failure: 0, threat: 0, despair: 0, ...o });
+  equal('R-22: one net Success reads Slight', grade(tal({ success: 1 })).level, 'slight');
+  equal('R-22: two net Success read Clear', grade(tal({ success: 2 })).level, 'clear');
+  equal('R-22: three net Success read Strong', grade(tal({ success: 3 })).level, 'strong');
+  equal('R-22: four net Success read Overwhelming', grade(tal({ success: 4 })).level, 'overwhelming');
+  equal('R-22: three net Failure read Strong', grade(tal({ failure: 3 })).level, 'strong');
+  equal('R-22: a but-rung answer with no net Success or Failure reads Marginal',
+    grade(tal({ advantage: 1 })).level, 'marginal');
+  equal('R-22: leftover Threat on a yes is graded as a rider',
+    grade(tal({ success: 2, threat: 2 })).rider.id, 'notable');
+  equal('R-22: leftover Advantage on a no is graded as a rider',
+    grade(tal({ failure: 3, advantage: 1 })).rider.id, 'minor');
+  check('R-22: a clean answer carries no rider', grade(tal({ success: 3 })).rider === null);
+  check('R-22: intensity rises with the count',
+    grade(tal({ success: 4 })).weight > grade(tal({ success: 1 })).weight);
+
   // Compendium inventory (CLAUDE.md §13.5).
   equal('bestiary: 10 minion groups', M.MINION_GROUPS.length, 10);
   equal('bestiary: 12 rivals', M.RIVALS.length, 12);

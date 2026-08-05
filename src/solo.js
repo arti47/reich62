@@ -53,6 +53,29 @@ export function oraclePool(likelihoodId = state.likelihood) {
   return { ability: l.ability, proficiency: 0, difficulty: l.difficulty, challenge: 0, boost: 0, setback: 0 };
 }
 
+/** How hard the answer lands, and what rides along with it (R-22). The direction comes from
+ *  the rungs below; this grades it by how many symbols survived cancelling. */
+export function oracleIntensity(result, answerId) {
+  const yes = answerId.startsWith('yes');
+  const weight = yes ? result.netSuccess : result.netFailure;
+  const level = [...ORACLE.intensity.levels].reverse().find((l) => weight >= l.min);
+  const riderCount = yes ? result.netThreat : result.netAdvantage;
+  const rider = riderCount > 0
+    ? [...ORACLE.intensity.riders].reverse().find((r) => riderCount >= r.min)
+    : null;
+  return {
+    weight,
+    level: level.id,
+    label: level.label,
+    note: level.note,
+    rider: rider ? {
+      count: riderCount,
+      id: rider.id,
+      text: `${rider.label} ${yes ? ORACLE.intensity.riderNote.threat : ORACLE.intensity.riderNote.advantage}`
+    } : null
+  };
+}
+
 /** The Oracle answers from entered symbols, exactly like every other check (R-B1). */
 export function interpretOracle(tally) {
   const result = outcome(tally);
@@ -60,15 +83,18 @@ export function interpretOracle(tally) {
   // R-22 — the printed Oracle pool holds no Proficiency or Challenge die, so it can never
   // roll the Triumph or Despair §18.1 keys these two rows to. An emphatic result stands in
   // for the symbol; a symbol that does occur on an upgraded pool still reads the same way.
-  if (result.triumph > 0) return { answer: 'Yes, and…', id: 'yesAnd', event: true, result };
-  if (result.despair > 0) return { answer: 'No, and…', id: 'noAnd', event: true, result };
-  if (result.netSuccess >= emphatic && result.netThreat === 0) return { answer: 'Yes, and…', id: 'yesAnd', event: true, result, byMagnitude: true };
-  if (result.netFailure >= emphatic && result.netAdvantage === 0) return { answer: 'No, and…', id: 'noAnd', event: true, result, byMagnitude: true };
-  if (result.success) return { answer: 'Yes', id: 'yes', event: false, result };
-  if (result.netFailure > 0) return { answer: 'No', id: 'no', event: false, result };
-  if (result.netAdvantage > 0) return { answer: 'Yes, but…', id: 'yesBut', event: false, result };
-  if (result.netThreat > 0) return { answer: 'No, but…', id: 'noBut', event: false, result };
-  return { answer: 'No', id: 'no', event: false, result };
+  const rung = (() => {
+    if (result.triumph > 0) return { answer: 'Yes, and…', id: 'yesAnd', event: true };
+    if (result.despair > 0) return { answer: 'No, and…', id: 'noAnd', event: true };
+    if (result.netSuccess >= emphatic && result.netThreat === 0) return { answer: 'Yes, and…', id: 'yesAnd', event: true, byMagnitude: true };
+    if (result.netFailure >= emphatic && result.netAdvantage === 0) return { answer: 'No, and…', id: 'noAnd', event: true, byMagnitude: true };
+    if (result.success) return { answer: 'Yes', id: 'yes', event: false };
+    if (result.netFailure > 0) return { answer: 'No', id: 'no', event: false };
+    if (result.netAdvantage > 0) return { answer: 'Yes, but…', id: 'yesBut', event: false };
+    if (result.netThreat > 0) return { answer: 'No, but…', id: 'noBut', event: false };
+    return { answer: 'No', id: 'no', event: false };
+  })();
+  return { ...rung, result, intensity: oracleIntensity(result, rung.id) };
 }
 
 export function rollRandomEvent() {
@@ -163,11 +189,15 @@ export function renderSolo(mount) {
       net: verdict.result.net,
       answer: verdict.answer,
       answerId: verdict.id,
+      intensity: verdict.intensity,
       surveilled: state.surveilled,
       rolledByApp: rolled,
       lines
     });
-    state.lastAnswer = { answer: verdict.answer, net: verdict.result.net, symbols: { ...tally }, lines };
+    state.lastAnswer = {
+      answer: verdict.answer, net: verdict.result.net, symbols: { ...tally },
+      intensity: verdict.intensity, lines
+    };
     state.entered = newTally();
     rerender();
   };
@@ -183,7 +213,19 @@ export function renderSolo(mount) {
 
   // The last answer stays on screen: what the dice showed, then what it means.
   if (state.lastAnswer) {
-    answerNode.append(el('h3', { text: state.lastAnswer.answer }));
+    const heading = el('h3', { text: state.lastAnswer.answer });
+    const power = state.lastAnswer.intensity;
+    if (power) {
+      // How hard it lands, graded by how many symbols survived cancelling (R-22).
+      heading.append(el('span', { class: `status-chip intensity-${power.level}`, text: power.label }));
+    }
+    answerNode.append(heading);
+    if (power) {
+      answerNode.append(el('p', { class: 'small', text: power.note }));
+      if (power.rider) {
+        answerNode.append(el('p', { class: 'small', text: `And ${power.rider.text}.` }));
+      }
+    }
     answerNode.append(el('p', { class: 'small muted', text: 'What the dice showed' }));
     answerNode.append(rolledSymbols(state.lastAnswer.symbols || {}));
     answerNode.append(el('p', { class: 'small muted', text: 'What is left after cancelling' }));
@@ -269,7 +311,7 @@ export function renderSolo(mount) {
     shown.forEach((item) => {
       const row = el('div', { class: 'result log-row' }, [
         el('div', { class: 'result-head' }, [
-          el('span', { class: 'result-title', text: `${item.likelihoodName} — ${item.answer}` }),
+          el('span', { class: 'result-title', text: `${item.likelihoodName} — ${item.answer}${item.intensity ? ` (${item.intensity.label.toLowerCase()})` : ''}` }),
           el('span', { class: 'cite', text: new Date(item.ts).toLocaleTimeString() })
         ]),
         el('div', { class: 'log-symbols' }, [renderTally(item.net || {})])
