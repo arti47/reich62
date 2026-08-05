@@ -1,6 +1,7 @@
 // ui.js — themed modals, toasts, confirm and prompt. No native alert/confirm/prompt.
 
 import { $, el, clear } from './core.js';
+import { SYMBOLS } from '../data.js';
 
 let lastFocus = null;
 
@@ -97,17 +98,13 @@ export function promptModal(message, { title = 'Enter a value', value = '', conf
   });
 }
 
-export const SYMBOL_GLYPHS = {
-  success: '🌟', advantage: '🔺', triumph: '☀️',
-  failure: '💥', threat: '🔻', despair: '⚡'
-};
+// Glyphs, names and polarity all come from the single symbol table in data.js (§13.2) —
+// nothing about a dice symbol is restated in the UI layer.
+export const SYMBOL_GLYPHS = Object.fromEntries(SYMBOLS.map((s) => [s.id, s.glyph]));
+export const SYMBOL_NAMES = Object.fromEntries(SYMBOLS.map((s) => [s.id, s.name]));
 
-export const SYMBOL_NAMES = {
-  success: 'Success', advantage: 'Advantage', triumph: 'Triumph',
-  failure: 'Failure', threat: 'Threat', despair: 'Despair'
-};
-
-const POSITIVE = ['success', 'advantage', 'triumph'];
+const POSITIVE = SYMBOLS.filter((s) => s.polarity === 'positive').map((s) => s.id);
+const SYMBOL_ORDER = SYMBOLS.map((s) => s.id);
 
 /** A dice symbol is never shown bare: glyph, count and name always travel together, so
  *  nothing on screen needs a separate legend to decode (CLAUDE.md §1.2 a11y). */
@@ -125,7 +122,7 @@ export function symbolGlyph(symbol, count = 1) {
 
 export function renderTally(tally) {
   const wrap = el('span', {});
-  for (const key of ['success', 'advantage', 'triumph', 'failure', 'threat', 'despair']) {
+  for (const key of SYMBOL_ORDER) {
     if (tally[key]) wrap.append(symbolGlyph(key, tally[key]));
   }
   if (!wrap.childNodes.length) wrap.append(el('span', { class: 'muted small', text: 'Nothing left over' }));
@@ -195,9 +192,9 @@ export function emptyState(message, action = null) {
 }
 
 /** Persistent outcome panel: results stay on screen instead of vanishing with a toast. */
-export function outcomeBox(lines, { tone = 'neutral', title = 'What happened' } = {}) {
+export function outcomeBox(lines, { tone = 'neutral', title = 'What happened', level = 3 } = {}) {
   return el('div', { class: `outcome outcome-${tone}`, 'aria-live': 'polite' }, [
-    el('h3', { text: title }),
+    el(`h${level}`, { text: title }),
     el('ul', { class: 'small' }, [].concat(lines).filter(Boolean).map((line) => el('li', { text: line })))
   ]);
 }

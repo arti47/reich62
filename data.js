@@ -449,7 +449,10 @@ export const COMBAT_VARIANTS = {
       'Take the higher of the two difficulties and raise it by one more.',
       'On success the primary weapon hits. Spend two Advantage or one Triumph to land the secondary as well.',
       'Each hit deals its own weapon\'s damage.'
-    ]
+    ],
+    extraDifficultySteps: 1,
+    secondaryHit: { advantage: 2, triumph: 1 },
+    usesLowerOf: ['skillRank', 'characteristic']
   },
   unarmed: { skill: 'brawl', damage: 'brawn', crit: 5, range: 'engaged', qualities: ['Knockdown'],
     note: 'May target strain instead of wounds. Brawl weapons such as knuckledusters add to this base rather than replacing it.' },
@@ -640,6 +643,12 @@ export const CALLED_SHOTS = {
   cite: '§10A',
   declare: 'Chosen before the roll, aiming at a specific target such as a held weapon, a tyre, or a radio.',
   aimPenalty: 'Uses the Aim maneuver\'s targeted option: one maneuver of aiming this way adds two Setback to the following combat check, two consecutive aim maneuvers reduce that to one Setback.',
+  setbackByAim: [
+    { aimManeuvers: 0, setback: 2, label: 'Called without aiming' },
+    { aimManeuvers: 1, setback: 2, label: 'Aimed once' },
+    { aimManeuvers: 2, setback: 1, label: 'Aimed twice in a row' }
+  ],
+  payoffAdvantageCost: 3,
   payoff: 'On a hit, spending three Advantage (per §5C) disables the opponent or a piece of their gear instead of dealing normal wounds or strain.',
   limit: 'Effects should be temporary and proportionate, agreed between player and GM.'
 };
@@ -1147,6 +1156,7 @@ export const HEAT = {
   cite: '§17',
   max: 5,
   min: 0,
+  safehouseDefault: 'clear', // §3.8 — the status before any threshold sets one
   generation: {
     cite: '§17.1',
     scope: 'Only checks made in Reich-surveilled contexts — public spaces, checkpoints, dealings with officials or informants.',
@@ -1161,10 +1171,11 @@ export const HEAT = {
   tracks: {
     cite: '§17.2',
     personal: 'Tracked per character, 0 to 5.',
-    cell: 'Shared across the whole party or network, 0 to 5. Rises when any member reaches Personal Heat 3 or more, or from group-implicating failures such as a blown safehouse or a flipped informant.'
+    cell: 'Shared across the whole party or network, 0 to 5. Rises when any member reaches Personal Heat 3 or more, or from group-implicating failures such as a blown safehouse or a flipped informant.',
+    cellEscalationAtPersonal: 3
   },
   thresholds: [
-    { level: 1, personal: 'One Setback die on public checks', personalEffect: { setback: 1, scope: 'public' }, cell: null },
+    { level: 1, personal: 'One Setback die on public checks', personalEffect: { setback: 1, scope: 'public' }, cell: null, cellEffect: null },
     { level: 2, personal: 'Papers checked on sight — opposed Deception or Cool against Perception', cell: 'One Setback die on every cell member\'s public checks', cellEffect: { setback: 1, scope: 'public' } },
     { level: 3, personal: 'Tailed — an opposed Vigilance check to notice', cell: 'The safehouse is placed under watch, at GM discretion', safehouseStatus: 'watched' },
     { level: 4, personal: 'An informant is assigned and the residence is searched', cell: 'Oracle roll: a cell member is flipped or arrested' },

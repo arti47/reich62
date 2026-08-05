@@ -646,9 +646,9 @@ day one; fantasy-phrase join codes; themed `modal()`/`showToast`/`confirmModal`/
 
 | Module | Responsibility | Reich '62 specifics |
 |---|---|---|
-| `core.js` | Constants, DOM/util helpers, raw dice primitives. No imports | symbol enum, cancellation primitive |
+| `core.js` | Constants, DOM/util helpers, raw dice primitives, `plain()` for stripping citation markers out of data strings bound for the screen. No imports | symbol enum, cancellation primitive |
 | `ui.js` | Themed modals/toasts/confirm/prompt, plus the layout primitives: self-describing panels, accordions, sub-tabs, empty states, persistent outcome boxes, number steppers | dice-symbol glyph renderer |
-| `rules.js` | Pure lookups over data files | talent lookup, pyramid legality, rarity resolution, difficulty ladder, bestiary lookup + threat-flag evaluation |
+| `rules.js` | Pure lookups over data files | talent lookup, pyramid legality, rarity resolution, difficulty ladder, Medicine difficulty ladder, fall damage, bestiary lookup + threat-flag evaluation |
 | `derived.js` | Derived calculations + data normalisation/migration | WT/ST/Soak/Defense/encumbrance, cumulative Critical-Injury modifier |
 | `settings.js` | Feature toggles | solo · GM screen · digital roller (R-B1 gated) · non-setting talents (R-11) · currency label + starting budget (R-8) · GM discretionary dice (§5C'') |
 | `store.js` | Local/cloud persistence, Cell entity, combat mirroring, JSON export/import | Cell + Heat persistence |
@@ -709,7 +709,9 @@ characters/{characterId}
                conditions{}, incapacitated, deathState:{ kind, roundsRemaining },
                personalHeat: 0-5, surveilledContext: bool,
                perEncounterFlags{}, perSessionFlags{}, perDayFlags{ painkillers },
-               perWeekFlags{}, restLimits{} }
+               perWeekFlags{}, restLimits{},
+               careFlags:{ selfTreatment: bool, noEquipment: bool },   // §5G difficulty
+               lastFall: [string] | null }                             // §5I summary
   skills:    { <skillName>: { rank: 0-5, career: bool } }                        // 26 keys
   talents:   [ { id, tier, ranks, pyramidSlot } ]                                // §12A
   inventory: { items[ { id, qty, encumbrance, equipped, damageLevel,
@@ -859,6 +861,7 @@ is worked in this position, immediately after `data-npcs.js`.)*
 - [x] **Persistent resource header on every in-play screen:** wounds · strain · Story Points · Personal Heat · encumbrance
 - [x] Vitals steppers clamped to true maxima; incapacitation state
 - [x] Conditions registry (§3.9) — disoriented, encumbrance and Heat auto-apply their dice in the roller; the remaining condition effects are wired as the systems that consume them land
+- [x] Falls (§5I) applied from the Recovery tab: mitigation first, then soak, strain never soaked, and the Critical Injury modifier surfaced
 - [x] Inventory: encumbrance enforced (Setback per point over; free-maneuver loss at ≥ Brawn over), equipped state
 - [x] Inventory: item damage ladder, attachments and hard points (§14B, §14C)
 - [x] Critical Injury list with **cumulative +10 modifier** tracked
@@ -876,6 +879,7 @@ is worked in this position, immediately after `data-npcs.js`.)*
 - [x] Auto-applied dice: environment, silhouette, cover/concealment (§5E, §5J), plus the Adversary talent's upgrades (§12C)
 - [x] **Opposed-check builder** (§3.2 exact sequence) and competitive-check comparator (R-3)
 - [x] **Four context spend tables** (combat / generic / social / vehicle) surfaced by affordability (R-12)
+- [x] Called shots (§10A), two-weapon fighting (§5H) and group influence (§11) as check-setup controls feeding the pool
 - [x] One-tap application of a chosen spend to the character's state (§5C)
 - [x] **Story Point spends** with two-pool flow enforced (`spendStoryPoint`) — pool UI lands with the GM tab
 - [x] Damage applier: base + net 🌟 − Soak → wounds; strain path; Pierce handling
@@ -890,7 +894,7 @@ is worked in this position, immediately after `data-npcs.js`.)*
 
 ### Phase 4 — In-Play Systems — **COMPLETE**
 - [x] **Guided death procedure** (§3.10): The End Is Nigh countdown, Bleeding Out per-turn ticks + threshold-overflow extra roll, suffocation escalation, Indomitable escape hatch, 151+ terminal state
-- [x] Rest & recovery with **all once-per-X limits enforced** (§3.11)
+- [x] Rest & recovery with **all once-per-X limits enforced** (§3.11), including the Medicine difficulty ladder worked out from the patient's own wounds (§5G)
 - [x] **Lifecycle engine** (§3.12): End Encounter / Scene / Session / Day / Week / Adventure with confirmation summary + one-step undo
 - [x] **Generic progress tracker** (§3.13) reused by Heat, repairs, ad-hoc clocks and the Dragnet
 - [x] Advancement loop (§3.15) with pyramid + creation-only gates, Dedication handling, advancement log
@@ -920,12 +924,13 @@ is worked in this position, immediately after `data-npcs.js`.)*
 - [x] Safety-tools note (§20A, paraphrased, one screen, linked from Settings)
 
 ### Hardening (always)
-- [x] Regression harness per §13.5 assertions — 271 checks, every ruling pinned
-- [ ] Accessibility pass (labels, `aria-live` and focus are in place; a full pass is outstanding)
+- [x] Regression harness per §13.5 assertions — 448 checks, every ruling pinned
+- [x] **Accessibility pass** — an automated sweep runs on every screen and every sheet sub-tab with all accordions forced open, asserting that every button, link, input and select carries an accessible name, that no positive `tabindex` exists, that heading levels never skip, and that every table has header cells. Two real faults were found and fixed (see A-9)
 - [x] **Usability pass 1** — seat model, self-describing panels, sub-tabs and accordions, plain-language first, guardrails on destructive actions, persistent outcomes
 - [x] **Usability pass 2 (formatting)** — compact help bars, checklist line breaks, always-labelled dice symbols, the Outcome panel with a status chip and a plain-English explanation, and a rules library grouped into readable sections
 - [x] **Rules-accuracy audit, pass 1** — findings below, each closed with a regression check
-- [ ] Rules-accuracy audit, pass 2 (after Phase 5)
+- [x] **Rules-accuracy audit, pass 2 (local surfaces)** — findings A-5…A-9 below. Deferred to a third pass, after Phase 5: the sync layer's own rules exposure
+- [ ] Rules-accuracy audit, pass 3 (after Phase 5)
 
 #### Audit pass 1 — findings (Rule · Target · Fix · Why)
 
@@ -945,6 +950,19 @@ XP costs (§7); rarity difficulty and location modifiers (§14A); minion group t
 ranks (§12C, R-18); Heat generation, thresholds and decay (§17); the painkiller ladder and the
 once-per-X recovery limits (§5G); the Dragnet's escalation and dual Heat cost (B§6).
 
+#### Audit pass 2 — findings (Rule · Target · Fix · Why)
+
+Pass 2 audited the app against §13.2 (no rules value hardcoded in `src/`), against the ledger
+(every extracted table must reach a surface), and against §13.5's accessibility line.
+
+| # | Rule | Target | Fix | Why |
+|---|---|---|---|---|
+| **A-5** | §13.2 — every rules number lives in a `data*.js` file | `combat.js`, `roller.js`, `heat.js`, `ui.js`, `rules-index.js` | Five values were restated in the modules rather than read: the minion group's Critical Injury cost (`perMember + 1`), the silhouette rule's ±2 thresholds and their directions, the Heat levels at which the personal and cell Setbacks start, the dice-symbol glyph and name maps, and two hand-written rules-library sentences for the combat sequence and called shots. All five now read the data. `data.js` gained `criticalWoundCost`, an explicit `cellEffect: null` on Heat level 1, `HEAT.safehouseDefault` and `HEAT.tracks.cellEscalationAtPersonal`; `rules.js` gained `minionCriticalWoundCost` | A restated rules value drifts silently: the data file can be corrected and the app keep the old number, which is exactly what the single-source rule exists to prevent |
+| **A-6** | The ledger's rule: an extracted table must reach a surface, or it is not really extracted | `rules-index.js`, `settings.js` | Six exports were extracted, ticked and then never rendered: `MOVEMENT_COSTS`, `FALLING_RULES`, `SHEET_FIELDS`, `WEAPON_NOTE`, `VEHICLE_NOTE` and `DIE_FACES_SOURCE`. The first five are now library entries; the sixth annotates the simulated-roller toggle with where its face data came from | Movement costs and the two Heat notes on carrying a weapon or owning a vehicle are rules a player needs mid-session, and they were unreachable |
+| **A-7** | Five rules had data but no tool: the Medicine difficulty ladder (§5G), falls (§5I), two-weapon fighting (§5H), called shots (§10A) and group influence (§11) | `rules.js`, `sheet.js`, `roller.js` | `rules.js` gained `medicineDifficulty` (the wound-ratio ladder plus the self-treatment and no-equipment steps) and `fallDamage` (mitigation first, then soak, with strain never soaked). The Recovery tab now states the Medicine difficulty for the patient in front of you and can set that check up on the Roll screen, and applies a fall. The Roll screen gained a called-shot picker, a two-weapon toggle and an audience-size picker, all feeding the pool in the modification order | Each was a printed rule the app knew and could not do. The Medicine ladder in particular was being worked out by hand at the table while the app held every number needed |
+| **A-8** | Interface copy shows no section markers | `core.js`, `rules-index.js` | The no-marker rule was enforced by a test sweep over the screens as they happened to render. Any data string that reached an unpaginated surface could reintroduce one. `core.js` gained `plain()`, and every rules-library entry now passes through it | The guarantee was incidental rather than structural, and the pagination that hid the leak is a rendering detail that could change at any time |
+| **A-9** | Accessibility: headings must not skip levels | `ui.js`, `combat.js`, `screens.js`, `styles.css` | The new sweep found two: the combat screen's standalone outcome box opened at `h3` under the page `h1`, and rules-library entries used `h4` inside a card whose heading is `h2`. `outcomeBox` gained a `level` option; rule entries moved to `h3` | A screen reader's heading list is how you navigate a long screen, and both faults broke it on the two longest screens in the app |
+
 **Per-feature spec format (mandatory):** Rule (cited) · Target (file · module · function) ·
 Behavior/UI · Schema (name · type · default · location, §8 updated) · Acceptance (browser
 verification).
@@ -953,6 +971,7 @@ verification).
 
 | Date | Change | Why | Verification | Cache |
 |---|---|---|---|---|
+| 2026-08-05 | **Audit pass 2 closed: five single-source violations, six unsurfaced tables, five missing tools, and the accessibility pass.** *(A-5)* `combat.js`, `roller.js`, `heat.js`, `ui.js` and `rules-index.js` were restating rules values instead of reading them — the minion group's `perMember + 1` Critical cost, the silhouette ±2 thresholds, the Heat levels the Setbacks start at, the symbol glyph and name maps, and two hand-written library sentences. All now read the data; `data.js` gained `criticalWoundCost`, `HEAT.safehouseDefault`, `HEAT.tracks.cellEscalationAtPersonal` and an explicit `cellEffect: null` on Heat 1. *(A-6)* `MOVEMENT_COSTS`, `FALLING_RULES`, `SHEET_FIELDS`, `WEAPON_NOTE` and `VEHICLE_NOTE` reach the rules library; `DIE_FACES_SOURCE` annotates the roller toggle. *(A-7)* Five printed rules gained tools: the Recovery tab states the Medicine difficulty for the patient in front of you, with the self-treatment and no-kit steps, and hands the check to the Roll screen; it also applies a fall, mitigation first, then soak, with strain never soaked. The Roll screen gained a called-shot picker, a two-weapon toggle and an audience-size picker. *(A-8)* `core.js` gained `plain()`, so no data string can carry a section marker onto a screen regardless of what the pagination happens to render. *(A-9)* The accessibility pass is now an automated sweep over every screen and every sheet sub-tab; it found and fixed two heading-level skips. | "Fix everything" against the audit list | `npm test`: **448 checks pass, zero console errors**. New checks pin the five values against their data tables, the six library entries, the Medicine ladder at four wound ratios plus both modifiers, fall damage with mitigation and soak in the right order, the three new roller controls moving the live dice counts and reverting cleanly, that no library entry leaks a section marker, and the accessibility sweep on ten screens and six sub-tabs | `reich62-v23` |
 | 2026-08-05 | **Errata adopted as a source of record.** `source/reich62_errata.md` confirms all 22 rulings; the app already matched 21 of them, so the only behavioural delta was **R-8's pocket money**, which the errata adds: unspent starting budget is kept as cash, and a **d100 of pocket money** is rolled once the shopping is done — spendable in play, never on more starting gear. `data.js` records `unspentKept` and `pocketMoney` under the R-8 house aid; the wizard's gear step gains a badged roll control and states the cash you will start with, the review step repeats it, and `finish()` credits unspent budget plus pocket money to the character's purse. §4 now cites the errata as binding. | Table owner's errata, supplied verbatim | `npm test`: 378 checks pass, **zero console errors**. New checks pin the d100 range, that pocket money cannot widen the gear budget, the two R-8 flags, and that a finished character starts with the unspent budget plus the roll | `reich62-v22` |
 | 2026-08-05 | **Black-market purchasing added as an explicit house rule (H-1).** `data.js` gains `BLACK_MARKET`, flagged `houseRule: true` and carrying its own badge: barter starts at rarity 6, one ration card per point above 5, +1 difficulty with nothing to trade, and a failed check showing 3 threat or any despair counting as a surveilled context. `rules.js` gains `blackMarketPurchase`, which reuses the printed rarity ladder and location modifiers rather than replacing them. `heat.js` extends `heatFromCheck` with the exposure trigger — a Streetwise despair still reads as an evasion check, so it costs 2. The purse splits into three: cash, ration cards and barter goods, back-filled on old characters. The Gear tab gains a badged **Buy something** counter that quotes the check, the price and the barter demand, sets the check up on the Roll screen, or pays outright. Currency is now **Reichsmark (RM)**, still 500 to start and still relabellable. | Table owner's house rule, supplied verbatim | `npm test`: 372 checks pass, **zero console errors**. New checks pin the card formula at rarities 5–10, the +1 penalty and its removal by cards or goods, location modifiers still stacking, three Heat cases plus the evasion despair, the three purses surviving normalisation, and the counter in the browser: a rarity-6 radio deducts 500 RM and one card and lands in the inventory | `reich62-v21` |
 | 2026-08-05 | **Screen menu tidied.** Each row read `HOMESet-up checklist, your characters and your network.` — the name and its blurb ran together. **Root cause:** `.toggle-desc` is only declared a block inside `.toggle-row` and `.checklist`, so in the menu it stayed inline; the same fault as the earlier checklist one. `.menu-item` is now a flex column with the name on its own line. The dialog itself also scrolled as a whole, carrying its heading and the Close button off-screen on a long list; `.modal` is now a flex column with only `.modal-body` scrolling, so the title and actions stay put. | User: menu formatting messed up | `npm test`: 341 checks pass, **zero console errors**. New checks assert the blurb starts below the name rather than beside it, that the dialog itself does not scroll while its body does, and that Close stays visible | `reich62-v20` |

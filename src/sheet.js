@@ -6,9 +6,9 @@ import { showToast, confirmModal, panel, subTabs, emptyState, outcomeBox, number
 import { PANELS, label as termLabel, gloss } from './help.js';
 import {
   SKILLS, CHARACTERISTICS, CONDITIONS, HEAT, CRITICAL_INJURIES, SUFFOCATION, RECOVERY,
-  XP_COSTS, SKILL_RANK_MAX
+  XP_COSTS, SKILL_RANK_MAX, FALLING, FALLING_RULES
 } from '../data.js';
-import { talent, buildPool, canBuyTalent, visibleTalents, xpCost, skill as skillById } from './rules.js';
+import { talent, buildPool, canBuyTalent, visibleTalents, xpCost, skill as skillById, medicineDifficulty, fallDamage } from './rules.js';
 import { ITEM_DAMAGE, ATTACHMENTS, DIFFICULTIES, GEAR, WEAPONS, ARMOUR, RARITY, BLACK_MARKET } from '../data.js';
 import { blackMarketPurchase } from './rules.js';
 import { hardPoints } from './derived.js';
@@ -391,6 +391,43 @@ function pane_care(mount, character, derived, rerender) {
   const advantageInput = el('input', { type: 'number', id: 'recovery-advantages', min: '0', value: '0', 'aria-label': 'Uncancelled Advantage' });
   recoveryCard.append(el('label', { class: 'small', for: 'recovery-successes', text: 'Uncancelled Success' }), successInput);
   recoveryCard.append(el('label', { class: 'small', for: 'recovery-advantages', text: 'Uncancelled Advantage' }), advantageInput);
+
+  // How hard the Medicine check is, worked out from the patient's own wounds (§5G).
+  const medBody = el('div', {});
+  const med = medicineDifficulty({
+    wounds: character.state.wounds,
+    woundThreshold: woundThreshold(character),
+    selfTreatment: !!character.state.careFlags.selfTreatment,
+    noEquipment: !!character.state.careFlags.noEquipment
+  });
+  medBody.append(el('p', { class: 'small', id: 'medicine-difficulty' }, [
+    `Treating these ${character.state.wounds} wounds is a `,
+    el('strong', { text: titleCase(med.difficulty) }),
+    ' Medicine check.'
+  ]));
+  med.applied.forEach((line) => medBody.append(el('p', { class: 'small muted', text: line })));
+  [['selfTreatment', 'Treating yourself'], ['noEquipment', 'No medical kit to hand']].forEach(([flag, label]) => {
+    medBody.append(el('div', { class: 'toggle-row' }, [
+      el('input', {
+        type: 'checkbox', id: `medicine-${flag}`, checked: !!character.state.careFlags[flag],
+        onchange: (e) => { character.state.careFlags[flag] = e.target.checked; saveCharacter(character); rerender(); }
+      }),
+      el('label', { for: `medicine-${flag}` }, [el('span', { text: label })])
+    ]));
+  });
+  medBody.append(el('button', {
+    type: 'button', class: 'secondary', id: 'medicine-to-roller',
+    text: 'Set this check up on the Roll screen',
+    onclick: () => {
+      rollerState.skillId = 'medicine';
+      rollerState.difficultyId = med.difficulty;
+      rollerState.opposed = false;
+      rollerState.audienceSize = null;
+      location.hash = '#/roll';
+    }
+  }));
+  recoveryCard.append(el('h3', { text: 'How hard is the check?' }), medBody);
+
   RECOVERY.methods.filter((m) => m.id !== 'vehicleSystemStrain').forEach((method) => {
     const gate = recoveryAvailable(character, method.id);
     recoveryCard.append(el('div', { class: 'result' }, [
@@ -415,6 +452,56 @@ function pane_care(mount, character, derived, rerender) {
   });
   mount.append(recoveryCard);
 
+  // --- falls (§5I): the band sets the damage; the mitigation check trims it ---
+  const fallCard = panel('Taking a fall', PANELS.sheetFall, []);
+  const fallBand = el('select', { id: 'fall-band', 'aria-label': 'How far you fell' });
+  FALLING.forEach((f) => fallBand.append(el('option', { value: f.band, text: `${titleCase(f.band)} range` })));
+  const fallSuccess = el('input', { type: 'number', id: 'fall-successes', min: '0', value: '0', 'aria-label': 'Uncancelled Success on the mitigation check' });
+  const fallAdvantage = el('input', { type: 'number', id: 'fall-advantages', min: '0', value: '0', 'aria-label': 'Uncancelled Advantage on the mitigation check' });
+  fallCard.append(
+    el('label', { class: 'small', for: 'fall-band', text: 'How far you fell' }), fallBand,
+    el('p', { class: 'small muted', text: FALLING_RULES.mitigation }),
+    el('label', { class: 'small', for: 'fall-successes', text: 'Uncancelled Success' }), fallSuccess,
+    el('label', { class: 'small', for: 'fall-advantages', text: 'Uncancelled Advantage' }), fallAdvantage,
+    el('button', {
+      type: 'button', class: 'secondary', id: 'apply-fall', text: 'Apply the fall',
+      onclick: () => {
+        const result = applyFall(character, fallBand.value, {
+          successes: Number(fallSuccess.value), advantages: Number(fallAdvantage.value)
+        });
+        result.events.forEach((e) => showToast(e));
+        rerender();
+      }
+    })
+  );
+  if (character.state.lastFall) {
+    fallCard.append(outcomeBox(character.state.lastFall, { title: 'The last fall', tone: 'bad' }));
+  }
+  mount.append(fallCard);
+}
+
+/** Apply a fall to the sheet: wounds past soak, strain unreduced, and the Critical roll (§5I). */
+export function applyFall(character, band, { successes = 0, advantages = 0 } = {}) {
+  const result = fallDamage({
+    band,
+    woundThreshold: woundThreshold(character),
+    soak: soak(character),
+    successes, advantages
+  });
+  if (!result) return { ok: false, events: ['Unknown fall distance.'] };
+  character.state.wounds = Math.max(0, character.state.wounds + result.wounds);
+  character.state.strain = Math.max(0, character.state.strain + result.strain);
+  character.state.incapacitated = character.state.wounds >= woundThreshold(character)
+    || character.state.strain >= strainThreshold(character);
+  const events = [
+    `${titleCase(band)} fall: ${result.wounds} wounds after soak, ${result.strain} strain.`
+  ];
+  if (result.criticalModifier) events.push(`Roll a Critical Injury at +${result.criticalModifier}.`);
+  if (result.note) events.push(result.note);
+  if (character.state.incapacitated) events.push('Incapacitated.');
+  character.state.lastFall = events;
+  saveCharacter(character);
+  return { ok: true, events, result };
 }
 
 function pane_advance(mount, character, derived, rerender) {

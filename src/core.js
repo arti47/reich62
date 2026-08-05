@@ -86,3 +86,14 @@ export function outcome(tally) {
     despair: net.despair
   };
 }
+
+/** The data files cite their sources inline ("… matching §1"). Interface copy never shows a
+ *  section marker, so any data string rendered on screen passes through here first. */
+export function plain(value) {
+  return String(value == null ? '' : value)
+    .replace(/\s*\((?:per\s+|see\s+)?(?:B?§|D§)[0-9A-Za-z.'’′, §–-]*\)/g, '')
+    .replace(/\s*(?:B?§|D§)[0-9][0-9A-Za-z.'’′]*/g, '')
+    .replace(/\s+([.,;:])/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}

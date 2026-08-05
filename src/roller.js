@@ -8,7 +8,8 @@ import { showToast, renderTally, modal, panel, accordion, outcomeBox, numberStep
 import { PANELS, label as termLabel, gloss } from './help.js';
 import {
   SKILLS, DIFFICULTIES, SPEND_TABLES, STORY_POINTS, CRITICAL_INJURY_RULES, DIE_FACES,
-  RANGED_DIFFICULTY_BY_RANGE, COMBAT_CHECK_PROCEDURE, DICE
+  RANGED_DIFFICULTY_BY_RANGE, COMBAT_CHECK_PROCEDURE, DICE, SILHOUETTE_RULE,
+  CALLED_SHOTS, COMBAT_VARIANTS, SOCIAL_ENCOUNTERS
 } from '../data.js';
 import {
   skill as skillById, buildPool, buildOpposedDifficulty, modifyPool, difficultyDice,
@@ -90,6 +91,9 @@ export const state = {
   concealmentRole: 'none', // 'hiding' | 'observing' | 'none'
   cover: false,            // §5E — ranged defence 1 plus a Boost on checks from behind it
   silhouetteDelta: 0,      // §5J — target silhouette minus your own
+  calledShot: null,        // §10A — how many aim maneuvers were spent, or null for no called shot
+  twoWeapon: false,        // §5H — the off-hand attack raises the difficulty a step
+  audienceSize: null,      // §11 — group influence sets the difficulty from the crowd's size
   // When `advancedAutomation` is off the automatic dice are shown as confirmable rows
   // rather than applied silently; the flag turns the prompting off.
   autoDice: { conditions: true, encumbrance: true, heat: true },
@@ -121,8 +125,27 @@ export function assemblePool(character = activeCharacter()) {
     pool.difficulty = opp.difficulty;
     pool.challenge = opp.challenge;
     notes.push('Difficulty side built from the opponent\'s rating; only the active character rolls');
+  } else if (state.audienceSize) {
+    // Group influence: the crowd's size sets the difficulty outright (§11).
+    const row = SOCIAL_ENCOUNTERS.groupInfluenceLadder.find((g) => g.audience === state.audienceSize);
+    pool.difficulty = difficultyDice(row ? row.difficulty : state.difficultyId);
+    notes.push(`Swaying ${state.audienceSize} people sets the difficulty at ${titleCase(row ? row.difficulty : state.difficultyId)}`);
   } else {
     pool.difficulty = difficultyDice(state.difficultyId);
+  }
+
+  // Two-weapon fighting takes the higher difficulty and raises it one more step (§5H).
+  if (state.twoWeapon) {
+    modifications.push({ stage: 'add', die: 'difficulty', count: COMBAT_VARIANTS.twoWeapon.extraDifficultySteps });
+    notes.push(`Fighting with two weapons: ${COMBAT_VARIANTS.twoWeapon.extraDifficultySteps} more difficulty, and the pool uses the lower of the two skills and characteristics`);
+  }
+
+  // A called shot aims at something specific and pays for it in Setback dice (§10A).
+  if (state.calledShot !== null) {
+    const aim = CALLED_SHOTS.setbackByAim.find((a) => a.aimManeuvers === state.calledShot)
+      || CALLED_SHOTS.setbackByAim[0];
+    modifications.push({ stage: 'add', die: 'setback', count: aim.setback });
+    notes.push(`${aim.label}: ${aim.setback} Setback, and ${CALLED_SHOTS.payoffAdvantageCost} Advantage on a hit disables the target instead of wounding them`);
   }
 
   // Environmental and size modifiers are properties of the situation, not the character,
@@ -144,13 +167,15 @@ export function assemblePool(character = activeCharacter()) {
     modifications.push({ stage: 'upgrade', die: 'difficulty', count: state.targetAdversary });
     notes.push(`Target has Adversary ${state.targetAdversary}: the difficulty is upgraded ${state.targetAdversary} time(s)`);
   }
-  // Silhouette (§5J): two or more larger is one step easier, two or more smaller one harder.
-  if (state.silhouetteDelta >= 2) {
-    modifications.push({ stage: 'remove', die: 'difficulty', count: 1 });
-    notes.push('Target is 2 or more silhouettes larger: one difficulty less');
-  } else if (state.silhouetteDelta <= -2) {
-    modifications.push({ stage: 'add', die: 'difficulty', count: 1 });
-    notes.push('Target is 2 or more silhouettes smaller: one difficulty more');
+  // Silhouette (§5J): the thresholds and the direction both come from SILHOUETTE_RULE.
+  const bigger = SILHOUETTE_RULE.largerTarget;
+  const smaller = SILHOUETTE_RULE.smallerTarget;
+  if (state.silhouetteDelta >= bigger.differenceAtLeast) {
+    modifications.push({ stage: 'remove', die: 'difficulty', count: Math.abs(bigger.difficultySteps) });
+    notes.push(`Target is ${bigger.differenceAtLeast} or more sizes larger: ${Math.abs(bigger.difficultySteps)} difficulty less`);
+  } else if (state.silhouetteDelta <= -smaller.differenceAtLeast) {
+    modifications.push({ stage: 'add', die: 'difficulty', count: Math.abs(smaller.difficultySteps) });
+    notes.push(`Target is ${smaller.differenceAtLeast} or more sizes smaller: ${Math.abs(smaller.difficultySteps)} difficulty more`);
   }
 
   if (character) {
@@ -400,6 +425,42 @@ export function renderRoller(mount) {
     { min: -4, max: 4, hint: 'Target size minus your own. Two or more either way shifts the difficulty a step.' }));
   situationBody.append(numberField('roller-adversary', 'How hard is the target to hit?', state.targetAdversary, (v) => { state.targetAdversary = v; rerender(); },
     { max: 3, hint: 'Their Adversary rating, if they have one. Each rank makes this check one step harder.' }));
+
+  // Called shots (§10A): aiming at a specific thing costs Setback and pays off in a spend.
+  const calledSelect = el('select', {
+    id: 'roller-called-shot', 'aria-label': 'Called shot',
+    onchange: (e) => { state.calledShot = e.target.value === '' ? null : Number(e.target.value); rerender(); }
+  });
+  calledSelect.append(el('option', { value: '', text: 'Not aiming at anything in particular', selected: state.calledShot === null }));
+  CALLED_SHOTS.setbackByAim.forEach((a) => calledSelect.append(el('option', {
+    value: String(a.aimManeuvers), text: `${a.label} — ${a.setback} Setback`, selected: state.calledShot === a.aimManeuvers
+  })));
+  situationBody.append(
+    el('label', { class: 'small', for: 'roller-called-shot', text: 'Aiming at something specific' }),
+    calledSelect,
+    el('p', { class: 'small muted', text: `Declare it before you roll. On a hit, spending ${CALLED_SHOTS.payoffAdvantageCost} advantage disables the thing you aimed at — a weapon, a tyre, a radio — instead of dealing damage.` })
+  );
+
+  // Two-weapon fighting (§5H).
+  situationBody.append(toggle('roller-two-weapon', 'Attacking with a weapon in each hand', state.twoWeapon, (v) => { state.twoWeapon = v; rerender(); }));
+  if (state.twoWeapon) {
+    situationBody.append(el('p', { class: 'small muted', text: `Build the pool from the lower of the two skill ranks and the lower of the two characteristics. The primary weapon hits on a success; landing the off-hand one costs ${COMBAT_VARIANTS.twoWeapon.secondaryHit.advantage} advantage or ${COMBAT_VARIANTS.twoWeapon.secondaryHit.triumph} triumph.` }));
+  }
+
+  // Group influence (§11): the audience sets the difficulty outright.
+  const audienceSelect = el('select', {
+    id: 'roller-audience', 'aria-label': 'Audience size', disabled: state.opposed,
+    onchange: (e) => { state.audienceSize = e.target.value || null; rerender(); }
+  });
+  audienceSelect.append(el('option', { value: '', text: 'Talking to one person', selected: !state.audienceSize }));
+  SOCIAL_ENCOUNTERS.groupInfluenceLadder.forEach((g) => audienceSelect.append(el('option', {
+    value: g.audience, text: `${g.audience} people — ${titleCase(g.difficulty)}`, selected: state.audienceSize === g.audience
+  })));
+  situationBody.append(
+    el('label', { class: 'small', for: 'roller-audience', text: 'Swaying a crowd' }),
+    audienceSelect,
+    el('p', { class: 'small muted', text: 'Working a room instead of one person: the size of the audience sets the difficulty and overrides the picker above.' })
+  );
 
   const modBody = el('div', {});
   situationBody.append(accordion('Change the dice by hand', [modBody], { key: 'roll-mods', summary: 'upgrade, downgrade, spend a story point' }));

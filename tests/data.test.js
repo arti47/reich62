@@ -7,6 +7,9 @@ import * as S from '../data-solo.js';
 import * as R from '../src/rules.js';
 import * as D2 from '../src/derived.js';
 import { cancel, outcome, newTally } from '../src/core.js';
+import * as H from '../src/heat.js';
+import * as UI from '../src/ui.js';
+import * as RI from '../src/rules-index.js';
 
 export async function dataChecks({ check, equal }) {
   // --- content inventory ---
@@ -261,6 +264,78 @@ export async function dataChecks({ check, equal }) {
   equal('cash carries through normalisation', buyer.inventory.money.amount, 120);
   equal('ration cards are back-filled', buyer.inventory.money.rationCards, 0);
   equal('barter goods are back-filled', buyer.inventory.money.barterGoods, 0);
+
+  // --- single source of truth (CLAUDE.md §13.2): the modules read these, never restate them ---
+  equal('a Critical Injury costs a minion group its share plus one',
+    N.ADVERSARY_TIERS.find((t) => t.id === 'minion').criticalWoundCost(4), 5);
+  equal('the same value comes back through the rules layer', R.minionCriticalWoundCost(4), 5);
+  check('the silhouette rule carries its own thresholds and directions',
+    D.SILHOUETTE_RULE.largerTarget.differenceAtLeast === 2
+    && D.SILHOUETTE_RULE.largerTarget.difficultySteps === -1
+    && D.SILHOUETTE_RULE.smallerTarget.differenceAtLeast === 2
+    && D.SILHOUETTE_RULE.smallerTarget.difficultySteps === 1);
+  check('every Heat threshold declares its personal and cell dice explicitly',
+    D.HEAT.thresholds.every((t) => 'personalEffect' in t || 'cell' in t)
+    && D.HEAT.thresholds[0].cellEffect === null);
+  equal('the cell escalates from a member at Personal Heat 3', D.HEAT.tracks.cellEscalationAtPersonal, 3);
+  equal('suspicion dice come off the threshold table, not a restated level',
+    H.heatSetbackDice({ personalHeat: 1, cellHeat: 0 }), 1);
+  equal('cell suspicion adds its own die from level 2', H.heatSetbackDice({ personalHeat: 1, cellHeat: 2 }), 2);
+  equal('a private check takes no suspicion dice',
+    H.heatSetbackDice({ personalHeat: 5, cellHeat: 5, isPublicCheck: false }), 0);
+  equal('safehouse status is read off the thresholds: clear', H.safehouseFor(0), 'clear');
+  equal('safehouse status is read off the thresholds: watched', H.safehouseFor(3), 'watched');
+  equal('safehouse status is read off the thresholds: blown', H.safehouseFor(5), 'blown');
+  check('the symbol glyphs and names in the UI layer come from the data table',
+    D.SYMBOLS.every((sym) => UI.SYMBOL_GLYPHS[sym.id] === sym.glyph && UI.SYMBOL_NAMES[sym.id] === sym.name));
+
+  // --- Medicine difficulty ladder (§5G) ---
+  const medEasy = R.medicineDifficulty({ wounds: 4, woundThreshold: 10 });
+  equal('treating light wounds is Easy', medEasy.difficulty, 'easy');
+  equal('past half the threshold it is Average', R.medicineDifficulty({ wounds: 6, woundThreshold: 10 }).difficulty, 'average');
+  equal('past the threshold itself it is Hard', R.medicineDifficulty({ wounds: 12, woundThreshold: 10 }).difficulty, 'hard');
+  equal('treating yourself adds two steps',
+    R.medicineDifficulty({ wounds: 4, woundThreshold: 10, selfTreatment: true }).difficulty, 'hard');
+  equal('no medical kit adds one more',
+    R.medicineDifficulty({ wounds: 4, woundThreshold: 10, selfTreatment: true, noEquipment: true }).difficulty, 'daunting');
+  equal('both modifiers are named back to the player',
+    R.medicineDifficulty({ wounds: 4, woundThreshold: 10, selfTreatment: true, noEquipment: true }).applied.length, 2);
+
+  // --- falls (§5I): mitigation first, then soak, and strain is never soaked ---
+  const shortFall = R.fallDamage({ band: 'short', soak: 3, successes: 0, advantages: 0 });
+  equal('a short fall starts at 10 wounds', shortFall.rawWounds, 10);
+  equal('soak comes off the wounds', shortFall.wounds, 7);
+  equal('strain is not reduced by soak', shortFall.strain, 10);
+  equal('each success on the mitigation check saves a wound',
+    R.fallDamage({ band: 'short', soak: 3, successes: 2 }).wounds, 5);
+  equal('each advantage saves a point of strain',
+    R.fallDamage({ band: 'short', soak: 3, advantages: 4 }).strain, 6);
+  equal('a long fall uses the threshold formula',
+    R.fallDamage({ band: 'long', woundThreshold: 12, soak: 0 }).rawWounds, 13);
+  equal('a long fall carries its Critical Injury modifier',
+    R.fallDamage({ band: 'long', woundThreshold: 12 }).criticalModifier, 50);
+  equal('an extreme fall carries the larger one',
+    R.fallDamage({ band: 'extreme', woundThreshold: 12 }).criticalModifier, 75);
+
+  // --- called shots and two-weapon fighting carry structured data, not just prose ---
+  equal('aiming twice halves the called-shot penalty',
+    D.CALLED_SHOTS.setbackByAim.find((a) => a.aimManeuvers === 2).setback, 1);
+  equal('a called shot costs three advantage to pay off', D.CALLED_SHOTS.payoffAdvantageCost, 3);
+  equal('two-weapon fighting raises the difficulty one step', D.COMBAT_VARIANTS.twoWeapon.extraDifficultySteps, 1);
+  equal('the off-hand hit costs two advantage', D.COMBAT_VARIANTS.twoWeapon.secondaryHit.advantage, 2);
+  equal('four group-influence bands', D.SOCIAL_ENCOUNTERS.groupInfluenceLadder.length, 4);
+
+  // --- every extracted table reaches the rules library ---
+  const library = RI.buildIndex();
+  const hasEntry = (re) => library.some((e) => re.test(e.title));
+  check('movement costs are in the library', hasEntry(/^Moving from /));
+  check('the falling mitigation rule is in the library', hasEntry(/^Falling: soak/));
+  check('the character-sheet field reference is in the library', hasEntry(/^On the character sheet: /));
+  check('the weapon Heat note is in the library', hasEntry(/^Carrying a weapon$/));
+  check('the vehicle Heat note is in the library', hasEntry(/^Owning a vehicle$/));
+  check('no library entry leaks a section marker',
+    library.every((e) => !/(?:B?§|D§)[0-9]/.test(`${e.title} ${e.body}`)),
+    (library.find((e) => /(?:B?§|D§)[0-9]/.test(`${e.title} ${e.body}`)) || {}).title);
 
   // --- solo tables (§18–§20, §23) ---
   equal('3 Oracle likelihoods', S.ORACLE.likelihoods.length, 3);

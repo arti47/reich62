@@ -254,6 +254,37 @@ async function main() {
     await page.waitForTimeout(90);
     equal('leaving cover removes it again', await dieCount('Boost'), 0);
 
+    // --- called shots, two-weapon fighting and swaying a crowd (§10A, §5H, §11) ---
+    await page.selectOption('#roller-difficulty', 'average');
+    await page.waitForTimeout(90);
+    const setbackBefore = await dieCount('Setback');
+    await page.selectOption('#roller-called-shot', '1');
+    await page.waitForTimeout(90);
+    equal('a called shot aimed once adds two Setback', await dieCount('Setback'), setbackBefore + 2);
+    await page.selectOption('#roller-called-shot', '2');
+    await page.waitForTimeout(90);
+    equal('aiming twice in a row halves that', await dieCount('Setback'), setbackBefore + 1);
+    await page.selectOption('#roller-called-shot', '');
+    await page.waitForTimeout(90);
+    equal('dropping the called shot takes the Setback back off', await dieCount('Setback'), setbackBefore);
+
+    const difficultyBefore = await dieCount('Difficulty');
+    await page.locator('#roller-two-weapon').check();
+    await page.waitForTimeout(90);
+    equal('a second weapon makes the check one step harder', await dieCount('Difficulty'), difficultyBefore + 1);
+    check('the app says what the off-hand hit costs',
+      /2 advantage or 1 triumph/i.test(await page.locator('#screen').innerText()));
+    await page.locator('#roller-two-weapon').uncheck();
+    await page.waitForTimeout(90);
+    equal('putting the second weapon away takes it back off', await dieCount('Difficulty'), difficultyBefore);
+
+    await page.selectOption('#roller-audience', '16–50');
+    await page.waitForTimeout(90);
+    equal('a crowd of 16 to 50 sets a Daunting difficulty', await dieCount('Difficulty'), 4);
+    await page.selectOption('#roller-audience', '');
+    await page.waitForTimeout(90);
+    equal('back to one listener and the picker governs again', await dieCount('Difficulty'), difficultyBefore);
+
     // Changing the skill rebuilds the positive side.
     await page.selectOption('#roller-skill', 'athletics');
     await page.waitForTimeout(90);
@@ -398,6 +429,49 @@ async function main() {
     check('a night\'s rest heals 1 wound and all strain (§5G)',
       /Injury 0\/10/.test(await page.locator('#resource-header').innerText()));
     check('the once-per-night limit is enforced', await page.locator('#recovery-nightRest').isDisabled());
+
+    // --- the Medicine ladder works itself out from the patient's own wounds (§5G) ---
+    check('an unhurt patient is an Easy Medicine check',
+      /easy medicine check/i.test(await page.locator('#medicine-difficulty').innerText()),
+      await page.locator('#medicine-difficulty').innerText());
+    await page.locator('#medicine-selfTreatment').check();
+    await page.waitForTimeout(90);
+    check('treating yourself pushes it two steps up the ladder',
+      /hard medicine check/i.test(await page.locator('#medicine-difficulty').innerText()),
+      await page.locator('#medicine-difficulty').innerText());
+    await page.locator('#medicine-noEquipment').check();
+    await page.waitForTimeout(90);
+    check('with no kit either, one step more',
+      /daunting medicine check/i.test(await page.locator('#medicine-difficulty').innerText()),
+      await page.locator('#medicine-difficulty').innerText());
+    await page.locator('#medicine-to-roller').click();
+    await page.waitForTimeout(140);
+    equal('the check lands on the Roll screen ready to go', await page.inputValue('#roller-skill'), 'medicine');
+    equal('at the difficulty the ladder worked out', await page.inputValue('#roller-difficulty'), 'daunting');
+
+    // --- falls: mitigation first, then soak, and strain is never soaked (§5I) ---
+    await go('#/sheet');
+    await subtab('Recovery');
+    await page.locator('#medicine-selfTreatment').uncheck();
+    await page.locator('#medicine-noEquipment').uncheck();
+    await page.selectOption('#fall-band', 'short');
+    await page.fill('#fall-successes', '3');
+    await page.fill('#fall-advantages', '4');
+    await page.locator('#apply-fall').click();
+    await page.waitForTimeout(140);
+    const fallText = await page.locator('#screen').innerText();
+    check('the fall reports wounds after soak and strain untouched by it',
+      /short fall/i.test(fallText) && /strain/i.test(fallText), fallText.slice(0, 160));
+    check('the fall reached the sheet\'s vitals',
+      /Injury [1-9]/.test(await page.locator('#resource-header').innerText()),
+      await page.locator('#resource-header').innerText());
+    await page.selectOption('#fall-band', 'long');
+    await page.fill('#fall-successes', '0');
+    await page.fill('#fall-advantages', '0');
+    await page.locator('#apply-fall').click();
+    await page.waitForTimeout(140);
+    check('a long fall says to roll a Critical Injury at +50',
+      /\+50/.test(await page.locator('#screen').innerText()));
 
     // --- Phase 6 surface: the GM screen with the bestiary browser ---
     await go('#/settings');
@@ -658,6 +732,60 @@ async function main() {
     await page.getByRole('button', { name: 'Roll Stealth' }).click();
     await page.waitForTimeout(120);
     equal('a second skill replaces the first', await page.inputValue('#roller-skill'), 'stealth');
+
+    // --- accessibility sweep: every control has a name, headings do not skip ---
+    const A11Y_PROBE = () => {
+      const problems = [];
+      const name = (node) => {
+        const aria = (node.getAttribute('aria-label') || '').trim();
+        if (aria) return aria;
+        const by = node.getAttribute('aria-labelledby');
+        if (by) {
+          const target = document.getElementById(by);
+          if (target && target.innerText.trim()) return target.innerText.trim();
+        }
+        if (node.id) {
+          const forLabel = document.querySelector(`label[for="${CSS.escape(node.id)}"]`);
+          if (forLabel && forLabel.innerText.trim()) return forLabel.innerText.trim();
+        }
+        const wrapping = node.closest('label');
+        if (wrapping && wrapping.innerText.trim()) return wrapping.innerText.trim();
+        if (node.title && node.title.trim()) return node.title.trim();
+        return (node.innerText || '').trim();
+      };
+      const describe = (node) => `${node.tagName.toLowerCase()}${node.id ? '#' + node.id : ''}`;
+      document.querySelectorAll('#screen button, #screen a, #screen input, #screen select, #screen textarea')
+        .forEach((node) => { if (!name(node)) problems.push(`unnamed ${describe(node)}`); });
+      document.querySelectorAll('#screen [tabindex]').forEach((node) => {
+        if (Number(node.getAttribute('tabindex')) > 0) problems.push(`positive tabindex on ${describe(node)}`);
+      });
+      let previous = 1; // the app header owns the only h1
+      document.querySelectorAll('#screen h1, #screen h2, #screen h3, #screen h4, #screen h5')
+        .forEach((node) => {
+          const level = Number(node.tagName.slice(1));
+          if (level > previous + 1) problems.push(`heading jumps h${previous}→h${level} at "${node.innerText.slice(0, 30)}"`);
+          previous = level;
+        });
+      document.querySelectorAll('#screen table').forEach((table, i) => {
+        if (!table.querySelector('th')) problems.push(`table ${i} has no header cells`);
+      });
+      return problems;
+    };
+    check('exactly one h1 on the page', (await page.locator('h1').count()) === 1);
+    for (const hash of ['#/', '#/sheet', '#/roll', '#/create', '#/combat', '#/solo', '#/gm', '#/rules', '#/settings', '#/safety']) {
+      await go(hash);
+      await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+      await page.waitForTimeout(80);
+      const problems = await page.evaluate(A11Y_PROBE);
+      check(`${hash} passes the accessibility sweep`, problems.length === 0, [...new Set(problems)].slice(0, 5).join(' | '));
+    }
+    // Every sub-tab pane on the sheet, not just the one that opens by default.
+    await go('#/sheet');
+    for (const tab of ['Vitals', 'Skills', 'Gear', 'Talents & injuries', 'Recovery', 'Advance']) {
+      await subtab(tab);
+      const problems = await page.evaluate(A11Y_PROBE);
+      check(`sheet ${tab} passes the accessibility sweep`, problems.length === 0, [...new Set(problems)].slice(0, 5).join(' | '));
+    }
 
     // --- deleting a character: confirms first, then removes it everywhere ---
     await go('#/');

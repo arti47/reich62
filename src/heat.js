@@ -48,10 +48,14 @@ export function cellEffects(level) {
   return HEAT.thresholds.filter((t) => t.level <= level).map((t) => t.cell).filter(Boolean);
 }
 
-/** Setback dice the current Heat adds to a public check (§17.3). */
+/** Setback dice the current Heat adds to a public check (§17.3).
+ *  Both the levels and the dice counts are read off HEAT.thresholds — nothing is restated here. */
 export function heatSetbackDice({ personalHeat = 0, cellHeat = 0, isPublicCheck = true }) {
   if (!isPublicCheck) return 0;
-  return (personalHeat >= 1 ? 1 : 0) + (cellHeat >= 2 ? 1 : 0);
+  const sum = (level, key) => HEAT.thresholds
+    .filter((t) => t.level <= level && t[key] && t[key].scope === 'public')
+    .reduce((n, t) => n + (t[key].setback || 0), 0);
+  return sum(personalHeat, 'personalEffect') + sum(cellHeat, 'cellEffect');
 }
 
 export function applyPersonalHeat(character, delta) {
@@ -63,21 +67,23 @@ export function applyPersonalHeat(character, delta) {
   return { before, after, crossed: HEAT.thresholds.filter((t) => t.level > before && t.level <= after), escalation };
 }
 
-/** Any member at Personal Heat 3 or more pushes Cell Heat up (§17.2). */
+/** Any member at or past the escalation level pushes Cell Heat up (§17.2). */
+export const CELL_ESCALATION_AT = HEAT.tracks.cellEscalationAtPersonal;
+
 export function escalateCell(personalHeat) {
-  if (personalHeat < 3) return null;
+  if (personalHeat < CELL_ESCALATION_AT) return null;
   const cell = getCell();
   const before = cell.cellHeat;
   cell.cellHeat = clamp(before + 1, HEAT.min, HEAT.max);
   cell.safehouseStatus = safehouseFor(cell.cellHeat);
   saveCell(cell);
-  return { before, after: cell.cellHeat, reason: 'A member reached Personal Heat 3 or more' };
+  return { before, after: cell.cellHeat, reason: `A member reached Personal Heat ${CELL_ESCALATION_AT} or more` };
 }
 
+/** Safehouse status: the highest threshold at or below the level that names one (§17.3, §3.8). */
 export function safehouseFor(cellHeat) {
-  if (cellHeat >= 5) return 'blown';
-  if (cellHeat >= 3) return 'watched';
-  return 'clear';
+  const reached = HEAT.thresholds.filter((t) => t.level <= cellHeat && t.safehouseStatus);
+  return reached.length ? reached[reached.length - 1].safehouseStatus : HEAT.safehouseDefault;
 }
 
 export function applyCellHeat(delta) {

@@ -9,7 +9,10 @@ import {
 } from '../data.js';
 import { BESTIARY, ENCOUNTER_BLOCKS } from '../data-monsters.js';
 import { VEHICLES, VEHICLE_RULES } from '../data.js';
-import { minionGroupWoundThreshold, minionGroupSkillRanks, bestiaryEntry, encounterBlock } from './rules.js';
+import {
+  minionGroupWoundThreshold, minionGroupSkillRanks, minionCriticalWoundCost,
+  bestiaryEntry, encounterBlock
+} from './rules.js';
 import { woundThreshold, strainThreshold, soak, derivedFor } from './derived.js';
 import {
   getCombat, saveCombat, blankCombat, listTasks, saveTasks, activeCharacter, listCharacters,
@@ -221,7 +224,7 @@ export function damageCombatant(combatantId, { wounds = 0, strain = 0, critical 
     const perMember = c.woundThresholdPerMember || 1;
     if (critical) {
       // Any Critical Injury takes one minion out; the group takes that share plus one (§12C).
-      c.wounds += perMember + 1;
+      c.wounds += minionCriticalWoundCost(perMember);
       notes.push('A Critical Injury instantly takes one minion out of the fight.');
     }
     const dropped = Math.min(c.minionCount, Math.floor(c.wounds / perMember));
@@ -572,7 +575,7 @@ export function renderCombat(mount) {
   const rerender = () => renderCombat(mount);
   const combat = getCombat();
   if (lastBoundaryResult) {
-    mount.append(outcomeBox([`${lastBoundaryResult.name} applied.`, ...lastBoundaryResult.deltas, 'Undo is available below until you fire another boundary.'], { title: 'What just happened' }));
+    mount.append(outcomeBox([`${lastBoundaryResult.name} applied.`, ...lastBoundaryResult.deltas, 'Undo is available below until you fire another boundary.'], { title: 'What just happened', level: 2 }));
   }
 
   // --- lifecycle controls ---

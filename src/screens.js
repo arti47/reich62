@@ -162,7 +162,7 @@ export function renderRules(mount, params = {}) {
       const body = el('div', {});
       slice.forEach((item) => {
         body.append(el('article', { class: 'rule-entry' }, [
-          el('h4', { text: item.title }),
+          el('h3', { text: item.title }),
           el('p', { text: item.body }),
           item.badge ? el('span', { class: `badge ${item.badgeClass || ''}`, text: item.badge }) : null
         ]));
@@ -268,7 +268,8 @@ export function renderSettings(mount) {
       el('label', { for: `flag-${flag.id}` }, [
         el('span', { text: flag.label }),
         blocked ? el('span', { class: 'badge badge-inferred', text: 'blocked' }) : null,
-        el('span', { class: 'toggle-desc', text: flag.desc })
+        el('span', { class: 'toggle-desc', text: flag.desc }),
+        flag.note ? el('span', { class: 'toggle-desc muted', text: flag.note() }) : null
       ])
     ]));
   });

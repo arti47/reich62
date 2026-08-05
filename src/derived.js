@@ -28,7 +28,9 @@ export function blankCharacter(over = {}) {
       wounds: 0, strain: 0, criticalInjuries: [], critModifier: 0, conditions: {},
       incapacitated: false, deathState: null, personalHeat: 0, surveilledContext: false,
       perEncounterFlags: {}, perSceneFlags: {}, perSessionFlags: {}, perDayFlags: { painkillers: 0 },
-      perWeekFlags: {}, restLimits: {}
+      perWeekFlags: {}, restLimits: {},
+      // How the Medicine check is being made (§5G) and the last fall's summary (§5I).
+      careFlags: { selfTreatment: false, noEquipment: false }, lastFall: null
     },
     xp: { total: 70, available: 70 },
     advancementLog: [],
@@ -45,6 +47,7 @@ export function normalise(character) {
   out.identity.motivation = { ...base.identity.motivation, ...((character.identity || {}).motivation || {}) };
   out.attributes = { ...base.attributes, ...(character.attributes || {}) };
   out.state = { ...base.state, ...(character.state || {}) };
+  out.state.careFlags = { ...base.state.careFlags, ...((character.state || {}).careFlags || {}) };
   out.inventory = { ...base.inventory, ...(character.inventory || {}) };
   out.inventory.money = { ...base.inventory.money, ...((character.inventory || {}).money || {}) };
   out.xp = { ...base.xp, ...(character.xp || {}) };

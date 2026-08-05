@@ -3,7 +3,8 @@
 import {
   SKILLS, CHARACTERISTICS, DIFFICULTIES, TALENTS, TALENT_RULES, CAREERS, WEAPONS, ARMOUR,
   GEAR, VEHICLES, ITEM_QUALITIES, CRITICAL_INJURIES, CRITICAL_INJURY_RULES, CONDITIONS,
-  RARITY, POOL_BUILD, UPGRADE_MAP, DOWNGRADE_MAP, MODIFICATION_ORDER, XP_COSTS
+  RARITY, POOL_BUILD, UPGRADE_MAP, DOWNGRADE_MAP, MODIFICATION_ORDER, XP_COSTS,
+  RECOVERY, FALLING, FALLING_RULES
 } from '../data.js';
 import { BLACK_MARKET } from '../data.js';
 import { ADVERSARY_ABILITIES, ADVERSARY_TIERS } from '../data-npcs.js';
@@ -87,6 +88,44 @@ export function stepDifficulty(levelId, steps) {
   if (index < 0) return levelId;
   const next = Math.min(ladder.length - 1, Math.max(0, index + steps));
   return ladder[next].id;
+}
+
+/** Difficulty of a Medicine check to treat wounds (§5G).
+ *  The ladder and both modifiers come from the RECOVERY table; nothing is restated here. */
+export function medicineDifficulty({ wounds, woundThreshold: wt, selfTreatment = false, noEquipment = false }) {
+  const method = RECOVERY.methods.find((m) => m.id === 'medicineWounds');
+  const [easy, average, hard] = method.difficultyRule;
+  let base = easy.difficulty;
+  if (wounds > wt) base = hard.difficulty;
+  else if (wounds > wt / 2) base = average.difficulty;
+  const applied = [];
+  let steps = 0;
+  method.modifiers.forEach((mod) => {
+    const on = (mod.id === 'selfTreatment' && selfTreatment) || (mod.id === 'noEquipment' && noEquipment);
+    if (!on) return;
+    steps += mod.difficultySteps;
+    applied.push(`${mod.label}: ${mod.difficultySteps} step${mod.difficultySteps === 1 ? '' : 's'} harder`);
+  });
+  return { base, difficulty: steps ? stepDifficulty(base, steps) : base, steps, applied };
+}
+
+/** Wounds and strain from a fall, and the Critical Injury modifier it carries (§5I).
+ *  Mitigation is the Average Athletics or Coordination check the rules allow. */
+export function fallDamage({ band, woundThreshold: wt = 0, soak: soakValue = 0, successes = 0, advantages = 0 }) {
+  const row = FALLING.find((f) => f.band === band);
+  if (!row) return null;
+  const rawWounds = row.wounds !== undefined ? row.wounds : wt + 1;
+  // Mitigation first, then soak — soak reduces wounds only, never strain (FALLING_RULES).
+  const mitigated = Math.max(0, rawWounds - successes);
+  return {
+    band,
+    rawWounds,
+    wounds: Math.max(0, mitigated - soakValue),
+    strain: Math.max(0, row.strain - advantages),
+    criticalModifier: row.criticalModifier || 0,
+    note: row.note || null,
+    soakApplied: Math.min(soakValue, mitigated)
+  };
 }
 
 /** Critical Injury lookup on roll + modifiers; results past 100 are reachable (R-14). */
@@ -193,6 +232,11 @@ export function minionGroupWoundThreshold(perMember, members) {
 /** Group skill ranks for a minion group: members minus one (§12C). */
 export function minionGroupSkillRanks(members) {
   return adversaryTier('minion').groupSkillRanks(members);
+}
+
+/** Wounds a minion group takes when a Critical Injury lands: one member's share plus one (§12C). */
+export function minionCriticalWoundCost(perMember) {
+  return adversaryTier('minion').criticalWoundCost(perMember);
 }
 
 export { RANDOM_ENCOUNTERS };

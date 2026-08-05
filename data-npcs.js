@@ -16,6 +16,8 @@ export const ADVERSARY_TIERS = [
     groupSkillRanks: (members) => Math.max(0, members - 1),
     // R-18 — the bestiary prints per-member thresholds; group WT is per-member × count.
     groupWoundThreshold: (perMember, members) => perMember * members,
+    // A Critical Injury takes one minion out: the group eats that member's share plus one.
+    criticalWoundCost: (perMember) => perMember + 1,
     threatGuide: '1 minion is negligible; 2–3 are a fair threat to one starting PC; 3–4 suit a PC with 100 or more XP spent.'
   },
   {
