@@ -12,7 +12,7 @@ import { talent, buildPool, canBuyTalent, visibleTalents, xpCost, skill as skill
 import { ITEM_DAMAGE, ATTACHMENTS, DIFFICULTIES } from '../data.js';
 import { hardPoints } from './derived.js';
 import { Settings } from './settings.js';
-import { rollCriticalInjury } from './roller.js';
+import { rollCriticalInjury, state as rollerState } from './roller.js';
 import {
   derivedFor, woundThreshold, strainThreshold, soak, encumbranceState, criticalModifier
 } from './derived.js';
@@ -146,7 +146,14 @@ function pane_skills(mount, character, derived, rerender) {
     const rank = character.skills[s.id].rank;
     const pool = buildPool(rank, character.attributes[s.characteristic]);
     skillTable.append(el('tr', {}, [
-      el('td', { text: `${s.name}${character.skills[s.id].career ? ' ●' : ''}` }),
+      // Tapping a skill selects it on the Roll screen and goes there, so the sheet is the
+      // way into a check rather than a place to read the skill's name and retype it.
+      el('td', {}, [el('button', {
+        type: 'button', class: 'skill-link',
+        'aria-label': `Roll ${s.name}`,
+        text: `${s.name}${character.skills[s.id].career ? ' ●' : ''}`,
+        onclick: () => { rollerState.skillId = s.id; location.hash = '#/roll'; }
+      })]),
       el('td', { text: String(rank) }),
       el('td', { class: 'dice-glyph', text: `${pool.ability}A ${pool.proficiency}P` })
     ]));
