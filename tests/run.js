@@ -580,6 +580,20 @@ async function main() {
     check('the safety-tools note covers session zero and rule zero',
       /Rule zero/.test(await page.locator('#screen').innerText()));
 
+    // --- a skill on the sheet selects itself on the Roll screen and goes there ---
+    await go('#/sheet');
+    await subtab('Skills');
+    await page.getByRole('button', { name: 'Roll Medicine' }).click();
+    await page.waitForTimeout(120);
+    equal('tapping a skill jumps to the Roll screen', new URL(page.url()).hash, '#/roll');
+    equal('the skill is already selected there', await page.inputValue('#roller-skill'), 'medicine');
+    check('the pool is built from that skill', (await page.locator('.die-count').first().count()) === 1);
+    await go('#/sheet');
+    await subtab('Skills');
+    await page.getByRole('button', { name: 'Roll Stealth' }).click();
+    await page.waitForTimeout(120);
+    equal('a second skill replaces the first', await page.inputValue('#roller-skill'), 'stealth');
+
     // --- deleting a character: confirms first, then removes it everywhere ---
     await go('#/');
     const charCard = () => page.locator('.result', { hasText: 'Test Runner' }).first();

@@ -240,6 +240,19 @@ button.primary, button.secondary {
 button.primary { border-color: var(--brass); }
 button.primary:hover, button.secondary:hover { background: var(--rule); }
 
+/* A skill name on the sheet is the way into its check, so it reads as a link. */
+.skill-link {
+  font: inherit;
+  text-align: left;
+  padding: 0.35rem 0;
+  border: 0;
+  background: none;
+  color: var(--focus);
+  cursor: pointer;
+  min-height: 2.25rem;
+}
+.skill-link:hover { text-decoration: underline; }
+
 input[type="search"], input[type="text"], input[type="number"], select, textarea {
   font: inherit;
   color: var(--ink);
