@@ -31,6 +31,31 @@ export const ORACLE = {
     noAnd: 'Two or more net Failure with no Advantage left over.',
     badge: 'inferred — the printed pool cannot roll a Triumph or a Despair'
   },
+  // R-22, second half — the same magnitude reading, carried the whole way up and down the
+  // scale rather than stopping at the "and" rung. How many net Success or Failure survive
+  // says how hard the answer lands; leftover Advantage or Threat rides alongside it as the
+  // string attached. Both are read off the printed symbols; nothing is added to the pool.
+  intensity: {
+    ruling: 'R-22',
+    // `min` is the number of net Success (for a yes) or net Failure (for a no).
+    levels: [
+      { min: 0, id: 'marginal',     label: 'Marginal',     note: 'The dice barely lean either way — the answer holds, but only just.' },
+      { min: 1, id: 'slight',       label: 'Slight',       note: 'A plain answer with nothing behind it.' },
+      { min: 2, id: 'clear',        label: 'Clear',        note: 'Emphatic enough to carry a complication with it.' },
+      { min: 3, id: 'strong',       label: 'Strong',       note: 'The answer arrives with force; play it as more than you asked for.' },
+      { min: 4, id: 'overwhelming', label: 'Overwhelming', note: 'As far as the dice go — treat it as settled beyond argument.' }
+    ],
+    // Leftover Advantage on a no, or Threat on a yes, is the string attached.
+    riders: [
+      { min: 1, id: 'minor',   label: 'a minor' },
+      { min: 2, id: 'notable', label: 'a real' },
+      { min: 3, id: 'major',   label: 'a major' }
+    ],
+    riderNote: {
+      advantage: 'upside that comes with it regardless',
+      threat: 'complication that comes with it regardless'
+    }
+  },
   procedure: [
     'Frame the question and set its likelihood.',
     'Roll the listed Ability dice against the listed Difficulty dice.',

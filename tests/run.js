@@ -590,6 +590,22 @@ async function main() {
     check('R-22: an emphatic answer chains a Random Event', /Random Event/.test(emphatic), emphatic.replace(/\n/g, ' | '));
     check('R-22: it feeds Heat in a surveilled context like a Despair would',
       (await page.locator('#resource-header').innerText()) !== heatBeforeEmphatic);
+    check('R-22: the answer is graded for how hard it landed',
+      (await page.locator('#oracle-answer .status-chip').count()) === 1,
+      (await page.locator('#oracle-answer').innerText()).replace(/\n/g, ' | '));
+
+    // Three failures land harder than two, and a leftover Advantage rides along with it.
+    await page.getByRole('button', { name: 'One more oracle failure' }).click();
+    await page.getByRole('button', { name: 'One more oracle failure' }).click();
+    await page.getByRole('button', { name: 'One more oracle failure' }).click();
+    await page.getByRole('button', { name: 'One more oracle advantage' }).click();
+    await page.locator('#oracle-ask-entered').click();
+    await page.waitForTimeout(140);
+    const graded = await page.locator('#oracle-answer').innerText();
+    check('R-22: three net failures read as a stronger answer', /strong/i.test(graded), graded.replace(/\n/g, ' | '));
+    check('R-22: leftover Advantage on a no is stated as a rider', /upside/i.test(graded), graded.replace(/\n/g, ' | '));
+    check('R-22: the Oracle log records how hard the answer landed',
+      /\((marginal|slight|clear|strong|overwhelming)\)/.test(await page.locator('#oracle-log').innerText()));
 
     // --- the Oracle keeps its own log, separate from the Roll screen's ---
     check('answers land in the Oracle log', (await page.locator('#oracle-log .log-row').count()) >= 2,
