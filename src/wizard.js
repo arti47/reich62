@@ -225,6 +225,19 @@ export function toggleCareerSkill(id) {
   return null;
 }
 
+/** Unspent budget is kept, and a d100 of pocket money is rolled after the gear is
+ *  bought. Pocket money is spending money in play; it cannot buy more starting gear. */
+export function rollPocketMoney() {
+  draft.identity.pocketMoney = rollDie(CREATION_RULES.houseAid.pocketMoney.die);
+  return draft.identity.pocketMoney;
+}
+
+export function startingCash() {
+  const unspent = Math.max(0, Settings.startingBudget() - gearSpent());
+  const pocket = draft.identity.pocketMoney || 0;
+  return { unspent, pocket, total: unspent + pocket };
+}
+
 export function rollMotivation(facet) {
   const table = MOTIVATIONS[facet];
   const roll = rollDie(10); // R-10
@@ -239,6 +252,9 @@ export function finish() {
   }
   const character = normalise(draft);
   character.creation = { open: false, completedAt: Date.now() };
+  // Whatever was not spent on gear, plus the pocket money, becomes the character's cash.
+  const cash = startingCash();
+  character.inventory.money.amount = (character.inventory.money.amount || 0) + cash.total;
   character.state.wounds = 0;
   character.state.strain = 0;
   const saved = saveCharacter(character);
@@ -486,8 +502,27 @@ function renderGearStep(node) {
   const budget = Settings.startingBudget();
   node.append(el('p', { class: 'small' }, [
     el('span', { class: 'badge badge-house', text: 'house aid — not a printed rule' }), ' ',
-    `The manual names neither a currency nor a budget (R-8). Spending ${gearSpent()} of ${budget} ${Settings.currencyLabel()}.`
+    `Spending ${gearSpent()} of ${budget} ${Settings.currencyLabel()}.`
   ]));
+
+  // Pocket money: rolled once, after the shopping, and kept apart from the budget.
+  const cash = startingCash();
+  const pocketRow = el('div', { class: 'result' }, [
+    el('div', { class: 'result-head' }, [
+      el('span', { class: 'result-title', text: 'Pocket money' }),
+      el('span', { class: 'cite', text: `d${CREATION_RULES.houseAid.pocketMoney.die}` })
+    ]),
+    el('div', { class: 'result-body', text: draft.identity.pocketMoney
+      ? `Rolled ${draft.identity.pocketMoney} ${Settings.currencyLabel()}. It cannot buy more starting gear, but you keep it to spend in play.`
+      : 'Roll this once you have finished shopping. It cannot buy more starting gear — it is money in your pocket when play begins.' })
+  ]);
+  pocketRow.append(el('button', {
+    type: 'button', class: 'secondary', id: 'roll-pocket-money',
+    text: draft.identity.pocketMoney ? 'Roll again' : 'Roll pocket money',
+    onclick: () => { const rolled = rollPocketMoney(); showToast(`Pocket money: ${rolled} ${Settings.currencyLabel()}`); rerender(); }
+  }));
+  node.append(pocketRow);
+  node.append(el('p', { class: 'small muted', text: `You will start play with ${cash.total} ${Settings.currencyLabel()}: ${cash.unspent} left from the budget${cash.pocket ? ` and ${cash.pocket} in pocket money` : ''}.` }));
   const catalogue = [
     ...WEAPONS.filter((w) => w.price).map((w) => ({ ...w, kind: 'weapon' })),
     ...ARMOUR.filter((a) => a.price).map((a) => ({ ...a, kind: 'armour' })),
@@ -534,4 +569,6 @@ function renderReviewStep(node) {
   node.append(el('p', { class: 'small', text: `Talents: ${draft.talents.map((t) => `${talent(t.id).name}${t.ranks > 1 ? ` ×${t.ranks}` : ''}`).join(', ') || 'none'}` }));
   const m = draft.identity.motivation;
   node.append(el('p', { class: 'small', text: `Motivation: ${m.desire} / ${m.fear} / ${m.strength} / ${m.flaw}` }));
+  const cash = startingCash();
+  node.append(el('p', { class: 'small', text: `Starting cash: ${cash.total} ${Settings.currencyLabel()} — ${cash.unspent} unspent from the budget${cash.pocket ? `, plus ${cash.pocket} pocket money` : ', with no pocket money rolled yet'}.` }));
 }

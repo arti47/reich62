@@ -193,11 +193,27 @@ async function main() {
       !(await page.getByRole('button', { name: 'Next', exact: true }).isDisabled()));
     await page.getByRole('button', { name: 'Next', exact: true }).click();   // gear
     check('R-8 house-aid badge on the gear step', await page.getByText('house aid — not a printed rule').first().isVisible());
+    // Pocket money: rolled once the shopping is done, kept apart from the budget.
+    await page.getByRole('button', { name: 'Roll pocket money' }).click();
+    await page.waitForTimeout(90);
+    const pocketText = await page.locator('.result', { hasText: 'Pocket money' }).innerText();
+    const pocket = Number((pocketText.match(/Rolled (\d+)/) || [])[1]);
+    check('pocket money rolls a d100', pocket >= 1 && pocket <= 100, String(pocket));
+    check('pocket money cannot buy more starting gear',
+      /cannot buy more starting gear/i.test(pocketText), pocketText.replace(/\n/g, ' | '));
+
     await page.getByRole('button', { name: 'Next', exact: true }).click();   // review
     await page.getByRole('button', { name: 'Save character' }).click();
     await page.waitForSelector('#resource-header:not([hidden])');
 
     check('saving lands on the sheet', new URL(page.url()).hash === '#/sheet');
+
+    // Unspent budget plus pocket money becomes the character's cash.
+    await subtab('Gear');
+    const startingCash = Number(await page.inputValue('#purse-cash'));
+    check('the character starts with the unspent budget plus pocket money',
+      startingCash >= 500 && startingCash <= 600, String(startingCash));
+    await subtab('Vitals');
     check('persistent resource header appears', await page.locator('#resource-header .chip').count() >= 5);
     const header = await page.locator('#resource-header').innerText();
     check('the resource bar shows injury against its true limit', /Injury 0\/10/.test(header), header);

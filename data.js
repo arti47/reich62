@@ -914,7 +914,14 @@ export const CREATION_RULES = {
   skillRankCap: SKILL_RANK_MAX_AT_CREATION,
   careerSkillPicks: 4,
   // R-8 — the manual states neither a budget nor a currency name. House aid, labelled as one.
-  houseAid: { currencyLabel: 'RM', currencyName: 'Reichsmark', startingBudget: 500, ruling: 'R-8', badge: 'House aid — not a printed rule' }
+  houseAid: {
+    currencyLabel: 'RM', currencyName: 'Reichsmark', startingBudget: 500,
+    ruling: 'R-8', badge: 'House aid — not a printed rule',
+    // Unspent budget is kept as cash, and a d100 of pocket money is rolled once the gear
+    // is bought. Pocket money is spending money in play — it cannot buy more starting gear.
+    unspentKept: true,
+    pocketMoney: { die: 100, usableForStartingGear: false }
+  }
 };
 
 // T36 — Careers — §14. Eight listed skills each; the player picks four at rank 1.
