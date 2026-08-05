@@ -235,6 +235,23 @@ export function canBuyTalent(id, held = {}) {
   return { ok: true, tier, cost: TALENT_RULES.costPerTier[tier - 1] };
 }
 
+/** Is a set of held talents legal against the pyramid (§7)? Buying is gated by
+ *  `canBuyTalent`, but a refund can leave a legal set illegal, so the whole set is checked
+ *  before a character is saved. */
+export function pyramidLegal(held = {}) {
+  const counts = talentTierCounts(held);
+  for (let tier = 2; tier <= 5; tier += 1) {
+    if (counts[tier - 1] > counts[tier - 2]) {
+      return {
+        ok: false,
+        tier,
+        reason: `The talent pyramid is broken: ${counts[tier - 1]} in tier ${tier} but only ${counts[tier - 2]} in tier ${tier - 1}.`
+      };
+    }
+  }
+  return { ok: true, counts };
+}
+
 /** XP cost of a purchase (§7). */
 export function xpCost(kind, { newRating, newRank, tier, career: isCareer } = {}) {
   if (kind === 'characteristic') return XP_COSTS.characteristic.cost(newRating);

@@ -5,9 +5,10 @@
 // No src/ module may hardcode a rules value — it belongs here (CLAUDE.md §13.2).
 
 // ---------------------------------------------------------------------------
-// R-1 — the manual never prints the human archetype base thresholds (§6).
-// Confirmed ruling: WT 8 / ST 10. These two constants are the only place the
-// bases appear; a single edit here corrects the whole app.
+// R-1 — the human archetype base thresholds. The manual originally left them unstated;
+// the errata resolved them and §6 now prints "Human base Wound Threshold: 8, Human base
+// Strain Threshold: 10", carrying the errata's own inferred-value badge. These two
+// constants are the only place the bases appear; a single edit here corrects the whole app.
 export const BASE_WOUND_THRESHOLD = 8;   // R-1
 export const BASE_STRAIN_THRESHOLD = 10; // R-1
 
@@ -498,8 +499,10 @@ export const SILHOUETTE_RULE = {
 
 // T23 — Derived stats — §6, R-1
 export const DERIVED_FORMULAS = [
-  { id: 'woundThreshold',       name: 'Wound Threshold',       formula: 'BASE_WOUND_THRESHOLD + Brawn',      fixedAtCreation: true,  raisedBy: 'Toughened (+2 per rank)', cite: '§6', ruling: 'R-1' },
-  { id: 'strainThreshold',      name: 'Strain Threshold',      formula: 'BASE_STRAIN_THRESHOLD + Willpower', fixedAtCreation: true,  raisedBy: 'Grit (+1 per rank)',      cite: '§6', ruling: 'R-1' },
+  { id: 'woundThreshold',       name: 'Wound Threshold',       formula: 'BASE_WOUND_THRESHOLD + Brawn',      fixedAtCreation: true,  raisedBy: 'Toughened (+2 per rank)', cite: '§6', ruling: 'R-1',
+    baseNote: 'Base 8, stated in §6 and flagged there as an inferred value.' },
+  { id: 'strainThreshold',      name: 'Strain Threshold',      formula: 'BASE_STRAIN_THRESHOLD + Willpower', fixedAtCreation: true,  raisedBy: 'Grit (+1 per rank)',      cite: '§6', ruling: 'R-1',
+    baseNote: 'Base 10, stated in §6 and flagged there as an inferred value.' },
   { id: 'soak',                 name: 'Soak',                  formula: 'Brawn + armour soak',               fixedAtCreation: false, note: 'Recalculates live with Brawn, unlike the two thresholds.', cite: '§6' },
   { id: 'meleeDefense',         name: 'Melee Defence',         formula: '0 + armour + cover + talents',      cite: '§6' },
   { id: 'rangedDefense',        name: 'Ranged Defence',        formula: '0 + armour + cover + talents',      cite: '§6' },

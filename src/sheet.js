@@ -2,7 +2,7 @@
 // resource header that rides on every in-play screen.
 
 import { el, clear, titleCase, clamp } from './core.js';
-import { showToast, confirmModal, modal, panel, subTabs, accordion, emptyState, outcomeBox, numberStepper } from './ui.js';
+import { showToast, confirmModal, promptModal, modal, panel, subTabs, accordion, emptyState, outcomeBox, numberStepper } from './ui.js';
 import { PANELS, label as termLabel, gloss } from './help.js';
 import {
   SKILLS, CHARACTERISTICS, CONDITIONS, HEAT, CRITICAL_INJURIES, SUFFOCATION, RECOVERY,
@@ -130,14 +130,33 @@ export function renderSheet(mount) {
 
   const derived = derivedFor(character);
 
-  mount.append(el('div', { class: 'card' }, [
+  const header = el('div', { class: 'card' }, [
     el('h2', { text: character.identity.name || 'Unnamed' }),
     el('p', { class: 'small muted', text: `${careerName(character.identity.career)} · ${character.xp.available} experience unspent` }),
     character.identity.erratum
       ? el('p', { class: 'small' }, [el('span', { class: 'badge badge-inferred', text: 'corrected' }), ' ', character.identity.erratum.note])
-      : null,
-    subTabs(SHEET_TABS, sheetTab, (id) => { sheetTab = id; rerender(); })
-  ]));
+      : null
+  ]);
+  // A name is the one thing you might want to change long after creation.
+  header.append(el('button', {
+    type: 'button', class: 'secondary', id: 'rename-character',
+    text: 'Rename', 'aria-label': `Rename ${character.identity.name || 'this character'}`,
+    onclick: async () => {
+      const next = await promptModal('What should this character be called?', {
+        title: 'Rename', value: character.identity.name || '', confirmLabel: 'Rename'
+      });
+      if (next === null) return;
+      const trimmed = String(next).trim();
+      if (!trimmed) { showToast('A character needs a name.'); return; }
+      if (trimmed === character.identity.name) return;
+      character.identity.name = trimmed;
+      saveCharacter(character);
+      showToast(`Renamed to ${trimmed}`);
+      rerender();
+    }
+  }));
+  header.append(subTabs(SHEET_TABS, sheetTab, (id) => { sheetTab = id; rerender(); }));
+  mount.append(header);
 
   PANES[sheetTab](mount, character, derived, rerender);
 }

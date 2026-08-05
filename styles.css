@@ -678,3 +678,26 @@ details.accordion > *:last-child { padding-bottom: 0.6rem; }
    each glyph the whole tab (B-7). The accessible name rides on the link itself. */
 .bottom-nav.nav-glyph-only a { padding: 0.5rem 0; }
 .bottom-nav.nav-glyph-only .nav-glyph { font-size: 1.3rem; }
+
+
+/* --- the update prompt ---
+   A persistent bar, not a timed toast: an update that arrives while the phone is pocketed
+   has to still be there when it comes back out. It sits above the bottom nav. */
+.update-bar {
+  position: fixed;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: calc(var(--nav-height, 3.5rem) + 0.5rem + env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--brass);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+.update-bar .update-text { flex: 1 1 100%; font-size: 0.9rem; }
+.update-bar button { margin: 0; }

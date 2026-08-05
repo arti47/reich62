@@ -393,6 +393,29 @@ export async function dataChecks({ check, equal }) {
   check('the revealed facets back-fill',
     oldSave.identity.motivationRevealed && oldSave.identity.motivationRevealed.desire === false);
 
+  // --- the XP engine at creation: no path may leave experience and ranks out of step ---
+  equal('every character gets the same 70', D.XP_COSTS.startingXp, 70);
+  equal('a characteristic to 5 costs 10 times the new rating', D.XP_COSTS.characteristic.cost(5), 50);
+  equal('raising one from 1 to 5 costs 140 in total',
+    [2, 3, 4, 5].reduce((sum, n) => sum + D.XP_COSTS.characteristic.cost(n), 0), 140);
+  equal('a career skill to rank 2 costs 10', D.XP_COSTS.careerSkill.cost(2), 10);
+  equal('a non-career skill to rank 2 costs 15', D.XP_COSTS.nonCareerSkill.cost(2), 15);
+  check('talents cost five times their tier',
+    [1, 2, 3, 4, 5].every((t) => D.XP_COSTS.talent.cost(t) === t * 5));
+  equal('four career skills are picked at creation', D.CREATION_RULES.careerSkillPicks, 4);
+
+  // The pyramid check over a whole held set, which is what a refund can break.
+  check('one talent in each of tiers 1 and 2 is legal', R.pyramidLegal({ grit: 1, basicMilitaryTraining: 1 }).ok);
+  check('a tier 2 talent with nothing in tier 1 is not',
+    R.pyramidLegal({ basicMilitaryTraining: 1 }).ok === false);
+  equal('and the reason names the tier to refund first',
+    R.pyramidLegal({ basicMilitaryTraining: 1 }).tier, 2);
+  // A ranked talent bought N times spreads one purchase per tier, which is always a legal
+  // pyramid on its own; stacking a second tier 2 on top of it is not.
+  check('two ranks of a tier 1 talent spread one per tier and stay legal', R.pyramidLegal({ grit: 2 }).ok);
+  check('a second tier 2 talent on top of that breaks it',
+    R.pyramidLegal({ grit: 2, basicMilitaryTraining: 1 }).ok === false);
+
   // --- solo tables (§18–§20, §23) ---
   equal('3 Oracle likelihoods', S.ORACLE.likelihoods.length, 3);
   equal('Likely is 2 Ability against 1 Difficulty', `${S.ORACLE.likelihoods[0].ability}v${S.ORACLE.likelihoods[0].difficulty}`, '2v1');

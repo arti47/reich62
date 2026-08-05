@@ -1,7 +1,7 @@
 // service-worker.js — network-first with an app-shell cache.
 // CACHE_VERSION is bumped on every shipped-file change (CLAUDE.md §13.6).
 
-const CACHE_VERSION = 'reich62-v25';
+const CACHE_VERSION = 'reich62-v26';
 
 const APP_SHELL = [
   './',
@@ -31,11 +31,20 @@ const APP_SHELL = [
   './src/solo.js',
   './src/help.js',
   './src/router.js',
+  './src/update.js',
   './src/main.js'
 ];
 
+// The new worker deliberately does NOT skip waiting on its own: it stays parked until the
+// page tells it to take over, so the app can offer a reload rather than swapping the code
+// out from under an open session mid-roll.
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_VERSION).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE_VERSION).then((cache) => cache.addAll(APP_SHELL)));
+});
+
+// The page asks for the swap once the player has tapped "Reload now".
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'skipWaiting') self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {

@@ -1012,6 +1012,113 @@ async function main() {
     await page.locator('#mode-player').check();
     await page.waitForTimeout(120);
 
+    // --- XP at creation: changing your mind never leaves experience out of step ---
+    await go('#/create');
+    await page.locator('#build-from-career').click();
+    await page.waitForSelector('#char-name');
+    await page.fill('#char-name', 'XP Audit');
+    await page.locator('#career-resistanceRunner').check();
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await page.waitForTimeout(90);
+    const xpPicks = await page.locator('input[id^="pick-"]').all();
+    for (let i = 0; i < 4; i += 1) await xpPicks[i].check();
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await page.waitForTimeout(90);
+    const xpLeft = async () => Number((await page.locator('#screen').innerText()).match(/(\d+) of 70 experience left/)[1]);
+    equal('the four career picks are free', await xpLeft(), 70);
+    await subtab('Skills');
+    await page.getByRole('button', { name: /^Raise Skulduggery$/ }).click();
+    await page.waitForTimeout(110);
+    equal('raising a career skill to rank 2 costs 10', await xpLeft(), 60);
+
+    // Dropping the pick must give back both the rank and what was paid on top.
+    await page.getByRole('button', { name: 'Back' }).click();
+    await page.waitForTimeout(110);
+    await page.locator('#pick-skulduggery').uncheck();
+    await page.waitForTimeout(110);
+    await page.locator('#pick-skulduggery').check();
+    await page.waitForTimeout(110);
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await page.waitForTimeout(110);
+    equal('dropping the pick refunds what was paid to raise it', await xpLeft(), 70);
+
+    // Changing career wipes every rank, so it must refund every rank.
+    await subtab('Skills');
+    await page.getByRole('button', { name: /^Raise Skulduggery$/ }).click();
+    await page.waitForTimeout(110);
+    await page.getByRole('button', { name: 'Back' }).click();
+    await page.waitForTimeout(90);
+    await page.getByRole('button', { name: 'Back' }).click();
+    await page.waitForTimeout(90);
+    await page.locator('#career-forger').check();
+    await page.waitForTimeout(140);
+    const forgerPicks = await page.locator('input[id^="pick-"]').all().catch(() => []);
+    await page.getByRole('button', { name: 'Next', exact: true }).click().catch(() => {});
+    await page.waitForTimeout(110);
+    const nowPicks = await page.locator('input[id^="pick-"]').all();
+    for (let i = 0; i < 4; i += 1) await nowPicks[i].check();
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await page.waitForTimeout(110);
+    equal('changing career refunds the ranks it wiped', await xpLeft(), 70);
+
+    // A refund may not leave the talent pyramid illegal.
+    await subtab('Talents');
+    await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+    await page.waitForTimeout(90);
+    await page.getByRole('button', { name: /^Buy$/ }).first().click();
+    await page.waitForTimeout(120);
+    const tier2Buy = page.locator('.result', { hasText: 'Basic Military Training' }).getByRole('button', { name: /^Buy$/ });
+    if (await tier2Buy.count()) {
+      await tier2Buy.first().click();
+      await page.waitForTimeout(120);
+      const firstRefund = page.getByRole('button', { name: /^Refund / }).first();
+      await firstRefund.click();
+      await page.waitForTimeout(140);
+      const toastText = await page.locator('#toast-region').innerText();
+      check('refunding a lower-tier talent under a higher one is refused with a reason',
+        /pyramid is broken/i.test(toastText) || /Refund a tier/i.test(toastText), toastText.replace(/\n/g, ' | '));
+    }
+
+    // --- renaming a character ---
+    await go('#/');
+    await page.locator('.result', { hasText: 'Test Runner' }).first()
+      .getByRole('button', { name: 'Make active' }).click().catch(() => {});
+    await go('#/sheet');
+    check('the sheet offers a rename', (await page.locator('#rename-character').count()) === 1);
+    await page.locator('#rename-character').click();
+    await page.waitForSelector('.modal-backdrop');
+    await page.locator('.modal input[type="text"]').fill('Renamed Runner');
+    await page.getByRole('button', { name: 'Rename', exact: true }).last().click();
+    await page.waitForTimeout(160);
+    check('the new name lands on the sheet',
+      /renamed runner/i.test(await page.locator('#screen .card').first().innerText()),
+      (await page.locator('#screen .card').first().innerText()).replace(/\n/g, ' | '));
+    await go('#/');
+    check('and on the character list',
+      /renamed runner/i.test(await page.locator('#screen').innerText()));
+    // Put the name back: later checks look this character up by name.
+    await go('#/sheet');
+    await page.locator('#rename-character').click();
+    await page.waitForSelector('.modal-backdrop');
+    await page.locator('.modal input[type="text"]').fill('Test Runner');
+    await page.getByRole('button', { name: 'Rename', exact: true }).last().click();
+    await page.waitForTimeout(160);
+
+    // --- the update prompt is a persistent bar with a reload button, not a timed toast ---
+    const updateBar = await page.evaluate(async () => {
+      const mod = await import('./src/update.js');
+      mod.offerUpdate({ postMessage() { window.__skipWaitingAsked = true; } });
+      const bar = document.querySelector('#update-bar');
+      return bar ? { text: bar.innerText, reload: !!bar.querySelector('#update-reload'), later: !!bar.querySelector('#update-later') } : null;
+    });
+    check('the update notice offers a reload button', !!updateBar && updateBar.reload, JSON.stringify(updateBar));
+    check('and says a new version is ready', !!updateBar && /new version/i.test(updateBar.text), JSON.stringify(updateBar));
+    await page.locator('#update-reload').click();
+    await page.waitForTimeout(90);
+    check('tapping it asks the waiting worker to take over',
+      await page.evaluate(() => window.__skipWaitingAsked === true));
+    await page.evaluate(() => document.querySelector('#update-bar')?.remove());
+
     // --- safety-tools note (§20A) ---
     await go('#/settings');
     await page.getByRole('link', { name: 'Open the safety-tools note' }).click();

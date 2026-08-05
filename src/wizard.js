@@ -11,7 +11,7 @@ import {
   BASE_WOUND_THRESHOLD, BASE_STRAIN_THRESHOLD
 } from '../data.js';
 import { PREGENS } from '../data-pregens.js';
-import { canBuyTalent, visibleTalents, xpCost, talent, career as careerById } from './rules.js';
+import { canBuyTalent, pyramidLegal, visibleTalents, xpCost, talent, career as careerById } from './rules.js';
 import { blankCharacter, derivedFor, normalise } from './derived.js';
 import { saveCharacter, setActiveCharacter } from './store.js';
 import { Settings } from './settings.js';
@@ -116,6 +116,14 @@ export function validateStep(index = step) {
     if (overRank) return `Skill ranks cannot pass ${SKILL_RANK_MAX_AT_CREATION} during creation.`;
     const overChar = Object.entries(draft.attributes).find(([, v]) => v > CHARACTERISTIC_MAX);
     if (overChar) return `Characteristics cannot pass ${CHARACTERISTIC_MAX}.`;
+    const pyramid = pyramidLegal(heldTalents());
+    if (!pyramid.ok) return pyramid.reason;
+    // The recorded spends must reconcile with the experience actually gone, so no path can
+    // leave the two out of step.
+    const spent = draft.creation.spend.reduce((sum, e) => sum + e.cost, 0);
+    if (draft.xp.total - spent !== draft.xp.available) {
+      return `Experience does not reconcile: ${spent} recorded as spent but ${draft.xp.total - draft.xp.available} gone.`;
+    }
   }
   if (name === 'motivation') {
     const m = draft.identity.motivation;
@@ -142,6 +150,14 @@ function refundXp(entry) {
   draft.xp.available += entry.cost;
   const index = draft.creation.spend.lastIndexOf(entry);
   if (index >= 0) draft.creation.spend.splice(index, 1);
+}
+
+/** Refund every recorded spend that matches, so a change of mind never leaves experience
+ *  paid for something the character no longer has. */
+function refundAllWhere(predicate) {
+  let refunded = 0;
+  draft.creation.spend.filter(predicate).forEach((entry) => { refunded += entry.cost; refundXp(entry); });
+  return refunded;
 }
 
 export function raiseCharacteristic(id) {
@@ -198,6 +214,15 @@ export function sellTalent(id) {
   if (!entry) return null;
   const held = draft.talents.find((t) => t.id === id);
   if (!held) return null;
+  // Refunding a lower-tier talent can leave more talents in a tier than the one below it,
+  // which the pyramid forbids (§7). The refund is refused rather than silently allowed.
+  const after = {};
+  draft.talents.forEach((t) => { after[t.id] = t.ranks; });
+  after[id] = (after[id] || 1) - 1;
+  if (!after[id]) delete after[id];
+  const legality = pyramidLegal(after);
+  if (!legality.ok) return `${legality.reason} Refund a tier ${legality.tier} talent first.`;
+
   held.ranks -= 1;
   if (held.ranks <= 0) draft.talents = draft.talents.filter((t) => t.id !== id);
   refundXp(entry);
@@ -211,17 +236,28 @@ function heldTalents() {
 }
 
 export function pickCareer(id) {
+  if (draft.identity.career === id) return null;
+  // Changing career wipes every skill rank, so the experience spent on those ranks comes
+  // back with them rather than staying paid for something the character no longer has.
+  const refunded = refundAllWhere((e) => e.kind === 'skill');
   draft.identity.career = id;
   draft.identity.careerSkills = [];
   SKILLS.forEach((s) => { draft.skills[s.id] = { rank: 0, career: false }; });
   careerById(id).skills.forEach((s) => { draft.skills[s].career = true; });
-  return null;
+  return refunded ? { refunded } : null;
 }
 
 export function toggleCareerSkill(id) {
   const picks = draft.identity.careerSkills;
   const at = picks.indexOf(id);
-  if (at >= 0) { picks.splice(at, 1); draft.skills[id].rank = Math.max(0, draft.skills[id].rank - 1); return null; }
+  if (at >= 0) {
+    // Dropping the pick drops the free rank it granted and refunds anything paid on top,
+    // so the rank and the experience never fall out of step.
+    picks.splice(at, 1);
+    refundAllWhere((e) => e.kind === 'skill' && e.id === id);
+    draft.skills[id].rank = 0;
+    return null;
+  }
   if (picks.length >= CREATION_RULES.careerSkillPicks) return `Only ${CREATION_RULES.careerSkillPicks} picks.`;
   picks.push(id);
   draft.skills[id].rank += 1;
@@ -352,7 +388,11 @@ function renderCareerStep(node) {
     node.append(el('div', { class: 'toggle-row' }, [
       el('input', {
         type: 'radio', name: 'career', id: `career-${c.id}`, checked: draft.identity.career === c.id,
-        onchange: () => { pickCareer(c.id); rerender(); }
+        onchange: () => {
+          const result = pickCareer(c.id);
+          if (result && result.refunded) showToast(`Career changed — ${result.refunded} experience refunded with the skill ranks it wiped.`);
+          rerender();
+        }
       }),
       el('label', { for: `career-${c.id}` }, [
         el('span', { text: c.name }),
@@ -467,7 +507,10 @@ function renderXpStep(node) {
             onclick: () => { const p = buyTalent(t.id); if (p) showToast(p); rerender(); }
           }),
           legality.ok ? null : el('span', { class: 'toggle-desc', text: legality.reason }),
-          ranks ? el('button', { type: 'button', class: 'secondary', text: 'Refund', onclick: () => { sellTalent(t.id); rerender(); } }) : null
+          ranks ? el('button', {
+          type: 'button', class: 'secondary', text: 'Refund', 'aria-label': `Refund ${t.name}`,
+          onclick: () => { const problem = sellTalent(t.id); if (problem) showToast(problem); rerender(); }
+        }) : null
         ]));
       });
       node.append(accordion(`Tier ${tier} — ${TALENT_RULES.costPerTier[tier - 1]} XP each`, [body], {
@@ -482,7 +525,7 @@ function renderDerivedStep(node) {
   const derived = derivedFor(draft);
   node.append(el('p', { class: 'small' }, [
     el('span', { class: 'badge badge-inferred', text: 'inferred' }), ' ',
-    `The manual never prints the human base thresholds. This app uses Wound ${BASE_WOUND_THRESHOLD} + Brawn and Strain ${BASE_STRAIN_THRESHOLD} + Willpower, taken from the pregens that agree.`
+    `Injury limit is ${BASE_WOUND_THRESHOLD} + Brawn and stress limit ${BASE_STRAIN_THRESHOLD} + Willpower. The book states both bases, and flags them as inferred: nothing in the original text printed them, and this pair is what the ready-made characters agree on.`
   ]));
   node.append(el('div', { class: 'stat-grid' }, [
     stat('Wound Threshold', derived.woundThreshold),
