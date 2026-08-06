@@ -41,11 +41,11 @@ export const ORACLE = {
     // describes the result rather than instructing the player, and never repeats the yes or
     // no the answer above it already gives.
     levels: [
-      { min: 0, id: 'marginal',     note: 'Barely — it could still go the other way.' },
-      { min: 1, id: 'slight',       note: 'Clean, with nothing attached.' },
-      { min: 2, id: 'clear',        note: 'Solid, and something comes with it.' },
-      { min: 3, id: 'strong',       note: 'More than you asked for.' },
-      { min: 4, id: 'overwhelming', note: 'About as certain as it gets.' }
+      { min: 0, id: 'marginal',     note: 'It barely tipped that way.' },
+      { min: 1, id: 'slight',       note: 'A straightforward result.' },
+      { min: 2, id: 'clear',        note: 'A solid result.' },
+      { min: 3, id: 'strong',       note: 'A powerful result — more than you asked for.' },
+      { min: 4, id: 'overwhelming', note: 'About as decisive as the dice get.' }
     ],
     // Leftover Threat on a yes, or Advantage on a no, is the string attached.
     riders: [

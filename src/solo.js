@@ -10,7 +10,7 @@ import { NPC_QUICKGEN } from '../data-npcs.js';
 import { RANDOM_ENCOUNTERS, MINION_GROUPS } from '../data-monsters.js';
 import { activeCharacter, getCell } from './store.js';
 import { applyPersonalHeat } from './heat.js';
-import { rollPool, diceToRoll, rolledSymbols, SYMBOL_HELP } from './roller.js';
+import { rollPool, diceToRoll, SYMBOL_HELP } from './roller.js';
 import { Settings } from './settings.js';
 
 const ORACLE_SYMBOLS = SYMBOLS.map((s) => s.id);
@@ -156,10 +156,9 @@ export function renderSolo(mount) {
   // the GM's die, not the character's, so the app rolls it — with a fallback below for
   // anyone using physical dice.
   const pool = oraclePool();
-  oracleCard.append(diceToRoll(pool, [`${ORACLE.likelihoods.find((l) => l.id === state.likelihood).name} asks for this pool.`]));
-  // R-22 substitutes for a printed rule, so the screen still says so — in a sentence
-  // rather than a tag.
-  oracleCard.append(el('p', { class: 'small muted', text: 'The book gives its strongest answers to symbols this pool cannot roll, so they are read by weight instead: two or more net success with nothing left against it answers "Yes, and", and two or more net failure with nothing left for it answers "No, and".' }));
+  // The likelihood picker above already says why the pool is what it is, and R-22's
+  // substitution is stated in the panel's own "how this works" (§4).
+  oracleCard.append(diceToRoll(pool, []));
 
   const answerNode = el('div', { id: 'oracle-answer', 'aria-live': 'polite' });
   const ask = (tally, { rolled = true } = {}) => {
@@ -219,10 +218,13 @@ export function renderSolo(mount) {
       answerNode.append(el('p', { class: 'oracle-degree', text: power.note }));
       if (power.rider) answerNode.append(el('p', { class: 'oracle-rider', text: power.rider.text }));
     }
-    answerNode.append(el('p', { class: 'small muted', text: 'What the dice showed' }));
-    answerNode.append(rolledSymbols(state.lastAnswer.symbols || {}));
-    answerNode.append(el('p', { class: 'small muted', text: 'What is left after cancelling' }));
-    answerNode.append(el('p', {}, [renderTally(state.lastAnswer.net)]));
+    // The dice are evidence, not the answer, so they fold away under it.
+    answerNode.append(accordion('Show the dice', [
+      el('p', { class: 'small muted', text: 'What came up' }),
+      el('p', {}, [renderTally(state.lastAnswer.symbols || {})]),
+      el('p', { class: 'small muted', text: 'What is left after cancelling' }),
+      el('p', {}, [renderTally(state.lastAnswer.net)])
+    ], { key: 'oracle-dice', summary: 'what came up' }));
     (state.lastAnswer.lines || []).forEach((line) => answerNode.append(el('p', { class: 'small', text: line })));
   }
   oracleCard.append(answerNode);

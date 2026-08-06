@@ -561,8 +561,8 @@ async function main() {
     await page.locator('#oracle-ask').click();
     await page.waitForTimeout(140);
     const asked = await page.locator('#oracle-answer').innerText();
-    check('it shows what the dice showed and what it means',
-      /what the dice showed/i.test(asked) && /(Yes|No)/.test(asked), asked.replace(/\n/g, ' | '));
+    check('it gives the answer, with the dice folded away under it',
+      /(Yes|No)/.test(asked) && /show the dice/i.test(asked), asked.replace(/\n/g, ' | '));
 
     // A Despair answer reads "No, and…", chains a Random Event, and feeds Heat when the
     // question concerned a surveilled context (§18, §19, §17.1). The printed Oracle pool
@@ -582,8 +582,11 @@ async function main() {
 
     // R-22 — the printed pool holds no die that can show a Triumph or a Despair, so the two
     // emphatic rungs are reached by weight of result instead, and the screen says so.
-    check('R-22: the Oracle says the strongest answers are read by weight',
-      /read by weight/i.test(await page.locator('#screen').innerText()));
+    check('R-22: the panel explains the weight reading in its own how-this-works',
+      await page.evaluate(() => {
+        const d = [...document.querySelectorAll('#screen details.howto')];
+        return d.some((x) => /read by weight/i.test(x.textContent));
+      }));
     const heatBeforeEmphatic = await page.locator('#resource-header').innerText();
     await page.getByRole('button', { name: 'One more oracle failure' }).click();
     await page.getByRole('button', { name: 'One more oracle failure' }).click();
@@ -1070,7 +1073,7 @@ async function main() {
     await page.locator('#oracle-ask').click();
     await page.waitForTimeout(180);
     check('one tap rolls and answers together',
-      /what the dice showed/i.test(await page.locator('#oracle-answer').innerText()),
+      /show the dice/i.test(await page.locator('#oracle-answer').innerText()),
       (await page.locator('#oracle-answer').innerText()).replace(/\n/g, ' | '));
     check('the answer stays on screen',
       /Yes|No/.test(await page.locator('#oracle-answer').innerText()),
