@@ -63,21 +63,7 @@ export function oracleIntensity(result, answerId) {
   const yes = answerId.startsWith('yes');
   const weight = yes ? result.netSuccess : result.netFailure;
   const level = [...ORACLE.intensity.levels].reverse().find((l) => weight >= l.min);
-  const riderCount = yes ? result.netThreat : result.netAdvantage;
-  const rider = riderCount > 0
-    ? [...ORACLE.intensity.riders].reverse().find((r) => riderCount >= r.min)
-    : null;
-  return {
-    weight,
-    level: level.id,
-    note: level.note,
-    rider: rider ? {
-      count: riderCount,
-      id: rider.id,
-      text: (yes ? ORACLE.intensity.riderNote.threat : ORACLE.intensity.riderNote.advantage)
-        .replace('{x}', yes ? rider.againstYou : rider.yourWay)
-    } : null
-  };
+  return { weight, level: level.id, note: level.note };
 }
 
 /** The Oracle answers from entered symbols, exactly like every other check (R-B1). */
@@ -109,33 +95,29 @@ export function focusChaos(character, cell) {
   return heat * FATE_FOCUS.chaos.multiplier;
 }
 
-const focusBand = (roll) => FATE_FOCUS.bands.find((b) => roll >= b.min && roll <= b.max);
+const NET_MIN = Math.min(...FATE_FOCUS.bands.map((b) => b.net));
+const NET_MAX = Math.max(...FATE_FOCUS.bands.map((b) => b.net));
+const focusBand = (net) =>
+  FATE_FOCUS.bands.find((b) => b.net === Math.max(NET_MIN, Math.min(NET_MAX, net)));
 
-/** Roll the focus: how to read the answer against what you expected (H-2). A 96–100 chains
- *  an event and rolls again for the focus itself; a second one reads as what you expected. */
-export function rollFocus({ chaos = 0, roll = null, rerollValue = null, chaosRoll = null } = {}) {
-  const first = roll || rollDie(100);
-  let band = focusBand(first);
-  const out = { roll: first, chainsEvent: false, rerolledFrom: null };
+/** How to read the answer against what you expected (H-2), taken off the same roll: the
+ *  Advantage and Threat the answer did not use. The sign says whose way it goes, the size
+ *  how far from expectation it lands. Nothing extra is thrown except the suspicion die on
+ *  the one result that says nothing either way. */
+export function readFocus(result, { chaos = 0, chaosRoll = null } = {}) {
+  const net = (result.netAdvantage || 0) - (result.netThreat || 0);
+  let band = focusBand(net);
+  const out = { net, chainsEvent: !!band.chainsEvent };
 
-  if (band.reroll) {
-    out.chainsEvent = true;
-    out.rerolledFrom = first;
-    const second = rerollValue || rollDie(100);
-    out.roll = second;
-    band = focusBand(second);
-    // A second such roll is read as what you expected rather than looping.
-    if (band.reroll) band = FATE_FOCUS.bands[0];
-  }
-
-  if (band.resolvesTo) {
-    const d10 = chaosRoll || rollDie(10);
+  if (band.chaosMayBend && chaos > 0) {
+    const d10 = chaosRoll || rollDie(FATE_FOCUS.chaos.dieSides || 10);
     out.chaosRoll = d10;
     out.chaos = chaos;
-    const [against, favour] = band.resolvesTo;
-    const resolvedId = d10 <= chaos ? against : favour;
-    out.decidedBy = band.id;
-    band = FATE_FOCUS.bands.find((b) => b.id === resolvedId);
+    if (d10 <= chaos) {
+      out.bentBySuspicion = true;
+      band = FATE_FOCUS.bands.find((b) => b.id === FATE_FOCUS.chaos.bendsTo);
+      out.chainsEvent = !!band.chainsEvent;
+    }
   }
 
   out.id = band.id;
@@ -231,7 +213,7 @@ export function renderSolo(mount) {
     }
     // How to read that answer against what you expected (H-2).
     const focus = Settings.fateFocus()
-      ? rollFocus({ chaos: focusChaos(character, cell) })
+      ? readFocus(verdict.result, { chaos: focusChaos(character, cell) })
       : null;
 
     // One event per question: either trigger fires it, never both (H-2).
@@ -293,16 +275,13 @@ export function renderSolo(mount) {
     // Strength, the catch and the dice are all evidence for the answer above, so they fold
     // away under it rather than crowding it.
     const evidence = [];
-    if (power) {
-      evidence.push(el('p', { class: 'small', text: power.note }));
-      if (power.rider) evidence.push(el('p', { class: 'small', text: power.rider.text }));
-    }
+    if (power) evidence.push(el('p', { class: 'small', text: power.note }));
     evidence.push(el('p', { class: 'small muted', text: 'What came up' }));
     evidence.push(el('p', {}, [renderTally(state.lastAnswer.symbols || {})]));
     evidence.push(el('p', { class: 'small muted', text: 'What is left after cancelling' }));
     evidence.push(el('p', {}, [renderTally(state.lastAnswer.net)]));
     if (focused && focused.chaosRoll) {
-      evidence.push(el('p', { class: 'small muted', text: `Suspicion decided this one: rolled ${focused.chaosRoll} against ${focused.chaos}.` }));
+      evidence.push(el('p', { class: 'small muted', text: `Nothing was left over either way, so suspicion decided it: rolled ${focused.chaosRoll} against ${focused.chaos}.` }));
     }
     answerNode.append(accordion('Show the dice', evidence, { key: 'oracle-dice', summary: 'how it landed' }));
     (state.lastAnswer.lines || []).forEach((line) => answerNode.append(el('p', { class: 'small', text: line })));
@@ -394,10 +373,7 @@ export function renderSolo(mount) {
       if (item.expectation) row.append(el('p', { class: 'small muted', text: `You expected: ${item.expectation}` }));
       if (item.focus) row.append(el('p', { class: 'small', text: `${item.focus.name}. ${item.focus.note}` }));
       // The row reads back the way it played: the answer, then how hard it landed.
-      if (item.intensity) {
-        row.append(el('p', { class: 'small', text: item.intensity.note }));
-        if (item.intensity.rider) row.append(el('p', { class: 'small', text: item.intensity.rider.text }));
-      }
+      if (item.intensity) row.append(el('p', { class: 'small', text: item.intensity.note }));
       if (item.surveilled) row.append(el('p', { class: 'small muted', text: 'Asked about somewhere the regime is watching.' }));
       (item.lines || []).forEach((line) => row.append(el('p', { class: 'small muted', text: line })));
       row.append(el('button', {

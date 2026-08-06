@@ -181,54 +181,50 @@ export async function pinChecks({ check, equal }) {
   equal('R-22: three net Failure read Strong', grade(tal({ failure: 3 })).level, 'strong');
   equal('R-22: a but-rung answer with no net Success or Failure reads Marginal',
     grade(tal({ advantage: 1 })).level, 'marginal');
-  equal('R-22: leftover Threat on a yes is graded as a rider',
-    grade(tal({ success: 2, threat: 2 })).rider.id, 'notable');
-  equal('R-22: leftover Advantage on a no is graded as a rider',
-    grade(tal({ failure: 3, advantage: 1 })).rider.id, 'minor');
-  check('R-22: a yes rider reads as something going against you',
-    /goes against you/.test(grade(tal({ success: 2, threat: 2 })).rider.text));
-  check('R-22: a no rider reads as a consolation',
-    /still goes your way/.test(grade(tal({ failure: 3, advantage: 1 })).rider.text));
-  check('R-22: no wording leaves a template placeholder',
-    !S.ORACLE.intensity.riders.some((r) => /\{x\}/.test(grade(tal({ success: 2, threat: r.min })).rider.text)));
   check('R-22: the degree wording never repeats the yes or no above it',
     S.ORACLE.intensity.levels.every((l) => !/^(yes|no)\b/i.test(l.note)));
-  check('R-22: a clean answer carries no rider', grade(tal({ success: 3 })).rider === null);
   // The degree says how hard it landed and nothing else; only the rider speaks to strings
   // attached, so "nothing attached" can never sit above "there's a catch".
   check('R-22: no degree wording claims anything about strings attached',
     S.ORACLE.intensity.levels.every((l) => !/attach|catch|comes with it|consolation/i.test(l.note)));
-  check('R-22: a yes with leftover Threat still states the catch',
-    grade(tal({ success: 1, threat: 2 })).rider !== null);
   check('R-22: intensity rises with the count',
     grade(tal({ success: 4 })).weight > grade(tal({ success: 1 })).weight);
 
-  // H-2 — the Fate Question Focus layer, a labelled house aid over the printed §18 Oracle.
+  // H-2 — the focus layer, now read off the Oracle roll itself rather than a separate d100.
   check('H-2: the focus table is flagged as a house aid', S.FATE_FOCUS.houseAid === true);
-  equal('H-2: it is a d100 in 10 bands', `${S.FATE_FOCUS.die}/${S.FATE_FOCUS.bands.length}`, 'd100/10');
-  let focusCursor = 0, focusContiguous = true;
-  S.FATE_FOCUS.bands.forEach((b) => { if (b.min !== focusCursor + 1) focusContiguous = false; focusCursor = b.max; });
-  check('H-2: the bands cover 1–100 with no gap or overlap', focusContiguous && focusCursor === 100);
-  equal('H-2: 1 reads as what you expected', Solo.rollFocus({ roll: 1 }).id, 'asExpected');
-  equal('H-2: 42 is a surprise', Solo.rollFocus({ roll: 42 }).id, 'surprise');
-  equal('H-2: 75 diminishes the answer', Solo.rollFocus({ roll: 75 }).id, 'expectedBut');
-  equal('H-2: 90 adds to the answer', Solo.rollFocus({ roll: 90 }).id, 'expectedAnd');
-  // The chaos row resolves off the suspicion dial: the roll or lower goes against you.
-  equal('H-2: chaos at or under the dial works against you',
-    Solo.rollFocus({ roll: 60, chaos: 6, chaosRoll: 6 }).id, 'againstYou');
-  equal('H-2: chaos above the dial works in your favour',
-    Solo.rollFocus({ roll: 60, chaos: 6, chaosRoll: 7 }).id, 'inFavour');
-  equal('H-2: with no suspicion chaos never turns on you',
-    Solo.rollFocus({ roll: 60, chaos: 0, chaosRoll: 1 }).id, 'inFavour');
+  check('H-2: it no longer needs a die of its own', !S.FATE_FOCUS.die && !!S.FATE_FOCUS.readsFrom);
+  const nets = S.FATE_FOCUS.bands.map((b) => b.net);
+  equal('H-2: the bands run -4 to +4 with no gap', nets.join(','), '-4,-3,-2,-1,0,1,2,3,4');
+  check('H-2: no band is left unnamed', S.FATE_FOCUS.bands.every((b) => !!b.name && !!b.note));
+  const res = (adv, thr) => ({ netAdvantage: adv, netThreat: thr });
+  equal('H-2: nothing left over reads as expected', Solo.readFocus(res(0, 0)).id, 'asExpected');
+  equal('H-2: one advantage leans your way', Solo.readFocus(res(1, 0)).id, 'notQuiteFor');
+  equal('H-2: one threat leans against you', Solo.readFocus(res(0, 1)).id, 'notQuiteAgainst');
+  equal('H-2: two advantage adds to the answer', Solo.readFocus(res(2, 0)).id, 'expectedAnd');
+  equal('H-2: two threat takes the edge off it', Solo.readFocus(res(0, 2)).id, 'expectedBut');
+  equal('H-2: three advantage works in your favour', Solo.readFocus(res(3, 0)).id, 'inFavour');
+  equal('H-2: three threat works against you', Solo.readFocus(res(0, 3)).id, 'againstYou');
+  equal('H-2: four advantage turns the story', Solo.readFocus(res(4, 0)).id, 'gameChanger');
+  equal('H-2: four threat is a surprise', Solo.readFocus(res(0, 4)).id, 'surprise');
+  check('H-2: advantage and threat cancel before the reading',
+    Solo.readFocus(res(2, 2)).id === 'asExpected' && Solo.readFocus(res(3, 1)).net === 2);
+  check('H-2: a net beyond the table clamps to its end',
+    Solo.readFocus(res(9, 0)).id === 'gameChanger' && Solo.readFocus(res(0, 9)).id === 'surprise');
+  // Only the two extremes chain an event; everything between is interpretation alone.
+  equal('H-2: the extremes chain an event',
+    S.FATE_FOCUS.bands.filter((b) => b.chainsEvent).map((b) => b.net).join(','), '-4,4');
+  check('H-2: a middling focus chains nothing', Solo.readFocus(res(2, 0)).chainsEvent === false);
+  // Suspicion only speaks when the symbols say nothing either way.
+  equal('H-2: suspicion bends a flat result against you',
+    Solo.readFocus(res(0, 0), { chaos: 6, chaosRoll: 6 }).id, 'againstYou');
+  equal('H-2: above the dial it stands as expected',
+    Solo.readFocus(res(0, 0), { chaos: 6, chaosRoll: 7 }).id, 'asExpected');
+  equal('H-2: with no suspicion nothing is rolled at all',
+    Solo.readFocus(res(0, 0), { chaos: 0 }).chaosRoll, undefined);
+  equal('H-2: suspicion never touches a result that spoke for itself',
+    Solo.readFocus(res(2, 0), { chaos: 10, chaosRoll: 1 }).id, 'expectedAnd');
   equal('H-2: the dial is the higher track, doubled',
     Solo.focusChaos({ state: { personalHeat: 2 } }, { cellHeat: 4 }), 8);
-  // 96–100 chains an event and rerolls for the focus; a second one reads as expected.
-  check('H-2: a 96+ chains an event', Solo.rollFocus({ roll: 97, rerollValue: 10 }).chainsEvent === true);
-  equal('H-2: and rerolls for the real focus', Solo.rollFocus({ roll: 97, rerollValue: 42 }).id, 'surprise');
-  equal('H-2: a second 96+ reads as what you expected',
-    Solo.rollFocus({ roll: 97, rerollValue: 99 }).id, 'asExpected');
-  check('H-2: no band leaves the focus unnamed',
-    S.FATE_FOCUS.bands.every((b) => !!b.name && !!b.note));
 
   // Compendium inventory (CLAUDE.md §13.5).
   equal('bestiary: 10 minion groups', M.MINION_GROUPS.length, 10);

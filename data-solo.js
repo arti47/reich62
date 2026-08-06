@@ -33,8 +33,7 @@ export const ORACLE = {
   },
   // R-22, second half — the same magnitude reading, carried the whole way up and down the
   // scale rather than stopping at the "and" rung. How many net Success or Failure survive
-  // says how hard the answer lands; leftover Advantage or Threat rides alongside it as the
-  // string attached. Both are read off the printed symbols; nothing is added to the pool.
+  // says how hard the answer lands. Read off the printed symbols; nothing is added to the pool.
   intensity: {
     ruling: 'R-22',
     // `min` is the number of net Success (for a yes) or net Failure (for a no). The wording
@@ -47,16 +46,8 @@ export const ORACLE = {
       { min: 3, id: 'strong',       note: 'A powerful result — more than you asked for.' },
       { min: 4, id: 'overwhelming', note: 'About as decisive as the dice get.' }
     ],
-    // Leftover Threat on a yes, or Advantage on a no, is the string attached.
-    riders: [
-      { min: 1, id: 'minor',   againstYou: 'small',   yourWay: 'small' },
-      { min: 2, id: 'notable', againstYou: 'real',    yourWay: 'real' },
-      { min: 3, id: 'major',   againstYou: 'serious', yourWay: 'big' }
-    ],
-    riderNote: {
-      threat: 'There\'s a catch: something {x} goes against you.',
-      advantage: 'One consolation: something {x} still goes your way.'
-    }
+    // Leftover Advantage and Threat used to ride along here as a string attached; they now
+    // drive the focus reading instead (H-2), which is the same symbols read once.
   },
   procedure: [
     'Frame the question and set its likelihood.',
@@ -72,38 +63,45 @@ export const ORACLE = {
 export const FATE_FOCUS = {
   houseAid: true,
   ruling: 'H-2',
-  die: 'd100',
-  note: 'Not a printed rule. The books answer a question yes or no; this reads that answer against what you expected before you asked.',
-  // The chaos row needs an escalation dial. This campaign already has one, so the higher of
-  // the two suspicion tracks stands in for it, doubled to cover the whole d10.
+  // The focus is read off the Oracle roll itself rather than a separate d100: the Success
+  // and Failure decide the answer, and the Advantage and Threat left over decide how that
+  // answer sits against what you expected. One roll, two readings, nothing else to throw.
+  readsFrom: 'net Advantage and Threat on the Oracle roll',
+  note: 'Not a printed rule. The books answer a question yes or no; this reads that answer against what you expected before you asked, off the symbols the answer itself did not use.',
+  // The sign says whose way it goes, the size says how far from expectation it lands.
+  // Net runs -4 to +4 on the printed pools, so every rung is reachable.
+  bands: [
+    { net: -4, id: 'surprise',    name: 'That is a surprise',
+      note: 'It lands well away from what you expected, and not in your favour.', chainsEvent: true },
+    { net: -3, id: 'againstYou',  name: 'Works against you',
+      note: 'Read it as you expected, then bend the reading until it costs your character.' },
+    { net: -2, id: 'expectedBut', name: 'As expected, but…',
+      note: 'What you expected, with something significant taking the edge off it.' },
+    { net: -1, id: 'notQuiteAgainst', name: 'Not quite what you expected',
+      note: 'Close to what you expected, but off in some detail, and the detail is not helpful.' },
+    { net:  0, id: 'asExpected',  name: 'As you expected',
+      note: 'Read the answer the way you were expecting it.', chaosMayBend: true },
+    { net:  1, id: 'notQuiteFor', name: 'Not quite what you expected',
+      note: 'Close to what you expected, but off in some detail, and the detail suits you.' },
+    { net:  2, id: 'expectedAnd', name: 'As expected, and…',
+      note: 'What you expected, with something significant coming along with it.' },
+    { net:  3, id: 'inFavour',    name: 'In your favour',
+      note: 'Read it as you expected, then bend the reading until it works out for your character.' },
+    { net:  4, id: 'gameChanger', name: 'A turn in the story',
+      note: 'Read it as you expected, then bend the reading until it changes where an arc is heading, your way.', chainsEvent: true }
+  ],
+  // Advantage and Threat cancelling out exactly says nothing either way, so on that one
+  // result the campaign's own escalation dial decides whether it bends. The higher of the
+  // two suspicion tracks, doubled to cover the whole d10; at Heat 0 nothing is rolled and
+  // the answer stands as expected.
   chaos: {
     die: 'd10',
     from: 'the higher of Personal and Cell Heat',
     multiplier: 2,
-    rule: 'Roll a d10. That value or lower means the answer works against you; higher means it works in your favour.'
-  },
-  bands: [
-    { min: 1,  max: 34,  id: 'asExpected',  name: 'As you expected',
-      note: 'Read the answer the way you were expecting it.' },
-    { min: 35, max: 41,  id: 'notQuite',    name: 'Not quite what you expected',
-      note: 'Close to what you expected, but off in some detail.' },
-    { min: 42, max: 43,  id: 'surprise',    name: 'That is a surprise',
-      note: 'The answer lands well away from what you expected. Read it as something you did not see coming.' },
-    { min: 44, max: 50,  id: 'inFavour',    name: 'In your favour',
-      note: 'Read it as you expected, then bend the reading until it works out for your character.' },
-    { min: 51, max: 57,  id: 'againstYou',  name: 'Works against you',
-      note: 'Read it as you expected, then bend the reading until it costs your character.' },
-    { min: 58, max: 70,  id: 'chaos',       name: 'Let chaos decide',
-      note: 'Suspicion decides whether this one goes for you or against you.', resolvesTo: ['againstYou', 'inFavour'] },
-    { min: 71, max: 72,  id: 'gameChanger', name: 'A turn in the story',
-      note: 'Read it as you expected, then bend the reading until it changes where an arc is heading.' },
-    { min: 73, max: 79,  id: 'expectedBut', name: 'As expected, but…',
-      note: 'What you expected, with something significant taking the edge off it.' },
-    { min: 80, max: 95,  id: 'expectedAnd', name: 'As expected, and…',
-      note: 'What you expected, with something significant coming along with it.' },
-    { min: 96, max: 100, id: 'randomEvent', name: 'Something else happens',
-      note: 'An event lands on top of this question. Roll again for the focus itself; a second such roll reads as what you expected.', chainsEvent: true, reroll: true }
-  ]
+    appliesAtNet: 0,
+    bendsTo: 'againstYou',
+    rule: 'With suspicion on the board, roll a d10 when nothing is left over either way. That value or lower and the answer bends against you; above it, it stands as you expected.'
+  }
 };
 
 // T57 — Meaning tables — §15A

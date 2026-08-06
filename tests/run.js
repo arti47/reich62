@@ -628,8 +628,9 @@ async function main() {
     const graded = await page.locator('#oracle-answer').innerText();
     check('R-22: three net failures read as more than you asked for',
       /more than you asked for/i.test(graded), graded.replace(/\n/g, ' | '));
-    check('R-22: leftover Advantage on a no reads as a consolation',
-      /still goes your way/i.test(graded), graded.replace(/\n/g, ' | '));
+    check('H-2: leftover Advantage on a no reads as the focus leaning your way',
+      /not quite what you expected/i.test(graded) && /suits you/i.test(graded),
+      graded.replace(/\n/g, ' | '));
     check('R-22: the Oracle log records how hard the answer landed',
       /barely|nothing attached|comes with it|more than you asked for|as certain as it gets/i
         .test(await page.locator('#oracle-log').innerText()));
