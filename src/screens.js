@@ -258,7 +258,8 @@ export function renderSettings(mount) {
     const input = el('input', {
       type: 'checkbox',
       id: `flag-${flag.id}`,
-      checked: !!Settings.get(flag.id) && !blocked,
+      // A flag that ships on stays on until it is explicitly turned off.
+      checked: (Settings.get(flag.id) ?? !!flag.defaultOn) && !blocked,
       disabled: blocked,
       onchange: (e) => {
         Settings.set(flag.id, e.target.checked);
