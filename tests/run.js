@@ -679,7 +679,32 @@ async function main() {
     check('and empties the log', /nothing asked yet/i.test(await page.locator('#oracle-log').innerText()),
       (await page.locator('#oracle-log').innerText()).replace(/\n/g, ' | '));
 
+    // Rolled prompts are kept, not replaced: each one is logged and survives navigation.
     await page.getByRole('button', { name: 'Meaning', exact: true }).click();
+    await page.waitForTimeout(120);
+    await page.getByRole('button', { name: 'Location', exact: true }).click();
+    await page.waitForTimeout(120);
+    const ideaRows = await page.locator('#solo-output .log-row').count();
+    check('a second prompt does not replace the first', ideaRows >= 2, `rows ${ideaRows}`);
+    await go('#/');
+    await go('#/solo');
+    await page.waitForTimeout(150);
+    check('rolled prompts survive leaving the screen',
+      (await page.locator('#solo-output .log-row').count()) === ideaRows);
+    check('each prompt row can be deleted on its own',
+      (await page.locator('#solo-output .log-row').first().getByRole('button', { name: /^Delete/ }).count()) === 1);
+    await page.locator('#solo-output .log-row').first().getByRole('button', { name: /^Delete/ }).click();
+    await page.waitForTimeout(120);
+    check('deleting one prompt leaves the rest',
+      (await page.locator('#solo-output .log-row').count()) === ideaRows - 1);
+    await page.locator('#idea-log-clear').click();
+    await page.waitForSelector('.modal-backdrop');
+    check('clearing the prompts asks first', /cannot be undone/i.test(await page.locator('.modal').innerText()));
+    await page.getByRole('button', { name: 'Delete them' }).click();
+    await page.waitForTimeout(120);
+    check('the emptied prompt log explains itself',
+      /nothing rolled yet/i.test(await page.locator('#solo-output').innerText()));
+
     check('the meaning table produces a phrase', (await page.locator('#solo-output').innerText()).length > 8);
     await page.getByRole('button', { name: 'Random encounter', exact: true }).click();
     check('the random encounter table rolls', /\(\d+\)/.test(await page.locator('#solo-output').innerText()));
@@ -796,6 +821,20 @@ async function main() {
       check(`${hash} carries no section numbers or ruling codes`, markers.length === 0, [...new Set(markers)].join(', '));
       // No boxed tags anywhere: what a tag used to say is now said in the prose (§14 note).
       check(`${hash} carries no boxed tags`, (await page.locator('#screen .badge').count()) === 0);
+      // Controls never butt straight into each other: every adjacent pair keeps a gap.
+      const tight = await page.evaluate(() => {
+        const ctrl = 'button, select, input, textarea';
+        return [...document.querySelectorAll('#screen ' + ctrl)].filter((el) => {
+          const a = el.getBoundingClientRect();
+          const next = el.nextElementSibling;
+          if (!a.width || !next || !next.matches(ctrl)) return false;
+          const b = next.getBoundingClientRect();
+          if (!b.width) return false;
+          const sameRow = Math.abs(b.top - a.top) < 6;
+          return (sameRow ? b.left - a.right : b.top - a.bottom) < 4;
+        }).map((el) => (el.textContent || el.id).trim().slice(0, 24));
+      });
+      check(`${hash} keeps its controls apart`, tight.length === 0, tight.join(', '));
     }
 
     // --- HOUSE RULE: the black-market counter on the Gear tab ---

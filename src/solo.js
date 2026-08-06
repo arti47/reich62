@@ -51,6 +51,35 @@ export function deleteOracleLogEntry(id) {
 
 export function clearOracleLog() { localStorage.removeItem(ORACLE_LOG_KEY); }
 
+// --- the prompt tables' log ---
+// A rolled prompt is as much a record of play as an Oracle answer: it seeds a scene, and
+// losing it the moment you roll the next one means writing it down by hand. It keeps its
+// own log rather than crowding the Oracle's.
+const IDEA_LOG_KEY = STORAGE_PREFIX + 'ideaLog';
+const IDEA_LOG_CAP = 100;
+const IDEA_LOG_PAGE = 12;
+let ideaShown = IDEA_LOG_PAGE;
+
+export function readIdeaLog() {
+  try { return JSON.parse(localStorage.getItem(IDEA_LOG_KEY) || '[]'); } catch { return []; }
+}
+
+export function writeIdeaLog(entry) {
+  const log = readIdeaLog();
+  const stored = { id: uid(), ts: Date.now(), ...entry };
+  log.unshift(stored);
+  localStorage.setItem(IDEA_LOG_KEY, JSON.stringify(log.slice(0, IDEA_LOG_CAP)));
+  return stored;
+}
+
+export function deleteIdeaLogEntry(id) {
+  const log = readIdeaLog().filter((e) => e.id !== id);
+  localStorage.setItem(IDEA_LOG_KEY, JSON.stringify(log));
+  return log;
+}
+
+export function clearIdeaLog() { localStorage.removeItem(IDEA_LOG_KEY); }
+
 /** The pool the chosen likelihood asks for (§18), in the same shape the roller uses. */
 export function oraclePool(likelihoodId = state.likelihood) {
   const l = ORACLE.likelihoods.find((x) => x.id === likelihoodId) || ORACLE.likelihoods[1];
@@ -306,8 +335,8 @@ export function renderSolo(mount) {
 
   // --- tables ---
   const tables = panel('Need an idea?', PANELS.soloTables, []);
-  const output = el('div', { id: 'solo-output', 'aria-live': 'polite' });
-  const show = (title, text) => { clear(output); output.append(el('h3', { text: title }), el('p', { class: 'small', text })); };
+  // A rolled prompt is written to its own log rather than replacing the last one on screen.
+  const show = (table, text) => { writeIdeaLog({ table, text }); ideaShown = IDEA_LOG_PAGE; rerender(); };
 
   tables.append(el('button', { type: 'button', class: 'secondary', text: 'Meaning', onclick: () => { const r = rollMeaning(); show('Meaning', `${r.phrase} (${r.actionRoll}, ${r.subjectRoll})`); } }));
   ['location', 'faction', 'complication'].forEach((kind) => {
@@ -335,7 +364,45 @@ export function renderSolo(mount) {
       show('Random encounter', `${row.entry} (${roll}).${escalate}`);
     }
   }));
-  tables.append(output);
+
+  // Everything rolled here, newest first, kept until you clear it.
+  const ideas = readIdeaLog();
+  const ideaBody = el('div', { id: 'solo-output', 'aria-live': 'polite' });
+  if (!ideas.length) {
+    ideaBody.append(emptyState('Nothing rolled yet — tap a table above and it lands here.'));
+  } else {
+    tables.append(el('button', {
+      type: 'button', class: 'secondary', id: 'idea-log-clear', text: `Clear all ${ideas.length}`,
+      onclick: async () => {
+        if (!(await confirmModal(`Delete all ${ideas.length} rolled prompts? This cannot be undone.`, { title: 'Clear the prompts', confirmLabel: 'Delete them' }))) return;
+        clearIdeaLog();
+        ideaShown = IDEA_LOG_PAGE;
+        rerender();
+      }
+    }));
+  }
+  ideas.slice(0, ideaShown).forEach((item) => {
+    ideaBody.append(el('div', { class: 'result log-row' }, [
+      el('div', { class: 'result-head' }, [
+        el('span', { class: 'result-title', text: item.table }),
+        el('span', { class: 'cite', text: new Date(item.ts).toLocaleTimeString() })
+      ]),
+      el('p', { class: 'small', text: item.text }),
+      el('button', {
+        type: 'button', class: 'secondary log-delete', text: 'Delete',
+        'aria-label': `Delete the ${item.table} prompt rolled at ${new Date(item.ts).toLocaleTimeString()}`,
+        onclick: () => { deleteIdeaLogEntry(item.id); rerender(); }
+      })
+    ]));
+  });
+  tables.append(ideaBody);
+  if (ideas.length > ideaShown) {
+    tables.append(el('button', {
+      type: 'button', class: 'secondary', id: 'idea-log-more',
+      text: `Show ${Math.min(IDEA_LOG_PAGE, ideas.length - ideaShown)} more of ${ideas.length - ideaShown}`,
+      onclick: () => { ideaShown += IDEA_LOG_PAGE; rerender(); }
+    }));
+  }
   mount.append(tables);
 
   // --- the Oracle's own log ---
