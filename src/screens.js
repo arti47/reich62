@@ -167,7 +167,7 @@ export function renderRules(mount, params = {}) {
         body.append(el('article', { class: 'rule-entry' }, [
           el('h3', { text: item.title }),
           el('p', { text: item.body }),
-          item.badge ? el('span', { class: `badge ${item.badgeClass || ''}`, text: item.badge }) : null
+          item.note ? el('p', { class: 'small muted', text: item.note }) : null
         ]));
       });
 
@@ -270,8 +270,7 @@ export function renderSettings(mount) {
       input,
       el('label', { for: `flag-${flag.id}` }, [
         el('span', { text: flag.label }),
-        blocked ? el('span', { class: 'badge badge-inferred', text: 'blocked' }) : null,
-        el('span', { class: 'toggle-desc', text: flag.desc }),
+        el('span', { class: 'toggle-desc', text: blocked ? `Unavailable. ${flag.desc}` : flag.desc }),
         flag.note ? el('span', { class: 'toggle-desc muted', text: flag.note() }) : null
       ])
     ]));
@@ -287,7 +286,7 @@ export function renderSettings(mount) {
     onchange: (e) => { Settings.set('currencyLabel', e.target.value.trim() || CREATION_RULES.houseAid.currencyLabel); showToast('Currency label saved'); }
   });
   mount.append(panel('House aids', PANELS.settingsHouse, [
-    el('p', {}, [el('span', { class: 'badge badge-house', text: 'not a printed rule' })]),
+    el('p', { class: 'small muted', text: 'Neither number is printed in the books, so both are yours to set.' }),
     el('label', { for: 'currency-label', class: 'small', text: 'What money is called' }), currency,
     el('label', { for: 'starting-budget', class: 'small', text: 'Money a new character starts with' }), budget
   ]));

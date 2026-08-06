@@ -157,11 +157,9 @@ export function renderSolo(mount) {
   // anyone using physical dice.
   const pool = oraclePool();
   oracleCard.append(diceToRoll(pool, [`${ORACLE.likelihoods.find((l) => l.id === state.likelihood).name} asks for this pool.`]));
-  // R-22 is a substitution for a printed rule, so it says so where it applies.
-  oracleCard.append(el('p', { class: 'small' }, [
-    el('span', { class: 'badge badge-inferred', text: 'inferred' }), ' ',
-    `The book gives the strongest answers to the best and worst symbols, but this pool holds no die that can show them. They are read by weight instead: ${ORACLE.magnitude.yesAnd.toLowerCase()} answers "Yes, and", ${ORACLE.magnitude.noAnd.toLowerCase()} answers "No, and".`
-  ]));
+  // R-22 substitutes for a printed rule, so the screen still says so — in a sentence
+  // rather than a tag.
+  oracleCard.append(el('p', { class: 'small muted', text: 'The book gives its strongest answers to symbols this pool cannot roll, so they are read by weight instead: two or more net success with nothing left against it answers "Yes, and", and two or more net failure with nothing left for it answers "No, and".' }));
 
   const answerNode = el('div', { id: 'oracle-answer', 'aria-live': 'polite' });
   const ask = (tally, { rolled = true } = {}) => {

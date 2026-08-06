@@ -134,7 +134,7 @@ export function renderSheet(mount) {
     el('h2', { text: character.identity.name || 'Unnamed' }),
     el('p', { class: 'small muted', text: `${careerName(character.identity.career)} · ${character.xp.available} experience unspent` }),
     character.identity.erratum
-      ? el('p', { class: 'small' }, [el('span', { class: 'badge badge-inferred', text: 'corrected' }), ' ', character.identity.erratum.note])
+      ? el('p', { class: 'small muted', text: character.identity.erratum.note })
       : null
   ]);
   // A name is the one thing you might want to change long after creation.
@@ -301,7 +301,6 @@ function pane_skills(mount, character, derived, rerender) {
       }),
       el('label', { for: `cond-${c.id}` }, [
         el('span', { text: c.name }),
-        c.inferred ? el('span', { class: 'badge badge-inferred', text: 'inferred' }) : null,
         el('span', { class: 'toggle-desc', text: c.effect })
       ])
     ]));
@@ -347,7 +346,6 @@ function pane_gear(mount, character, derived, rerender) {
   invCard.append(el('p', { class: 'small', text: `Carrying ${enc.carried} against a threshold of ${enc.threshold}.` }));
   if (enc.over) {
     invCard.append(el('p', { class: 'small' }, [
-      el('span', { class: 'badge', text: 'enforced' }), ' ',
       `${enc.setbackDice} Setback on ${enc.scope}${enc.losesFreeManeuver ? '; the free maneuver is lost, so each maneuver costs 2 strain' : ''}.`
     ]));
   }
@@ -492,7 +490,7 @@ function pane_talents(mount, character, derived, rerender) {
   if (deathState && DEATH_STATES[deathState.kind]) {
     const def = DEATH_STATES[deathState.kind];
     deathCard.append(el('p', { class: 'small' }, [
-      el('span', { class: 'badge badge-inferred', text: def.name }), ' ', def.perTurn
+      el('strong', { text: def.name }), ' ', def.perTurn
     ]));
     if (deathState.kind === 'endIsNigh') {
       deathCard.append(el('p', { class: 'small', text: `Rounds remaining: ${deathState.roundsRemaining ?? 1}.` }));
@@ -794,7 +792,7 @@ function buyPanel(character, rerender) {
     lede: 'Work out what a purchase will cost and how hard the check is, then pay for it.',
     detail: `Legal goods go through Negotiation, illegal ones through Streetwise, at the difficulty their rarity sets. Above rarity ${BLACK_MARKET.barterFromRarity - 1} this table's house rule also demands ration cards or goods in trade: one card per point of rarity above 5. With nothing to trade the check gets one step harder and the shortfall is made up in cash or favours.`
   }, []);
-  card.append(el('p', {}, [el('span', { class: 'badge badge-house', text: BLACK_MARKET.badge })]));
+  card.append(el('p', { class: 'small muted', text: BLACK_MARKET.badge }));
 
   const itemSelect = el('select', { id: 'buy-item', 'aria-label': 'What to buy', onchange: (e) => { buyState.itemId = e.target.value; rerender(); } });
   catalogue.forEach((item) => itemSelect.append(el('option', {
