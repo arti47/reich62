@@ -611,6 +611,19 @@ async function main() {
         .test(await page.locator('#oracle-answer').innerText()),
       (await page.locator('#oracle-answer').innerText()).replace(/\n/g, ' | '));
     // H-2 — every answer is read against what you expected.
+    check('H-2: the focus reading never doubles its punctuation',
+      !/…\./.test(await page.locator('#oracle-answer').innerText()),
+      (await page.locator('#oracle-answer').innerText()).replace(/\n/g, ' | '));
+    check('H-2: the delete control does not sit on top of the row text',
+      await page.evaluate(() => {
+        const row = document.querySelector('#oracle-log .log-row');
+        if (!row) return true;
+        const b = row.querySelector('.log-delete').getBoundingClientRect();
+        return [...row.querySelectorAll('p')].every((el) => {
+          const r = el.getBoundingClientRect();
+          return r.right <= b.left || r.left >= b.right || r.bottom <= b.top || r.top >= b.bottom;
+        });
+      }));
     check('H-2: the answer carries a focus reading',
       (await page.locator('#oracle-answer .oracle-focus').count()) === 1,
       (await page.locator('#oracle-answer').innerText()).replace(/\n/g, ' | '));
