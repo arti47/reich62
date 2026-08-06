@@ -130,7 +130,10 @@ export const ELEMENTS = {
 export const RANDOM_EVENT = {
   cite: '§19',
   die: 'd10',
-  trigger: 'Any Oracle result carrying a Triumph or a Despair, or on demand when framing a scene.',
+  // R-22 — the printed Oracle pool can roll neither symbol, so the trigger and the skew both
+  // read off the rung that fired instead of off a Triumph or Despair that cannot appear.
+  trigger: 'Either emphatic Oracle answer — "Yes, and" or "No, and" — or on demand when framing a scene.',
+  ruling: 'R-22',
   category: [
     { min: 1, max: 2,  entry: 'NPC action' },
     { min: 3, max: 4,  entry: 'Reich interference' },
@@ -144,7 +147,11 @@ export const RANDOM_EVENT = {
     { min: 7, max: 8,  entry: 'An unresolved thread from earlier' },
     { min: 9, max: 10, entry: 'Something new — interpret freely' }
   ],
-  skew: 'A Triumph skews the event favourable; a Despair skews it toward escalation, often raising Heat.'
+  skew: 'A Triumph skews the event favourable; a Despair skews it toward escalation, often raising Heat.',
+  skewByAnswer: {
+    yesAnd: 'The answer was emphatic in your favour, so read the event as an opening rather than a threat.',
+    noAnd: 'The answer was emphatically against you, so read the event as an escalation.'
+  }
 };
 
 // T60 — Solo play loop — §23

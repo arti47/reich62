@@ -564,20 +564,26 @@ async function main() {
     check('it gives the answer, with the dice folded away under it',
       /(Yes|No)/.test(asked) && /show the dice/i.test(asked), asked.replace(/\n/g, ' | '));
 
-    // A Despair answer reads "No, and…", chains a Random Event, and feeds Heat when the
-    // question concerned a surveilled context (§18, §19, §17.1). The printed Oracle pool
-    // cannot roll a Despair, so it is entered by hand through the physical-dice pad.
+    // An emphatic no chains a Random Event and feeds Heat when the question concerned a
+    // surveilled context (§18, §19, §17.1). The pad offers only symbols this pool can roll.
     await page.locator('#oracle-surveilled').check();
     const heatBeforeOracle = await page.locator('#resource-header').innerText();
     await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
     await page.waitForTimeout(80);
-    await page.getByRole('button', { name: 'One more oracle despair' }).click();
+    check('the hand-entry pad offers no Triumph or Despair for this pool',
+      (await page.getByRole('button', { name: 'One more oracle despair' }).count()) === 0
+      && (await page.getByRole('button', { name: 'One more oracle triumph' }).count()) === 0);
+    await page.getByRole('button', { name: 'One more oracle failure' }).click();
+    await page.getByRole('button', { name: 'One more oracle failure' }).click();
     await page.locator('#oracle-ask-entered').click();
     await page.waitForTimeout(140);
     const oracleAnswer = await page.locator('#oracle-answer').innerText();
-    check('an uncancelled Despair answers "No, and…"', /No, and/.test(oracleAnswer), oracleAnswer);
-    check('a Triumph or Despair chains a Random Event (§19)', /Random Event/.test(oracleAnswer), oracleAnswer);
-    check('Oracle Despair in a surveilled context raises Heat (§17.1)',
+    check('two net failures answer "No, and…"', /No, and/.test(oracleAnswer), oracleAnswer);
+    check('an emphatic answer chains a Random Event (§19)', /Random Event/.test(oracleAnswer), oracleAnswer);
+    check('the event skew reads off the answer, not a symbol this pool cannot roll',
+      /emphatically against you/.test(oracleAnswer) && !/A Triumph skews/.test(oracleAnswer),
+      oracleAnswer.replace(/\n/g, ' | '));
+    check('an emphatic no in a surveilled context raises Heat (§17.1)',
       (await page.locator('#resource-header').innerText()) !== heatBeforeOracle);
 
     // R-22 — the printed pool holds no die that can show a Triumph or a Despair, so the two
