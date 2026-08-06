@@ -8,17 +8,20 @@ import { el, clear, uid, clamp } from './core.js';
 import { showToast, confirmModal, panel, emptyState } from './ui.js';
 import { PANELS } from './help.js';
 import { CLOCKS } from '../data.js';
+import { ENCOUNTER_BLOCKS } from '../data-monsters.js';
 import { listTasks, saveTasks } from './store.js';
+import { dragnetRound } from './combat.js';
+import { activeCharacter } from './store.js';
 
 export const clockSizes = () => CLOCKS.sizes;
 export const clockDirections = () => CLOCKS.directions;
 
 /** Every clock, newest first. Repair jobs and the dragnet live in the same list and are
  *  shown here too, since they are the same shape. */
+/** Everything on the track list. The Dragnet is a clock too — a published one — so it sits
+ *  here with the rest rather than in a second panel saying the same thing. */
 export function listClocks() {
-  // The Dragnet is published with its own escalating opposition and dual Heat cost (B§6),
-  // so it keeps the card built for it on the Combat tab rather than appearing here twice.
-  return listTasks().filter((t) => !t.closed && t.kind !== 'dragnet');
+  return listTasks().filter((t) => !t.closed);
 }
 
 export function createClock({ name, size = CLOCKS.defaultSize, direction = 'against', kind = 'clock', note = '' }) {
@@ -102,10 +105,29 @@ export function renderClocks(mount, { compact = false, onChange = () => {} } = {
     clockSizes().forEach((n) => size.append(el('option', { value: String(n), text: `${n} segments`, selected: n === CLOCKS.defaultSize })));
     const direction = el('select', { id: 'clock-direction', 'aria-label': 'Which way it runs' });
     clockDirections().forEach((d) => direction.append(el('option', { value: d.id, text: d.name })));
-    card.append(name, size, direction, el('button', {
+    // The Dragnet is the one clock the books publish, so it is offered as a kind rather
+    // than left to be rebuilt by hand (B§6).
+    const kind = el('select', { id: 'clock-kind', 'aria-label': 'What kind of clock' }, [
+      el('option', { value: 'clock', text: 'Anything you name' }),
+      el('option', { value: 'dragnet', text: 'Manhunt / Dragnet (from the book)' })
+    ]);
+    card.append(name, size, direction, kind, el('button', {
       type: 'button', class: 'secondary', id: 'clock-add', text: 'Start a clock',
       onclick: () => {
-        createClock({ name: name.value, size: Number(size.value), direction: direction.value });
+        const isDragnet = kind.value === 'dragnet';
+        const block = ENCOUNTER_BLOCKS.find((b) => b.id === 'manhuntDragnet');
+        const made = createClock({
+          name: name.value || (isDragnet ? block.name : 'Clock'),
+          size: Number(size.value),
+          direction: isDragnet ? 'against' : direction.value,
+          kind: kind.value
+        });
+        if (isDragnet) {
+          const tasks = listTasks();
+          const t = tasks.find((x) => x.id === made.id);
+          t.oppositionDice = block.resolution.oppositionDiceStart;
+          saveTasks(tasks);
+        }
         onChange();
       }
     }));
@@ -128,6 +150,23 @@ export function renderClocks(mount, { compact = false, onChange = () => {} } = {
       el('div', { class: 'result-body', text: dir.name })
     ]);
     if (clock.progress >= clock.target) row.append(el('p', { class: 'small', text: CLOCKS.full }));
+
+    // B§6 — the published track keeps its printed behaviour: escalating opposition, and a
+    // failed round costing both suspicion tracks. It is shown here, not ticked by H-4.
+    if (clock.kind === 'dragnet') {
+      row.append(el('p', { class: 'small muted', text: `Stealth or Streetwise against ${clock.oppositionDice || 2} opposition dice, rising by one per in-game hour to a maximum of four. Every failed round advances both suspicion tracks. Elapsed: ${clock.elapsedHours || 0}h.` }));
+      row.append(el('button', {
+        type: 'button', class: 'secondary', text: 'Failed round',
+        'aria-label': `A failed round of ${clock.name}`,
+        onclick: () => { const r = dragnetRound(clock.id, { failed: true, character: activeCharacter() }); (r.effects || []).forEach((e) => showToast(e)); onChange(); }
+      }));
+      row.append(el('button', {
+        type: 'button', class: 'secondary', text: 'Survived round',
+        'aria-label': `A survived round of ${clock.name}`,
+        onclick: () => { const r = dragnetRound(clock.id, { failed: false }); (r.effects || []).forEach((e) => showToast(e)); onChange(); }
+      }));
+    }
+
     row.append(el('button', {
       type: 'button', class: 'secondary', text: '+1', 'aria-label': `Fill one segment of ${clock.name}`,
       onclick: () => { tickClock(clock.id, 1, 'by hand'); onChange(); }

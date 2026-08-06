@@ -175,7 +175,7 @@ function gmEncounters(mount, rerender) {
     if (block.extended) {
       card.append(el('button', {
         type: 'button', class: 'secondary', text: 'Start the dragnet tracker',
-        onclick: () => { createTask({ name: block.name, kind: 'dragnet', target: 4 }); showToast('Dragnet started on the progress tracker'); }
+        onclick: () => { createTask({ name: block.name, kind: 'dragnet', target: 4 }); showToast('Dragnet started — it is on the clocks panel'); }
       }));
     } else {
       // The other three blocks print their skills and opposition, so they can be deployed
