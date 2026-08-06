@@ -558,6 +558,31 @@ async function main() {
     await go('#/solo');
     await page.waitForSelector('#oracle-likelihood');
     check('the Oracle offers all three likelihoods', (await page.locator('#oracle-likelihood option').count()) === 3);
+
+    // The screen runs in the order the printed loop runs (§23), so the buttons follow play
+    // rather than the order they happened to be written in.
+    const soloHeadings = await page.evaluate(() =>
+      [...document.querySelectorAll('#screen .card > h2')].map((h) => h.textContent.trim()));
+    const at = (t) => soloHeadings.findIndex((h) => h.startsWith(t));
+    check('the solo screen follows the printed loop order',
+      at('1 · Frame') >= 0 && at('1 · Frame') < at('2 · Ask') && at('2 · Ask') < at('3 · Resolve')
+      && at('3 · Resolve') < at('4 · Track'), soloHeadings.join(' | '));
+    check('the two logs sit last, after every step',
+      at('Questions you have asked') > at('4 · Track') && at('Prompts you have rolled') > at('4 · Track'),
+      soloHeadings.join(' | '));
+    check('the loop itself opens the screen, folded',
+      await page.evaluate(() => {
+        const d = document.querySelector('#screen > details.accordion');
+        return !!d && /how a turn goes/i.test(d.textContent) && !d.open;
+      }));
+    check('the logs are folded away by default',
+      await page.evaluate(() => {
+        const d = [...document.querySelectorAll('#screen > details.accordion')]
+          .find((x) => /what has happened/i.test(x.querySelector('summary').textContent));
+        return !!d && !d.open;
+      }));
+    check('resolving what you do points at the Roll screen',
+      (await page.locator('#screen a[href="#/roll"]').count()) >= 1);
     // H-2 — what you expect is captured with the question and read back in the log.
     check('H-2: the Oracle asks what you expect', (await page.locator('#oracle-expectation').count()) === 1);
     await page.fill('#oracle-expectation', 'He waves me through');
