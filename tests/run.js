@@ -709,6 +709,47 @@ async function main() {
     await page.getByRole('button', { name: 'Random encounter', exact: true }).click();
     check('the random encounter table rolls', /\(\d+\)/.test(await page.locator('#solo-output').innerText()));
 
+    // --- scene start: the bestiary's Passive Watch, now one tap (B§2) ---
+    await go('#/solo');
+    await page.waitForSelector('#scene-start');
+    const oracleBefore = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem('reich62:oracleLog') || '[]').length);
+    await page.locator('#scene-start').click();
+    await page.waitForTimeout(160);
+    const sceneText = await page.locator('#scene-result').innerText();
+    check('starting a scene rolls Passive Watch and says what came of it',
+      /(you were noticed|nothing reported)/i.test(sceneText), sceneText.replace(/\n/g, ' | '));
+    check('the watch is asked at the likelihood suspicion earns',
+      /asked as (likely|50-50|unlikely)/i.test(sceneText), sceneText.replace(/\n/g, ' | '));
+    check('the answer lands in the Oracle log', await page.evaluate(() =>
+      JSON.parse(localStorage.getItem('reich62:oracleLog') || '[]').length) > oracleBefore);
+    check('the scene is seeded with a place and a faction',
+      /Where: .+\. Who has a hand in it: /.test(sceneText), sceneText.replace(/\n/g, ' | '));
+    check('both prompts land in the prompt log', await page.evaluate(() => {
+      const log = JSON.parse(localStorage.getItem('reich62:ideaLog') || '[]');
+      return log.some((e) => e.table === 'Location') && log.some((e) => e.table === 'Faction');
+    }));
+    check('what suspicion is doing to you is stated either way',
+      /(what suspicion is doing to you|nothing is working against you)/i.test(sceneText),
+      sceneText.replace(/\n/g, ' | '));
+    // Nothing moves a track on its own: a rise is offered, never taken.
+    if (await page.locator('#scene-apply-heat').count()) {
+      const heatBefore = await page.locator('#resource-header').innerText();
+      check('being noticed does not move suspicion by itself',
+        /Suspicion is low|Heat/.test(heatBefore));
+      await page.locator('#scene-apply-heat').click();
+      await page.waitForTimeout(140);
+      check('the offered rise applies when tapped',
+        (await page.locator('#resource-header').innerText()) !== heatBefore);
+      check('and cannot be applied twice',
+        (await page.locator('#scene-apply-heat').count()) === 0);
+    }
+    const ideasBefore = await page.locator('#solo-output .log-row').count();
+    await page.locator('#scene-encounter').click();
+    await page.waitForTimeout(140);
+    check('the encounter roll is its own button and logs a prompt',
+      (await page.locator('#solo-output .log-row').count()) === ideasBefore + 1);
+
     // --- UX pass: seat modes, checklist, suggested spread, confirmations, help ---
     await go('#/settings');
     await page.locator('#mode-gm').check();

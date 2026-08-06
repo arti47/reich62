@@ -94,7 +94,14 @@ export const ADVERSARY_ABILITIES = [
     trigger: { rounds: 3 } },
   { id: 'passiveWatch', name: 'Passive Watch', source: 'bestiary', cite: 'B§2', type: 'passive', heatHook: true,
     summary: 'At the start of any scene in a populated area the GM may secretly roll to see whether the informant network notices something — an Oracle roll (§18), Unlikely by default, more likely if Heat has risen recently.',
-    oracle: { likelihood: 'unlikely' } },
+    // "More likely if Heat has risen recently" is the printed wording; these are the steps
+    // the app reads it as, off the higher of the two suspicion tracks.
+    oracle: { likelihood: 'unlikely', scaleByHeat: [
+      { fromHeat: 4, likelihood: 'likely' },
+      { fromHeat: 2, likelihood: 'fiftyFifty' },
+      { fromHeat: 0, likelihood: 'unlikely' }
+    ] },
+    noticedConsequence: 'The network has something on you. What that costs is the GM\'s call; the books name no number, so the app offers a Personal Heat rise rather than taking one.' },
   { id: 'environmentalAffinityWilderness', name: 'Environmental Affinity — Wilderness', source: 'bestiary', cite: 'B§3', type: 'passive',
     summary: 'The rural counterpart of the Urban entry: removes Setback from this NPC\'s tracking checks outside cities.' },
   { id: 'keenSenses', name: 'Keen Senses', source: 'bestiary', cite: 'B§5', type: 'passive',
