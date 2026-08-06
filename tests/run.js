@@ -125,9 +125,11 @@ async function main() {
       !(await page.locator('#flag-digitalRoller').isDisabled()));
     check('R-B1: the simulated roller is still off by default',
       !(await page.locator('#flag-digitalRoller').isChecked()));
-    // R-8 — the house-aid budget defaults to 500 and is badged.
+    // R-8 — the house-aid budget defaults to 500 and says in words that it is not printed.
     equal('R-8: starting budget defaults to 500', await page.inputValue('#starting-budget'), '500');
-    check('R-8: house-aid badge is shown', await page.getByText('not a printed rule').first().isVisible());
+    check('R-8: the house aid says so in plain words, with no tag',
+      /neither number is printed in the books/i.test(await page.locator('#screen').innerText())
+        && (await page.locator('#screen .badge').count()) === 0);
 
     // Gated tabs appear when their flag is turned on.
     await page.locator('#flag-soloMode').check();
@@ -206,7 +208,9 @@ async function main() {
     check('motivation step advances once all four are set',
       !(await page.getByRole('button', { name: 'Next', exact: true }).isDisabled()));
     await page.getByRole('button', { name: 'Next', exact: true }).click();   // gear
-    check('R-8 house-aid badge on the gear step', await page.getByText('house aid — not a printed rule').first().isVisible());
+    check('R-8: the gear step says the budget is a house aid, with no tag',
+      /house aid, not a printed rule/i.test(await page.locator('#screen').innerText())
+        && (await page.locator('#screen .badge').count()) === 0);
     // Pocket money: rolled once the shopping is done, kept apart from the budget.
     await page.getByRole('button', { name: 'Roll pocket money' }).click();
     await page.waitForTimeout(90);
@@ -753,12 +757,14 @@ async function main() {
       const markers = await page.evaluate(() =>
         (document.querySelector('#screen').innerText.match(/\bR-(?:B1|\d+)\b|§[0-9A-Za-z.]+|B§[0-9]+|D§/g) || []));
       check(`${hash} carries no section numbers or ruling codes`, markers.length === 0, [...new Set(markers)].join(', '));
+      // No boxed tags anywhere: what a tag used to say is now said in the prose (§14 note).
+      check(`${hash} carries no boxed tags`, (await page.locator('#screen .badge').count()) === 0);
     }
 
     // --- HOUSE RULE: the black-market counter on the Gear tab ---
     await go('#/sheet');
     await subtab('Gear');
-    check('the purchase panel is badged as a house rule',
+    check('the purchase panel says it is a house rule',
       /house rule/i.test(await page.locator('#screen').innerText()));
     check('cash, ration cards and barter goods are tracked apart',
       (await page.locator('#purse-cash').count()) === 1

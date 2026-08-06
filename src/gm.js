@@ -142,8 +142,12 @@ function gmBestiary(mount, rerender) {
         (entry.abilities || []).length
           ? el('div', { class: 'small muted', text: `Abilities: ${entry.abilities.map((a) => (adversaryAbility(a) || { name: a }).name).join(', ')}` })
           : null,
-        entry.kind === 'rival' && isVeryChallenging(entry) ? el('span', { class: 'badge badge-inferred', text: 'very challenging' }) : null,
-        entry.heatHook ? el('span', { class: 'badge', text: 'Heat hook' }) : null,
+        (entry.kind === 'rival' && isVeryChallenging(entry)) || entry.heatHook
+          ? el('div', { class: 'small muted', text: [
+              entry.kind === 'rival' && isVeryChallenging(entry) ? 'Very challenging for one starting character.' : null,
+              entry.heatHook ? 'Raises suspicion.' : null
+            ].filter(Boolean).join(' ') })
+          : null,
         entry.abstract ? null : el('button', {
           type: 'button', class: 'secondary', text: 'Drop into combat',
           onclick: () => { const r = addFromBestiary(entry.id); showToast(r.ok ? `${entry.name} added to the tracker` : r.reason); }

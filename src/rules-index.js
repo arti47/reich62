@@ -129,7 +129,7 @@ export function buildIndex() {
 
   D.TALENTS.filter((t) => Settings.showNonSettingTalents() || t.settingApplicable)
     .forEach((t) => out.push(entry(t.name, `A tier ${t.tier} talent costing ${t.tier * 5} experience, used as ${t.activation === 'passive' ? 'a passive effect' : `an ${t.activation}`}${t.ranked ? ', and it can be bought more than once' : ''}. ${t.summary}`, '§12A',
-      t.settingApplicable ? {} : { badge: 'not in this setting' })));
+      t.settingApplicable ? {} : { note: 'Not used in this setting.' })));
 
   Object.entries(D.MOTIVATIONS).filter(([, v]) => Array.isArray(v)).forEach(([kind, list]) => {
     list.forEach((m) => out.push(entry(`${kind}: ${m.name}`, m.detail || '', '§12B')));
@@ -140,7 +140,7 @@ export function buildIndex() {
   N.ADVERSARY_ABILITIES.forEach((a) => out.push(entry(a.name, a.summary, a.cite, {})));
   out.push(entry('NPC quick-generation', `Roll ${N.NPC_QUICKGEN.die} for archetype, then ${N.NPC_QUICKGEN.die} for disposition, then build with the adversary tier recipes. ${N.NPC_QUICKGEN.tierMapping}`, '§20', {}));
 
-  D.CREATION_STEPS.forEach((s) => out.push(entry(`Creation: ${s.name}`, s.summary, s.cite, s.ruling ? { badge: 'house aid', badgeClass: 'badge-house' } : {})));
+  D.CREATION_STEPS.forEach((s) => out.push(entry(`Creation: ${s.name}`, s.summary, s.cite, s.ruling ? { note: 'A house aid, not a printed rule.' } : {})));
   D.CAREERS.forEach((c) => out.push(entry(
     c.name,
     `${c.summary} Its career skills are ${c.skills.map(titleCase).join(', ')}, and you pick four of them to start at rank 1`,
@@ -179,7 +179,7 @@ export function buildIndex() {
   D.DREAD_CHECKS.ladder.forEach((d) => out.push(entry(`Dread check: ${d.severity}`, `${d.difficulty} Discipline check. ${d.example}`, '§29')));
   D.SKILL_EXAMPLES.forEach((s) => out.push(entry(`Using ${titleCase(s.skill)}`, s.example, '§26')));
   D.QUICK_REFERENCE.sections.forEach((s) => out.push(entry(`Quick reference: ${s.title}`, s.body, '§30')));
-  D.CONDITIONS.forEach((c) => out.push(entry(c.name, c.effect, c.cite || '§3.9', c.inferred ? { badge: 'inferred', badgeClass: 'badge-inferred' } : {})));
+  D.CONDITIONS.forEach((c) => out.push(entry(c.name, c.effect, c.cite || '§3.9', c.inferred ? { note: 'The books use the word without defining it; this is the reading the app uses.' } : {})));
   D.SHEET_FIELDS.groups.forEach((g) => out.push(entry(
     `On the character sheet: ${g.name}`, g.fields.join('; '), '§16A')));
 
@@ -208,7 +208,7 @@ export function search(index, query) {
   if (!q) return index;
   const terms = q.split(/\s+/);
   return index.filter((e) => {
-    const haystack = `${e.title} ${e.body} ${e.cite || ''} ${e.badge || ''}`.toLowerCase();
+    const haystack = `${e.title} ${e.body} ${e.cite || ''} ${e.note || ''}`.toLowerCase();
     return terms.every((t) => haystack.includes(t));
   });
 }

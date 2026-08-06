@@ -921,7 +921,6 @@ function combatantCard(c, combat, rerender) {
       }),
       el('label', { for: `cond-${c.id}-${cond.id}` }, [
         el('span', { text: cond.name }),
-        cond.inferred ? el('span', { class: 'badge badge-inferred', text: 'inferred' }) : null,
         el('span', { class: 'toggle-desc', text: cond.effect })
       ])
     ]));

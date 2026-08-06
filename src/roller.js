@@ -748,7 +748,6 @@ export function renderRoller(mount) {
       ]));
       if (dmg.critical) {
         damageBody.append(el('p', { class: 'small', id: 'damage-critical' }, [
-          el('span', { class: 'badge', text: 'critical' }), ' ',
           `${titleCase(dmg.critReason)} means this hit also causes a lasting injury.`
         ]));
       }

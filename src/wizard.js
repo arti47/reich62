@@ -523,8 +523,7 @@ function renderXpStep(node) {
 
 function renderDerivedStep(node) {
   const derived = derivedFor(draft);
-  node.append(el('p', { class: 'small' }, [
-    el('span', { class: 'badge badge-inferred', text: 'inferred' }), ' ',
+  node.append(el('p', { class: 'small muted' }, [
     `Injury limit is ${BASE_WOUND_THRESHOLD} + Brawn and stress limit ${BASE_STRAIN_THRESHOLD} + Willpower. The book states both bases, and flags them as inferred: nothing in the original text printed them, and this pair is what the ready-made characters agree on.`
   ]));
   node.append(el('div', { class: 'stat-grid' }, [
@@ -536,9 +535,7 @@ function renderDerivedStep(node) {
     stat('Encumbrance Threshold', derived.encumbranceThreshold)
   ]));
   if (draft.identity.erratum) {
-    node.append(el('p', { class: 'small' }, [
-      el('span', { class: 'badge badge-inferred', text: 'erratum' }), ' ', draft.identity.erratum.note
-    ]));
+    node.append(el('p', { class: 'small muted', text: draft.identity.erratum.note }));
   }
 }
 
@@ -569,10 +566,7 @@ function renderMotivationStep(node) {
 
 function renderGearStep(node) {
   const budget = Settings.startingBudget();
-  node.append(el('p', { class: 'small' }, [
-    el('span', { class: 'badge badge-house', text: 'house aid — not a printed rule' }), ' ',
-    `Spending ${gearSpent()} of ${budget} ${Settings.currencyLabel()}.`
-  ]));
+  node.append(el('p', { class: 'small muted', text: `A house aid, not a printed rule: the books name neither a currency nor a starting budget. Spending ${gearSpent()} of ${budget} ${Settings.currencyLabel()}.` }));
 
   // Pocket money: rolled once, after the shopping, and kept apart from the budget.
   const cash = startingCash();
