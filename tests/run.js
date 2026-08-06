@@ -152,16 +152,6 @@ async function main() {
     await page.waitForSelector('#char-name');
     await page.fill('#char-name', 'Test Runner');
     await page.locator('#career-resistanceRunner').check();
-    await page.waitForTimeout(90);
-    // H-3 — the career preselects a side, and the choice can be moved.
-    check('the career picks a side for you',
-      await page.locator('#allegiance-opposed').isChecked());
-    await page.locator('#career-sdGestapoAgent').check();
-    await page.waitForTimeout(90);
-    check('a regime career moves the side with it',
-      await page.locator('#allegiance-regime').isChecked());
-    await page.locator('#career-resistanceRunner').check();
-    await page.waitForTimeout(90);
     await page.getByRole('button', { name: 'Next', exact: true }).click();
 
     // Career skills: exactly four picks, and the step will not advance on three.
@@ -719,6 +709,49 @@ async function main() {
     await page.getByRole('button', { name: 'Random encounter', exact: true }).click();
     check('the random encounter table rolls', /\(\d+\)/.test(await page.locator('#solo-output').innerText()));
 
+    // --- H-4 clocks: named, ticked by the symbols a check already produced ---
+    await go('#/combat');
+    await page.waitForSelector('#clock-add');
+    await page.fill('#clock-name', 'Gestapo closing in');
+    await page.selectOption('#clock-size', '4');
+    await page.selectOption('#clock-direction', 'against');
+    await page.locator('#clock-add').click();
+    await page.waitForTimeout(140);
+    const clockRow = () => page.locator('.clock-row', { hasText: 'Gestapo closing in' }).first();
+    check('a clock can be started and shows its face',
+      (await clockRow().locator('.clock-seg').count()) === 4);
+    check('it starts empty', (await clockRow().locator('.clock-seg.is-filled').count()) === 0);
+
+    await go('#/roll');
+    await page.waitForSelector('#roller-clock');
+    await page.selectOption('#roller-clock', { label: 'Gestapo closing in (0/4)' });
+    await page.getByRole('button', { name: 'One more success' }).click();
+    await page.getByRole('button', { name: 'One more threat' }).click();
+    await page.getByRole('button', { name: 'One more threat' }).click();
+    await page.getByRole('button', { name: 'Log this check' }).click();
+    await page.waitForTimeout(160);
+    const outcomeAfter = await page.locator('.outcome').first().innerText();
+    check('H-4: leftover Threat fills the clock the check was pointed at',
+      /Gestapo closing in: 2\/4/.test(outcomeAfter), outcomeAfter.replace(/\n/g, ' | '));
+
+    await go('#/combat');
+    await page.waitForTimeout(120);
+    check('the fill is on the clock face too',
+      (await clockRow().locator('.clock-seg.is-filled').count()) === 2);
+    await clockRow().getByRole('button', { name: /^Fill one segment/ }).click();
+    await page.waitForTimeout(120);
+    await clockRow().getByRole('button', { name: /^Fill one segment/ }).click();
+    await page.waitForTimeout(140);
+    check('a full clock says it has arrived',
+      /has arrived/i.test(await clockRow().innerText()), await clockRow().innerText());
+    check('every move records why', /Last: /.test(await clockRow().innerText()));
+    await clockRow().getByRole('button', { name: /^Close Gestapo/ }).click();
+    await page.waitForSelector('.modal-backdrop');
+    check('closing a clock asks first', /progress is discarded/i.test(await page.locator('.modal').innerText()));
+    await page.getByRole('button', { name: 'Close it' }).click();
+    await page.waitForTimeout(140);
+    check('and removes it', (await page.locator('.clock-row', { hasText: 'Gestapo closing in' }).count()) === 0);
+
     // --- scene start: the bestiary's Passive Watch, now one tap (B§2) ---
     await go('#/solo');
     await page.waitForSelector('#scene-start');
@@ -1222,16 +1255,6 @@ async function main() {
     await page.waitForSelector('#char-name');
     await page.fill('#char-name', 'XP Audit');
     await page.locator('#career-resistanceRunner').check();
-    await page.waitForTimeout(90);
-    // H-3 — the career preselects a side, and the choice can be moved.
-    check('the career picks a side for you',
-      await page.locator('#allegiance-opposed').isChecked());
-    await page.locator('#career-sdGestapoAgent').check();
-    await page.waitForTimeout(90);
-    check('a regime career moves the side with it',
-      await page.locator('#allegiance-regime').isChecked());
-    await page.locator('#career-resistanceRunner').check();
-    await page.waitForTimeout(90);
     await page.getByRole('button', { name: 'Next', exact: true }).click();
     await page.waitForTimeout(90);
     const xpPicks = await page.locator('input[id^="pick-"]').all();

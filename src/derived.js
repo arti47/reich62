@@ -2,7 +2,6 @@
 // R-15: published NPC and animal stats never pass through here; they load verbatim.
 
 import {
-  ALLEGIANCE_DEFAULT,
   BASE_WOUND_THRESHOLD, BASE_STRAIN_THRESHOLD, ENCUMBRANCE, SKILLS, CHARACTERISTICS,
   CHARACTERISTIC_MIN, ARMOUR, ATTACHMENTS
 } from '../data.js';
@@ -18,7 +17,7 @@ export function blankCharacter(over = {}) {
   return {
     schemaVersion: SCHEMA_VERSION,
     id: null,
-    identity: { name: '', career: null, allegiance: ALLEGIANCE_DEFAULT, careerSkills: [], motivation: { desire: null, fear: null, strength: null, flaw: null },
+    identity: { name: '', career: null, careerSkills: [], motivation: { desire: null, fear: null, strength: null, flaw: null },
                // Which facets an opponent has worked out in play (§11).
                motivationRevealed: { desire: false, fear: false, strength: false, flaw: false },
                knowledgeSpecialisation: '', portraitUrl: null },
@@ -50,8 +49,6 @@ export function normalise(character) {
   const base = blankCharacter();
   const out = { ...base, ...character };
   out.identity = { ...base.identity, ...(character.identity || {}) };
-  // H-3 — characters saved before allegiance existed sit in the seat the books assume.
-  if (!out.identity.allegiance) out.identity.allegiance = ALLEGIANCE_DEFAULT;
   out.identity.motivation = { ...base.identity.motivation, ...((character.identity || {}).motivation || {}) };
   out.identity.motivationRevealed = { ...base.identity.motivationRevealed, ...((character.identity || {}).motivationRevealed || {}) };
   out.attributes = { ...base.attributes, ...(character.attributes || {}) };

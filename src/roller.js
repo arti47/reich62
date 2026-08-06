@@ -19,10 +19,10 @@ import {
 import { getCombat } from './store.js';
 import { damageCombatant } from './combat.js';
 import { activeCharacter, getCell, saveCell, saveCharacter } from './store.js';
-import { allegiance as allegianceOf } from './rules.js';
 import { soak as soakOf, woundThreshold, strainThreshold, criticalModifier } from './derived.js';
 import { encumbranceState } from './derived.js';
 import { heatFromCheck, applyPersonalHeat, heatSetbackDice } from './heat.js';
+import { listClocks, applyCheckToClock } from './clocks.js';
 import { Settings } from './settings.js';
 import { STORAGE_PREFIX } from './core.js';
 
@@ -106,6 +106,7 @@ export const state = {
   weaponId: null,
   rangeBand: null,
   targetId: null,
+  clockId: null,          // H-4 — which clock this check feeds, if any
   // Which of the target's skills is resisting, on an opposed check (§3A).
   opposedSkillId: 'discipline',
   // Dice a tapped talent has put into this check, and the talents that did it (§12A).
@@ -571,11 +572,7 @@ export function renderRoller(mount) {
     setup.append(numberField('opp-char', 'Their characteristic', state.opponent.characteristic, (v) => { state.opponent.characteristic = v; rerender(); }));
   }
   setup.append(toggle('roller-blackmarket', 'Black-market deal (house rule)', state.blackMarket, (v) => { state.blackMarket = v; rerender(); }));
-  // H-3 — "under the regime's eyes" means the opposite thing depending on the seat.
-  const seat = allegianceOf(character ? character.identity.allegiance : null);
-  setup.append(toggle('roller-surveilled',
-    seat.hostileToRegimeBlocks ? 'Surveilled context' : 'Watched by your own service',
-    state.surveilled, (v) => { state.surveilled = v; rerender(); }));
+  setup.append(toggle('roller-surveilled', 'Surveilled context', state.surveilled, (v) => { state.surveilled = v; rerender(); }));
   setup.append(toggle('roller-triumph-heat', 'Spend a Triumph to reduce Personal Heat by 1', state.spendTriumphOnHeat, (v) => { state.spendTriumphOnHeat = v; rerender(); }));
   setup.append(toggle('roller-public', 'Public check (Heat Setbacks apply)', state.publicCheck, (v) => { state.publicCheck = v; rerender(); }));
   mount.append(setup);
@@ -647,6 +644,18 @@ export function renderRoller(mount) {
     audienceSelect,
     el('p', { class: 'small muted', text: 'Working a room instead of one person: the size of the audience sets the difficulty and overrides the picker above.' })
   );
+
+  // H-4 — point this check at a clock and its leftover symbols fill it.
+  const clocks = listClocks();
+  if (clocks.length) {
+    const clockSelect = el('select', { id: 'roller-clock', 'aria-label': 'Clock this check feeds', onchange: (e) => { state.clockId = e.target.value || null; rerender(); } });
+    clockSelect.append(el('option', { value: '', text: 'No clock', selected: !state.clockId }));
+    clocks.forEach((c) => clockSelect.append(el('option', {
+      value: c.id, selected: state.clockId === c.id,
+      text: `${c.name} (${c.progress}/${c.target})`
+    })));
+    situationBody.append(el('label', { class: 'small', for: 'roller-clock', text: 'Does this feed a clock?' }), clockSelect);
+  }
 
   const modBody = el('div', {});
   situationBody.append(accordion('Change the dice by hand', [modBody], { key: 'roll-mods', summary: 'upgrade, downgrade, spend a story point' }));
@@ -818,6 +827,16 @@ export function renderRoller(mount) {
       const committed = commit(character);
       const lines = [`Logged as a ${committed.entry.outcome}.`];
       committed.heat.reasons.forEach((r) => lines.push(r));
+      // H-4 — a check pointed at a clock fills it from the symbols it already produced.
+      if (state.clockId) {
+        const ticked = applyCheckToClock(state.clockId, committed.result.net, `${titleCase(state.skillId)} check`);
+        if (ticked && ticked.amount) {
+          lines.push(`${ticked.clock.name}: ${ticked.clock.progress}/${ticked.clock.target} (${ticked.reasons.join(', ')}).`);
+          if (ticked.filled) lines.push(`${ticked.clock.name} is full — it arrives now.`);
+        } else if (ticked) {
+          lines.push(`${ticked.clock.name} did not move: nothing was left over to fill it.`);
+        }
+      }
       if (committed.heatApplied) {
         lines.push(`Suspicion on you: ${committed.heatApplied.before} → ${committed.heatApplied.after}.`);
         committed.heatApplied.crossed.forEach((t) => lines.push(`Now at level ${t.level}: ${t.personal}`));

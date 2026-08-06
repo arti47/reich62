@@ -214,45 +214,40 @@ export async function pinChecks({ check, equal }) {
   equal('H-2: the dial is the higher track, doubled',
     Solo.focusChaos({ state: { personalHeat: 2 } }, { cellHeat: 4 }), 8);
 
-  // H-3 — allegiance relabels the Heat ladder and decides whose blocks are aimed at you.
+  // H-4 — clocks: the dragnet's shape generalised, ticked off symbols already rolled.
   const D2 = await import('../data.js');
-  const R2 = await import('../src/rules.js');
-  const H = await import('../src/heat.js');
-  equal('H-3: three seats', D2.ALLEGIANCES.length, 3);
-  check('H-3: every seat is flagged a house rule', D2.ALLEGIANCES.every((a) => a.houseRule === true));
-  check('H-3: every seat words all five thresholds',
-    D2.ALLEGIANCES.every((a) => a.thresholdLabels.length === D2.HEAT.thresholds.length));
-  equal('H-3: every career maps to a seat',
-    Object.keys(D2.CAREER_ALLEGIANCE).length, D2.CAREERS.length);
-  check('H-3: every mapped seat exists',
-    Object.values(D2.CAREER_ALLEGIANCE).every((id) => D2.ALLEGIANCES.some((a) => a.id === id)));
-  equal('H-3: the SD agent sits inside the regime', R2.allegianceForCareer('sdGestapoAgent'), 'regime');
-  equal('H-3: the resistance runner sits against it', R2.allegianceForCareer('resistanceRunner'), 'opposed');
-  equal('H-3: the fixer takes no side', R2.allegianceForCareer('blackMarketFixer'), 'unaligned');
-  equal('H-3: an unknown seat falls back to the one the books assume',
-    R2.allegiance('nonsense').id, D2.ALLEGIANCE_DEFAULT);
-  // The levels and their dice are the printed ones; only the wording moves.
-  const printed = D2.HEAT.thresholds.map((t) => t.level).join(',');
-  D2.ALLEGIANCES.forEach((a) => equal(`H-3: ${a.id} keeps the printed levels`,
-    R2.heatThresholdsFor(a.id).map((t) => t.level).join(','), printed));
-  check('H-3: the personal Setback at level 1 is untouched by the seat',
-    R2.heatThresholdsFor('regime')[0].personalEffect.setback === 1);
-  check('H-3: a regime seat is not having its papers checked',
-    /credentials/i.test(H.personalEffects(2, 'regime').join(' '))
-    && /papers/i.test(H.personalEffects(2, 'opposed').join(' ')));
-  equal('H-3: each seat names the place that gets blown', H.safehouseTerm('regime'), 'station');
-  // Targeting: the regime's own blocks are not aimed at the regime's own people.
-  const C = await import('../src/combat.js');
-  check('H-3: checkpoints are aimed at a character opposing the regime',
-    C.regimeBlocksApply({ identity: { allegiance: 'opposed' } }) === true);
-  check('H-3: and not at one inside it',
-    C.regimeBlocksApply({ identity: { allegiance: 'regime' } }) === false);
-  check('H-3: an unaligned character is still fair game',
-    C.regimeBlocksApply({ identity: { allegiance: 'unaligned' } }) === true);
-  // The schema back-fills the seat the books assume on characters saved before it existed.
-  const D3 = await import('../src/derived.js');
-  equal('H-3: old characters back-fill to the default seat',
-    D3.normalise({ identity: { name: 'Legacy' } }).identity.allegiance, D2.ALLEGIANCE_DEFAULT);
+  const CL = await import('../src/clocks.js');
+  check('H-4: clocks are flagged a house aid', D2.CLOCKS.houseAid === true);
+  equal('H-4: three sizes', D2.CLOCKS.sizes.join(','), '4,6,8');
+  check('H-4: the published tracks are named apart from the invented shape',
+    D2.CLOCKS.published.map((p) => p.id).join(',') === 'dragnet,heat');
+  const net = (o) => ({ success: 0, advantage: 0, triumph: 0, failure: 0, threat: 0, despair: 0, ...o });
+  equal('H-4: each Threat fills one segment of a clock closing on you',
+    CL.ticksFromCheck(net({ threat: 3 }), 'against').amount, 3);
+  equal('H-4: a Despair fills two', CL.ticksFromCheck(net({ despair: 1 }), 'against').amount, 2);
+  equal('H-4: Success fills a clock you are working on',
+    CL.ticksFromCheck(net({ success: 2 }), 'for').amount, 2);
+  equal('H-4: every two Advantage fills one more',
+    CL.ticksFromCheck(net({ success: 1, advantage: 3 }), 'for').amount, 2);
+  equal('H-4: a Triumph clears a segment from what is closing on you',
+    CL.ticksFromCheck(net({ triumph: 1 }), 'against').amount, -1);
+  equal('H-4: and fills one of your own',
+    CL.ticksFromCheck(net({ triumph: 1 }), 'for').amount, 1);
+  equal('H-4: symbols pointed the wrong way do nothing',
+    CL.ticksFromCheck(net({ success: 3 }), 'against').amount, 0);
+  // A clock fills to its size and no further, and says when it arrives.
+  const made = CL.createClock({ name: 'Test dragnet', size: 4, direction: 'against' });
+  equal('H-4: a new clock starts empty', made.progress, 0);
+  const part = CL.tickClock(made.id, 3, 'test');
+  check('H-4: ticking moves it without filling', part.clock.progress === 3 && part.filled === false);
+  const done = CL.tickClock(made.id, 5, 'test');
+  check('H-4: it stops at its size and reports arrival',
+    done.clock.progress === 4 && done.filled === true);
+  check('H-4: every move records why', done.clock.trail.length >= 2);
+  const applied = CL.applyCheckToClock(made.id, net({ triumph: 1 }), 'a check');
+  equal('H-4: a check can pull it back', applied.clock.progress, 3);
+  CL.closeClock(made.id);
+  check('H-4: closing removes it', !CL.listClocks().some((c) => c.id === made.id));
 
   // Compendium inventory (CLAUDE.md §13.5).
   equal('bestiary: 10 minion groups', M.MINION_GROUPS.length, 10);

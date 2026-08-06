@@ -8,7 +8,6 @@ import {
 } from '../data.js';
 import { BLACK_MARKET } from '../data.js';
 import { ADVERSARY_ABILITIES, ADVERSARY_TIERS } from '../data-npcs.js';
-import { ALLEGIANCES, ALLEGIANCE_DEFAULT, CAREER_ALLEGIANCE, HEAT } from '../data.js';
 import { BESTIARY, ENCOUNTER_BLOCKS, RANDOM_ENCOUNTERS } from '../data-monsters.js';
 
 const byId = (list) => (id) => list.find((entry) => entry.id === id) || null;
@@ -28,23 +27,6 @@ export const adversaryAbility = byId(ADVERSARY_ABILITIES);
 export const adversaryTier = byId(ADVERSARY_TIERS);
 export const bestiaryEntry = byId(BESTIARY);
 export const encounterBlock = byId(ENCOUNTER_BLOCKS);
-
-/** The seat a character sits in (H-3): it relabels the Heat ladder and decides which of
- *  the regime's own blocks are aimed at them. */
-export function allegiance(id) {
-  return ALLEGIANCES.find((a) => a.id === id) || ALLEGIANCES.find((a) => a.id === ALLEGIANCE_DEFAULT);
-}
-
-export const allegianceForCareer = (careerId) => CAREER_ALLEGIANCE[careerId] || ALLEGIANCE_DEFAULT;
-
-/** The §17.3 thresholds, worded for that seat. The levels and their effects are unchanged;
- *  only what the regime doing it is called changes (H-3). */
-export function heatThresholdsFor(allegianceId) {
-  const seat = allegiance(allegianceId);
-  return HEAT.thresholds.map((t, i) => ({ ...t, personal: seat.thresholdLabels[i] || t.personal }));
-}
-
-export const allegianceList = () => ALLEGIANCES;
 
 export const skillsByCategory = (category) => SKILLS.filter((s) => s.category === category);
 

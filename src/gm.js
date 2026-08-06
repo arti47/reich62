@@ -10,22 +10,18 @@ import {
 } from '../data.js';
 import { ADVERSARY_TIERS, ADVERSARY_ABILITIES, NPC_QUICKGEN, ADVERSARY_TALENT } from '../data-npcs.js';
 import { BESTIARY, ENCOUNTER_BLOCKS, RANDOM_ENCOUNTERS, MINION_GROUPS } from '../data-monsters.js';
-import { isVeryChallenging, minionGroupWoundThreshold, adversaryAbility, allegiance as allegianceOf, allegianceList } from './rules.js';
-import { addFromBestiary, createTask, addRecipeNpc, papersCheckReflex, regimeBlocksApply } from './combat.js';
+import { isVeryChallenging, minionGroupWoundThreshold, adversaryAbility } from './rules.js';
+import { addFromBestiary, createTask, addRecipeNpc, papersCheckReflex } from './combat.js';
 import { setUpEncounterBlock } from './roller.js';
 import { activeCharacter } from './store.js';
 import { getCell, saveCell } from './store.js';
-import { applyCellHeat, applyPersonalHeat, safehouseTerm } from './heat.js';
-import { listCharacters } from './store.js';
+import { applyCellHeat, applyPersonalHeat } from './heat.js';
 
 const filters = { tier: 'all', heatOnly: false, challengingOnly: false, query: '' };
 
 /** Papers-Check Reflex outside a running encounter: the ability's Heat effect applies even
  *  when the guards are not on the combat tracker (B§2). */
 function applyCellHeatless(character) {
-  if (!regimeBlocksApply(character)) {
-    return { applied: null, note: 'They are your own people — a papers check costs this character nothing.' };
-  }
   const applied = applyPersonalHeat(character, 1, 'Papers-Check Reflex at a checkpoint');
   return { applied, note: `Papers-Check Reflex: Personal Heat ${applied.before} → ${applied.after}.` };
 }
@@ -69,25 +65,7 @@ function gmCell(mount, rerender) {
       type: 'text', id: 'cell-name', value: cell.name,
       onchange: (e) => { const c = getCell(); c.name = e.target.value; saveCell(c); showToast('Cell name saved'); }
     }),
-    el('p', { class: 'small', text: `Cell Heat ${cell.cellHeat} / ${HEAT.max} · ${safehouseTerm(cell.allegiance)} ${cell.safehouseStatus} · Story Points ${cell.pools.storyPointsPlayer} player / ${cell.pools.storyPointsGM} GM` }),
-    ...allegianceList().map((a) => el('div', { class: 'toggle-row' }, [
-      el('input', {
-        type: 'radio', name: 'cell-allegiance', id: `cell-allegiance-${a.id}`,
-        checked: (cell.allegiance || 'opposed') === a.id,
-        onchange: () => { const c = getCell(); c.allegiance = a.id; saveCell(c); rerender(); }
-      }),
-      el('label', { for: `cell-allegiance-${a.id}` }, [
-        el('span', { text: a.name }),
-        el('span', { class: 'toggle-desc', text: a.summary })
-      ])
-    ])),
-    // H-3 — a party split across sides is playable, but worth saying out loud.
-    (() => {
-      const seats = [...new Set(listCharacters().map((c) => c.identity.allegiance || 'opposed'))];
-      return seats.length > 1
-        ? el('p', { class: 'small', id: 'mixed-party', text: `This party is split across ${seats.length} sides: ${seats.map((s) => allegianceOf(s).name).join(', ')}. Shared suspicion still runs on one track.` })
-        : null;
-    })(),
+    el('p', { class: 'small', text: `Cell Heat ${cell.cellHeat} / ${HEAT.max} · safehouse ${cell.safehouseStatus} · Story Points ${cell.pools.storyPointsPlayer} player / ${cell.pools.storyPointsGM} GM` }),
     el('button', { type: 'button', class: 'secondary', text: 'Cell Heat +1', onclick: () => { const r = applyCellHeat(1); showToast(`Cell Heat ${r.before} → ${r.after}`); rerender(); } }),
     el('button', { type: 'button', class: 'secondary', text: 'Cell Heat −1', onclick: () => { const r = applyCellHeat(-1); showToast(`Cell Heat ${r.before} → ${r.after}`); rerender(); } })
   ]);
