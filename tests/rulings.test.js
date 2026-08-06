@@ -214,6 +214,46 @@ export async function pinChecks({ check, equal }) {
   equal('H-2: the dial is the higher track, doubled',
     Solo.focusChaos({ state: { personalHeat: 2 } }, { cellHeat: 4 }), 8);
 
+  // H-3 — allegiance relabels the Heat ladder and decides whose blocks are aimed at you.
+  const D2 = await import('../data.js');
+  const R2 = await import('../src/rules.js');
+  const H = await import('../src/heat.js');
+  equal('H-3: three seats', D2.ALLEGIANCES.length, 3);
+  check('H-3: every seat is flagged a house rule', D2.ALLEGIANCES.every((a) => a.houseRule === true));
+  check('H-3: every seat words all five thresholds',
+    D2.ALLEGIANCES.every((a) => a.thresholdLabels.length === D2.HEAT.thresholds.length));
+  equal('H-3: every career maps to a seat',
+    Object.keys(D2.CAREER_ALLEGIANCE).length, D2.CAREERS.length);
+  check('H-3: every mapped seat exists',
+    Object.values(D2.CAREER_ALLEGIANCE).every((id) => D2.ALLEGIANCES.some((a) => a.id === id)));
+  equal('H-3: the SD agent sits inside the regime', R2.allegianceForCareer('sdGestapoAgent'), 'regime');
+  equal('H-3: the resistance runner sits against it', R2.allegianceForCareer('resistanceRunner'), 'opposed');
+  equal('H-3: the fixer takes no side', R2.allegianceForCareer('blackMarketFixer'), 'unaligned');
+  equal('H-3: an unknown seat falls back to the one the books assume',
+    R2.allegiance('nonsense').id, D2.ALLEGIANCE_DEFAULT);
+  // The levels and their dice are the printed ones; only the wording moves.
+  const printed = D2.HEAT.thresholds.map((t) => t.level).join(',');
+  D2.ALLEGIANCES.forEach((a) => equal(`H-3: ${a.id} keeps the printed levels`,
+    R2.heatThresholdsFor(a.id).map((t) => t.level).join(','), printed));
+  check('H-3: the personal Setback at level 1 is untouched by the seat',
+    R2.heatThresholdsFor('regime')[0].personalEffect.setback === 1);
+  check('H-3: a regime seat is not having its papers checked',
+    /credentials/i.test(H.personalEffects(2, 'regime').join(' '))
+    && /papers/i.test(H.personalEffects(2, 'opposed').join(' ')));
+  equal('H-3: each seat names the place that gets blown', H.safehouseTerm('regime'), 'station');
+  // Targeting: the regime's own blocks are not aimed at the regime's own people.
+  const C = await import('../src/combat.js');
+  check('H-3: checkpoints are aimed at a character opposing the regime',
+    C.regimeBlocksApply({ identity: { allegiance: 'opposed' } }) === true);
+  check('H-3: and not at one inside it',
+    C.regimeBlocksApply({ identity: { allegiance: 'regime' } }) === false);
+  check('H-3: an unaligned character is still fair game',
+    C.regimeBlocksApply({ identity: { allegiance: 'unaligned' } }) === true);
+  // The schema back-fills the seat the books assume on characters saved before it existed.
+  const D3 = await import('../src/derived.js');
+  equal('H-3: old characters back-fill to the default seat',
+    D3.normalise({ identity: { name: 'Legacy' } }).identity.allegiance, D2.ALLEGIANCE_DEFAULT);
+
   // Compendium inventory (CLAUDE.md §13.5).
   equal('bestiary: 10 minion groups', M.MINION_GROUPS.length, 10);
   equal('bestiary: 12 rivals', M.RIVALS.length, 12);

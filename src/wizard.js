@@ -11,7 +11,7 @@ import {
   BASE_WOUND_THRESHOLD, BASE_STRAIN_THRESHOLD
 } from '../data.js';
 import { PREGENS } from '../data-pregens.js';
-import { canBuyTalent, pyramidLegal, visibleTalents, xpCost, talent, career as careerById } from './rules.js';
+import { canBuyTalent, pyramidLegal, visibleTalents, xpCost, talent, career as careerById, allegianceForCareer, allegianceList } from './rules.js';
 import { blankCharacter, derivedFor, normalise } from './derived.js';
 import { saveCharacter, setActiveCharacter } from './store.js';
 import { Settings } from './settings.js';
@@ -235,7 +235,11 @@ function heldTalents() {
   return map;
 }
 
+export function setAllegiance(id) { draft.identity.allegiance = id; return null; }
+
 export function pickCareer(id) {
+  // H-3 — the career says which seat you most often sit in; the player can move it.
+  draft.identity.allegiance = allegianceForCareer(id);
   if (draft.identity.career === id) return null;
   // Changing career wipes every skill rank, so the experience spent on those ranks comes
   // back with them rather than staying paid for something the character no longer has.
@@ -401,6 +405,25 @@ function renderCareerStep(node) {
     ]));
   });
 
+  // H-3 — which side of the occupation this character stands on. Not a printed rule; it
+  // decides how suspicion reads and whether the regime's blocks are aimed at you.
+  if (draft.identity.career) {
+    node.append(el('h3', { text: 'Which side are you on?' }));
+    node.append(el('p', { class: 'small muted', text: 'A house rule, not a printed one. Your career picks the usual answer; change it if this character is the exception. It sets what suspicion means for you, and whether a checkpoint is aimed at you or staffed by your own people.' }));
+    allegianceList().forEach((a) => {
+      node.append(el('div', { class: 'toggle-row' }, [
+        el('input', {
+          type: 'radio', name: 'allegiance', id: `allegiance-${a.id}`,
+          checked: draft.identity.allegiance === a.id,
+          onchange: () => { setAllegiance(a.id); rerender(); }
+        }),
+        el('label', { for: `allegiance-${a.id}` }, [
+          el('span', { text: a.name }),
+          el('span', { class: 'toggle-desc', text: `${a.summary} ${a.heatMeaning}` })
+        ])
+      ]));
+    });
+  }
 }
 
 function renderSkillsStep(node) {

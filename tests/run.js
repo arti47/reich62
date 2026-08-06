@@ -152,6 +152,16 @@ async function main() {
     await page.waitForSelector('#char-name');
     await page.fill('#char-name', 'Test Runner');
     await page.locator('#career-resistanceRunner').check();
+    await page.waitForTimeout(90);
+    // H-3 — the career preselects a side, and the choice can be moved.
+    check('the career picks a side for you',
+      await page.locator('#allegiance-opposed').isChecked());
+    await page.locator('#career-sdGestapoAgent').check();
+    await page.waitForTimeout(90);
+    check('a regime career moves the side with it',
+      await page.locator('#allegiance-regime').isChecked());
+    await page.locator('#career-resistanceRunner').check();
+    await page.waitForTimeout(90);
     await page.getByRole('button', { name: 'Next', exact: true }).click();
 
     // Career skills: exactly four picks, and the step will not advance on three.
@@ -1212,6 +1222,16 @@ async function main() {
     await page.waitForSelector('#char-name');
     await page.fill('#char-name', 'XP Audit');
     await page.locator('#career-resistanceRunner').check();
+    await page.waitForTimeout(90);
+    // H-3 — the career preselects a side, and the choice can be moved.
+    check('the career picks a side for you',
+      await page.locator('#allegiance-opposed').isChecked());
+    await page.locator('#career-sdGestapoAgent').check();
+    await page.waitForTimeout(90);
+    check('a regime career moves the side with it',
+      await page.locator('#allegiance-regime').isChecked());
+    await page.locator('#career-resistanceRunner').check();
+    await page.waitForTimeout(90);
     await page.getByRole('button', { name: 'Next', exact: true }).click();
     await page.waitForTimeout(90);
     const xpPicks = await page.locator('input[id^="pick-"]').all();

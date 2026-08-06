@@ -67,6 +67,7 @@ export function activeCharacter() {
 export function blankCell(over = {}) {
   return {
     name: '',
+    allegiance: 'opposed',           // H-3 — mixed parties are flagged on the GM screen
     cellHeat: 0,                     // §17.2
     safehouseStatus: 'clear',        // clear | watched | blown
     roster: [],

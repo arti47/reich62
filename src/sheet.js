@@ -10,7 +10,7 @@ import {
 } from '../data.js';
 import {
   talent, buildPool, canBuyTalent, visibleTalents, xpCost, skill as skillById,
-  medicineDifficulty, fallDamage, career as careerById
+  medicineDifficulty, fallDamage, career as careerById, allegiance as allegianceOf
 } from './rules.js';
 import { ITEM_DAMAGE, ATTACHMENTS, DIFFICULTIES, GEAR, WEAPONS, ARMOUR, RARITY, BLACK_MARKET } from '../data.js';
 import { blackMarketPurchase } from './rules.js';
@@ -21,7 +21,7 @@ import {
   derivedFor, woundThreshold, strainThreshold, soak, encumbranceState, criticalModifier
 } from './derived.js';
 import { activeCharacter, saveCharacter, getCell, saveCell as saveCellDirect } from './store.js';
-import { personalEffects, cellEffects, applyPersonalHeat } from './heat.js';
+import { personalEffects, cellEffects, applyPersonalHeat, safehouseTerm } from './heat.js';
 
 /** The persistent resource header: wounds · strain · Story Points · Personal Heat · encumbrance. */
 export function renderResourceHeader() {
@@ -218,9 +218,9 @@ function pane_vitals(mount, character, derived, rerender) {
   const cell = getCell();
   const heatCard = el('div', { class: 'card' }, [
     el('h3', { text: 'Heat' }),
-    el('p', { class: 'small', text: `Personal ${character.state.personalHeat} / 5 · Cell ${cell.cellHeat} / 5 · safehouse ${cell.safehouseStatus}` })
+    el('p', { class: 'small', text: `${allegianceOf(character.identity.allegiance).heatLabel}: ${character.state.personalHeat} / 5 · network ${cell.cellHeat} / 5 · ${safehouseTerm(cell.allegiance)} ${cell.safehouseStatus}` })
   ]);
-  const personal = personalEffects(character.state.personalHeat);
+  const personal = personalEffects(character.state.personalHeat, character.identity.allegiance);
   const cellFx = cellEffects(cell.cellHeat);
   if (personal.length) heatCard.append(el('ul', { class: 'small' }, personal.map((t) => el('li', { text: t }))));
   if (cellFx.length) heatCard.append(el('ul', { class: 'small muted' }, cellFx.map((t) => el('li', { text: t }))));

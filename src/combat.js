@@ -12,7 +12,8 @@ import { BESTIARY, ENCOUNTER_BLOCKS } from '../data-monsters.js';
 import { VEHICLES, VEHICLE_RULES } from '../data.js';
 import {
   minionGroupWoundThreshold, minionGroupSkillRanks, minionCriticalWoundCost,
-  bestiaryEntry, encounterBlock, criticalInjuryFor, criticalInjuryTotal, adversaryAbility
+  bestiaryEntry, encounterBlock, criticalInjuryFor, criticalInjuryTotal, adversaryAbility,
+  allegiance as allegianceOf
 } from './rules.js';
 import { woundThreshold, strainThreshold, soak, derivedFor } from './derived.js';
 import {
@@ -336,11 +337,19 @@ export function healCombatantCritical(combatantId, index) {
 
 /** Papers-Check Reflex (B§2): a PC who fails a Deception or Cool check against this group
  *  takes a Personal Heat check automatically. */
+/** H-3 — the regime's own blocks are not aimed at the regime's own people. */
+export function regimeBlocksApply(character) {
+  return allegianceOf(character ? character.identity.allegiance : null).hostileToRegimeBlocks;
+}
+
 export function papersCheckReflex(combatantId, character, { failed }) {
   const combat = getCombat();
   const c = combat.combatants[combatantId];
   if (!c || !(c.abilities || []).includes('papersCheckReflex')) {
     return { ok: false, reason: 'This combatant does not have Papers-Check Reflex.' };
+  }
+  if (!regimeBlocksApply(character)) {
+    return { ok: true, triggered: false, note: 'They are your own people — a papers check costs you nothing.' };
   }
   if (!failed) return { ok: true, triggered: false, note: 'The check held up; no Heat.' };
   const applied = applyPersonalHeat(character, 1, `Papers-Check Reflex from ${c.name}`);

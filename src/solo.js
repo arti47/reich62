@@ -229,7 +229,7 @@ export function startScene(character, cell) {
     noticed,
     heatApplied: false,
     effects: [
-      ...personalEffects(character ? (character.state.personalHeat || 0) : 0).map((t) => `On you: ${t}`),
+      ...personalEffects(character ? (character.state.personalHeat || 0) : 0, character ? character.identity.allegiance : null).map((t) => `On you: ${t}`),
       ...cellEffects(cell ? (cell.cellHeat || 0) : 0).map((t) => `On the network: ${t}`)
     ],
     place: place.entry,
