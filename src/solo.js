@@ -13,7 +13,11 @@ import { applyPersonalHeat } from './heat.js';
 import { rollPool, diceToRoll, SYMBOL_HELP } from './roller.js';
 import { Settings } from './settings.js';
 
-const ORACLE_SYMBOLS = SYMBOLS.map((s) => s.id);
+// The Oracle pool is Ability against Difficulty, and per D§ neither die carries a Triumph
+// or a Despair, so the hand-entry pad does not offer symbols that cannot come up (R-22).
+const ORACLE_SYMBOLS = SYMBOLS
+  .filter((s) => !['triumph', 'despair'].includes(s.id))
+  .map((s) => s.id);
 
 // The entered tally lives at module scope so it survives navigation, the way the Roll
 // screen's does — an Oracle question part-way through entry is not lost by tapping Home.
@@ -149,7 +153,7 @@ export function renderSolo(mount) {
   oracleCard.append(el('label', { class: 'small', for: 'oracle-likelihood', text: 'Likelihood' }), likelihood);
   oracleCard.append(el('div', { class: 'toggle-row' }, [
     el('input', { type: 'checkbox', id: 'oracle-surveilled', checked: state.surveilled, onchange: (e) => { state.surveilled = e.target.checked; } }),
-    el('label', { for: 'oracle-surveilled' }, [el('span', { text: 'The question concerns somewhere the regime is watching, so a despair draws attention' })])
+    el('label', { for: 'oracle-surveilled' }, [el('span', { text: 'The question concerns somewhere the regime is watching, so an emphatic no draws attention' })])
   ]));
 
   // One button: it rolls the pool, shows what came up, and gives the answer. The Oracle is
@@ -174,7 +178,7 @@ export function renderSolo(mount) {
     let event = null;
     if (verdict.event) {
       event = rollRandomEvent();
-      lines.push(`Random Event: ${event.category} (${event.categoryRoll}) concerning ${event.subject.toLowerCase()} (${event.subjectRoll}).${event.complication ? ` Complication: ${event.complication}.` : ''} ${RANDOM_EVENT.skew}`);
+      lines.push(`Random Event: ${event.category} (${event.categoryRoll}) concerning ${event.subject.toLowerCase()} (${event.subjectRoll}).${event.complication ? ` Complication: ${event.complication}.` : ''} ${RANDOM_EVENT.skewByAnswer[verdict.id] || ''}`);
     }
 
     writeOracleLog({
