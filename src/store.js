@@ -91,6 +91,10 @@ export function saveCell(cell) {
 
 // --- backup ---
 const K_LOG = STORAGE_PREFIX + 'rollLog';
+// The solo screen keeps two logs of its own; a backup that dropped them would lose a
+// session's questions and prompts.
+const K_ORACLE_LOG = STORAGE_PREFIX + 'oracleLog';
+const K_IDEA_LOG = STORAGE_PREFIX + 'ideaLog';
 
 /** Everything that would be lost if this device went away: characters, the network, the
  *  settings, the roll log, the running encounter and the open progress tasks. */
@@ -102,6 +106,8 @@ export function exportAll() {
     cell: getCell(),
     settings: Settings.raw(),
     rollLog: readJson(K_LOG, []),
+    oracleLog: readJson(K_ORACLE_LOG, []),
+    ideaLog: readJson(K_IDEA_LOG, []),
     combat: readJson(K_COMBAT, null),
     tasks: readJson(K_TASKS, [])
   }, null, 2);
@@ -120,12 +126,16 @@ export function describeBackup(json) {
       cell: parsed.cell ? (parsed.cell.name || 'unnamed network') : null,
       cellHeat: parsed.cell ? parsed.cell.cellHeat : null,
       rollLog: (parsed.rollLog || []).length,
+      oracleLog: (parsed.oracleLog || []).length,
+      ideaLog: (parsed.ideaLog || []).length,
       combatRound: combat.active ? combat.round : null,
       tasks: (parsed.tasks || []).length
     },
     current: {
       characters: listCharacters().map((c) => c.identity.name || 'Unnamed'),
       rollLog: readJson(K_LOG, []).length,
+      oracleLog: readJson(K_ORACLE_LOG, []).length,
+      ideaLog: readJson(K_IDEA_LOG, []).length,
       tasks: listTasks().length
     }
   };
@@ -145,6 +155,8 @@ export function importAll(json, { mode = 'replace' } = {}) {
   } else {
     writeJson(K_CHARACTERS, incoming);
     if (parsed.rollLog) localStorage.setItem(K_LOG, JSON.stringify(parsed.rollLog));
+    if (parsed.oracleLog) localStorage.setItem(K_ORACLE_LOG, JSON.stringify(parsed.oracleLog));
+    if (parsed.ideaLog) localStorage.setItem(K_IDEA_LOG, JSON.stringify(parsed.ideaLog));
     if (parsed.combat) writeJson(K_COMBAT, parsed.combat);
     if (parsed.tasks) writeJson(K_TASKS, parsed.tasks);
     if (parsed.cell) writeJson(K_CELL, parsed.cell);

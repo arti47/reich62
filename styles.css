@@ -693,3 +693,33 @@ details.accordion > *:last-child { padding-bottom: 0.6rem; }
 
 /* The Oracle's focus reading: how the answer sits against what you expected (H-2). */
 .oracle-focus { font-size: 0.95rem; margin-bottom: 0.3rem; }
+
+
+/* --- control rhythm ---------------------------------------------------------
+   Buttons, selects and fields sitting loose in a card used to butt straight into
+   each other and into the text above them — the renderers append them as plain
+   siblings, so nothing separated them. One rule gives every loose control the
+   same gap; containers that already manage their own spacing opt out below. */
+#screen button,
+#screen select,
+#screen textarea,
+#screen input:not([type="checkbox"]):not([type="radio"]) {
+  margin: 0.35rem 0.4rem 0.35rem 0;
+}
+
+/* Containers that lay their children out themselves keep their own spacing. */
+.subtabs button,
+.toggle-row button, .toggle-row select, .toggle-row input, .toggle-row textarea,
+.stepper-row input, .stepper-controls button,
+.result-actions button, .result-actions select, .result-actions a,
+.modal-actions button,
+.log-row .log-delete,
+.dice-grid button,
+.bottom-nav a {
+  margin: 0;
+}
+
+/* A label immediately above its own control should sit tight to it. */
+#screen label + select,
+#screen label + input,
+#screen label + textarea { margin-top: 0.15rem; }
