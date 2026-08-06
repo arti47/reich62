@@ -169,6 +169,11 @@ export function buildIndex() {
     `Size ${v.silhouette}, top speed ${v.speed}, handling ${v.handling >= 0 ? '+' : ''}${v.handling}. It takes ${v.hull} hull trauma and ${v.systemStrain} system strain before it stops, behind ${v.armour} armour`,
     '§15E')));
 
+  D.ALLEGIANCES.forEach((a) => out.push(entry(
+    `Side: ${a.name}`,
+    `${a.summary} ${a.heatMeaning} ${a.hostileToRegimeBlocks ? 'Checkpoints, searches and dragnets are aimed at you.' : 'The regime\'s own checks are staffed by your people, so they cost you nothing.'}`,
+    '§17', { note: 'A house rule, not a printed one.' })));
+
   D.HEAT.thresholds.forEach((t) => out.push(entry(`Heat ${t.level}`, `Personal: ${t.personal}. Cell: ${t.cell || '—'}`, '§17.3')));
   D.HEAT.generation.rules.forEach((r) => out.push(entry('Heat generation', `${r.trigger} → Personal Heat ${r.personalHeat > 0 ? '+' : ''}${r.personalHeat}.`, '§17.1')));
   out.push(entry('Heat decay', `${D.HEAT.decay.personal} ${D.HEAT.decay.cell}`, '§17.4'));

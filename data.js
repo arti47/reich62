@@ -1201,6 +1201,75 @@ export const HEAT = {
   adventureEnd: 'A PC at Personal Heat 5 either goes underground, relocating and resetting Heat to 2, or is captured, with the Oracle or GM deciding whether they escape, turn, or leave play.' // §24
 };
 
+// H-3 — **House rule, in neither book:** the manual assumes the PC is hiding from the
+// regime, so Heat reads as "how closely the regime is watching you" and every checkpoint,
+// papers check and dragnet is aimed at you. A PC in the regime's own service, or one with
+// no side, needs the same track to mean something different. Allegiance is stored per
+// character and per cell; it relabels the Heat ladder and decides who is actually hunting
+// you. No number changes — the engine, the thresholds and the decay are all as printed.
+export const ALLEGIANCES = [
+  {
+    id: 'opposed', name: 'Against the regime', houseRule: true,
+    summary: 'Resistance, refugees, foreign assets — the seat the books are written for.',
+    heatLabel: 'Suspicion on you',
+    heatMeaning: 'How closely the regime is watching you.',
+    surveilledByDefault: true,      // routine public checks happen under their eyes
+    hostileToRegimeBlocks: true,    // checkpoints, searches and dragnets are aimed at you
+    safehouseTerm: 'safehouse',
+    thresholdLabels: [
+      'One Setback die on public checks',
+      'Papers checked on sight — opposed Deception or Cool against Perception',
+      'Tailed — an opposed Vigilance check to notice',
+      'An informant is assigned and the residence is searched',
+      'An arrest warrant is issued and a raid is imminent; the Oracle determines timing'
+    ]
+  },
+  {
+    id: 'regime', name: 'Inside the regime', houseRule: true,
+    summary: 'SD, Gestapo, Wehrmacht, Party administration — the checkpoints are yours.',
+    heatLabel: 'Suspicion on you from your own service',
+    heatMeaning: 'How closely internal security is watching you. The Mole Hunter is built for exactly this.',
+    surveilledByDefault: false,     // your own side's eyes are not a surveilled context
+    hostileToRegimeBlocks: false,   // a checkpoint is staffed by your people
+    safehouseTerm: 'station',
+    thresholdLabels: [
+      'One Setback die on checks made in front of colleagues',
+      'Credentials queried — opposed Deception or Cool against Perception',
+      'A file is opened on you; your movements are logged',
+      'A counter-infiltration specialist is assigned and your quarters are searched',
+      'Your own service moves to arrest you; the Oracle determines timing'
+    ]
+  },
+  {
+    id: 'unaligned', name: 'No side but your own', houseRule: true,
+    summary: 'Fixers, medics, smuggler-pilots — useful to everyone, trusted by nobody.',
+    heatLabel: 'Suspicion on you',
+    heatMeaning: 'How closely both sides are watching you.',
+    surveilledByDefault: true,
+    hostileToRegimeBlocks: true,
+    safehouseTerm: 'bolt-hole',
+    thresholdLabels: [
+      'One Setback die on public checks',
+      'Papers checked on sight — opposed Deception or Cool against Perception',
+      'Watched by both sides — an opposed Vigilance check to notice',
+      'Both sides press you to choose, and your place is searched',
+      'Whoever moves first takes you; the Oracle determines timing'
+    ]
+  }
+];
+
+export const ALLEGIANCE_DEFAULT = 'opposed';
+
+// Which seat each career most often sits in. Advisory: the wizard preselects it and the
+// player can change it, exactly as with the careers' suggested Motivations (§14).
+export const CAREER_ALLEGIANCE = {
+  resistanceRunner: 'opposed', displacedSurvivor: 'opposed', forger: 'opposed',
+  foreignIntelligenceAsset: 'opposed',
+  sdGestapoAgent: 'regime', wehrmachtVeteran: 'regime', partyBureaucrat: 'regime',
+  collaborator: 'regime',
+  blackMarketFixer: 'unaligned', fieldMedic: 'unaligned', smugglerPilot: 'unaligned'
+};
+
 // T46 — Encounter and adventure sizing — §20B
 export const ENCOUNTER_SIZING = {
   cite: '§20B',

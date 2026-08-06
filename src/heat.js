@@ -3,6 +3,7 @@
 // Despair in surveilled contexts, applies threshold effects, and decays slowly.
 
 import { HEAT, BLACK_MARKET } from '../data.js';
+import { heatThresholdsFor, allegiance } from './rules.js';
 import { clamp } from './core.js';
 import { getCell, saveCell, saveCharacter } from './store.js';
 
@@ -40,8 +41,9 @@ export function heatFromCheck({
 }
 
 /** Threshold effects in force at a given level (§17.3). */
-export function personalEffects(level) {
-  return HEAT.thresholds.filter((t) => t.level <= level).map((t) => t.personal).filter(Boolean);
+export function personalEffects(level, allegianceId = null) {
+  // The levels and their dice are the printed ones; only the wording follows the seat (H-3).
+  return heatThresholdsFor(allegianceId).filter((t) => t.level <= level).map((t) => t.personal).filter(Boolean);
 }
 
 export function cellEffects(level) {
@@ -92,6 +94,9 @@ export function escalateCell(personalHeat) {
 }
 
 /** Safehouse status: the highest threshold at or below the level that names one (§17.3, §3.8). */
+/** What this seat calls the place that gets watched, then blown (H-3). */
+export const safehouseTerm = (allegianceId) => allegiance(allegianceId).safehouseTerm;
+
 export function safehouseFor(cellHeat) {
   const reached = HEAT.thresholds.filter((t) => t.level <= cellHeat && t.safehouseStatus);
   return reached.length ? reached[reached.length - 1].safehouseStatus : HEAT.safehouseDefault;

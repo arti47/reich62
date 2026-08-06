@@ -19,6 +19,7 @@ import {
 import { getCombat } from './store.js';
 import { damageCombatant } from './combat.js';
 import { activeCharacter, getCell, saveCell, saveCharacter } from './store.js';
+import { allegiance as allegianceOf } from './rules.js';
 import { soak as soakOf, woundThreshold, strainThreshold, criticalModifier } from './derived.js';
 import { encumbranceState } from './derived.js';
 import { heatFromCheck, applyPersonalHeat, heatSetbackDice } from './heat.js';
@@ -570,7 +571,11 @@ export function renderRoller(mount) {
     setup.append(numberField('opp-char', 'Their characteristic', state.opponent.characteristic, (v) => { state.opponent.characteristic = v; rerender(); }));
   }
   setup.append(toggle('roller-blackmarket', 'Black-market deal (house rule)', state.blackMarket, (v) => { state.blackMarket = v; rerender(); }));
-  setup.append(toggle('roller-surveilled', 'Surveilled context', state.surveilled, (v) => { state.surveilled = v; rerender(); }));
+  // H-3 — "under the regime's eyes" means the opposite thing depending on the seat.
+  const seat = allegianceOf(character ? character.identity.allegiance : null);
+  setup.append(toggle('roller-surveilled',
+    seat.hostileToRegimeBlocks ? 'Surveilled context' : 'Watched by your own service',
+    state.surveilled, (v) => { state.surveilled = v; rerender(); }));
   setup.append(toggle('roller-triumph-heat', 'Spend a Triumph to reduce Personal Heat by 1', state.spendTriumphOnHeat, (v) => { state.spendTriumphOnHeat = v; rerender(); }));
   setup.append(toggle('roller-public', 'Public check (Heat Setbacks apply)', state.publicCheck, (v) => { state.publicCheck = v; rerender(); }));
   mount.append(setup);
