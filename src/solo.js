@@ -95,6 +95,10 @@ export function focusChaos(character, cell) {
   return heat * FATE_FOCUS.chaos.multiplier;
 }
 
+/** A band name already ending in punctuation ("As expected, but…") must not collect a
+ *  second full stop when the note is joined onto it. */
+export const focusHeading = (name) => (/[.!?…]$/.test(name) ? `${name} ` : `${name}. `);
+
 const NET_MIN = Math.min(...FATE_FOCUS.bands.map((b) => b.net));
 const NET_MAX = Math.max(...FATE_FOCUS.bands.map((b) => b.net));
 const focusBand = (net) =>
@@ -269,7 +273,7 @@ export function renderSolo(mount) {
         answerNode.append(el('p', { class: 'small muted', text: `You expected: ${state.lastAnswer.expectation}` }));
       }
       answerNode.append(el('p', { class: 'oracle-focus' }, [
-        el('strong', { text: `${focused.name}. ` }), focused.note
+        el('strong', { text: focusHeading(focused.name) }), focused.note
       ]));
     }
     // Strength, the catch and the dice are all evidence for the answer above, so they fold
@@ -371,7 +375,7 @@ export function renderSolo(mount) {
         el('div', { class: 'log-symbols' }, [renderTally(item.net || {})])
       ]);
       if (item.expectation) row.append(el('p', { class: 'small muted', text: `You expected: ${item.expectation}` }));
-      if (item.focus) row.append(el('p', { class: 'small', text: `${item.focus.name}. ${item.focus.note}` }));
+      if (item.focus) row.append(el('p', { class: 'small', text: `${focusHeading(item.focus.name)}${item.focus.note}` }));
       // The row reads back the way it played: the answer, then how hard it landed.
       if (item.intensity) row.append(el('p', { class: 'small', text: item.intensity.note }));
       if (item.surveilled) row.append(el('p', { class: 'small muted', text: 'Asked about somewhere the regime is watching.' }));

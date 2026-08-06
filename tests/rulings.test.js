@@ -223,6 +223,13 @@ export async function pinChecks({ check, equal }) {
     Solo.readFocus(res(0, 0), { chaos: 0 }).chaosRoll, undefined);
   equal('H-2: suspicion never touches a result that spoke for itself',
     Solo.readFocus(res(2, 0), { chaos: 10, chaosRoll: 1 }).id, 'expectedAnd');
+  // A band name ending in an ellipsis must not collect a second full stop.
+  check('H-2: no focus heading doubles its punctuation',
+    S.FATE_FOCUS.bands.every((b) => !/[.!?…]\s*\.$/.test(Solo.focusHeading(b.name).trim())));
+  equal('H-2: an ellipsis heading keeps its own punctuation',
+    Solo.focusHeading('As expected, but…'), 'As expected, but… ');
+  equal('H-2: a plain heading gains a full stop',
+    Solo.focusHeading('In your favour'), 'In your favour. ');
   equal('H-2: the dial is the higher track, doubled',
     Solo.focusChaos({ state: { personalHeat: 2 } }, { cellHeat: 4 }), 8);
 
