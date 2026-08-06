@@ -1017,50 +1017,6 @@ function vehicleDriverRow(v, combat, rerender) {
 function sectionTasks(mount, rerender) {
   const tasks = listTasks();
   renderClocks(mount, { onChange: rerender });
-  const taskCard = panel('Things that take a while', PANELS.combatTasks, []);
-  const taskName = el('input', { type: 'text', id: 'task-name', placeholder: 'Name', 'aria-label': 'Task name' });
-  const taskKind = el('select', { id: 'task-kind', 'aria-label': 'Task kind' }, [
-    el('option', { value: 'dragnet', text: 'Manhunt / Dragnet' })
-  ]);
-  const taskTarget = el('input', { type: 'number', id: 'task-target', min: '1', value: '4', 'aria-label': 'Target' });
-  taskCard.append(taskName, taskKind, taskTarget, el('button', {
-    type: 'button', class: 'secondary', text: 'Add task',
-    onclick: () => { createTask({ name: taskName.value || 'Task', kind: taskKind.value, target: Number(taskTarget.value) }); rerender(); }
-  }));
-
-  tasks.filter((t) => t.kind === 'dragnet').forEach((task) => {
-    const card = el('div', { class: 'result' }, [
-      el('div', { class: 'result-head' }, [
-        el('span', { class: 'result-title', text: task.name }),
-        el('span', { class: 'cite', text: `${task.progress}/${task.target}${task.kind === 'dragnet' ? ` · ${task.oppositionDice} opposition dice` : ''}` })
-      ]),
-      el('div', { class: 'result-body', text: task.kind === 'dragnet'
-        ? `Stealth or Streetwise against a Perception pool that starts at 2 dice and gains one per in-game hour, capped at 4. Every failed round advances Personal and Cell Heat by 1. Elapsed: ${task.elapsedHours}h.`
-        : `${titleCase(task.kind)} track.` })
-    ]);
-    if (task.kind === 'dragnet') {
-      card.append(el('button', {
-        type: 'button', class: 'secondary', text: 'Failed round',
-        onclick: () => { const r = dragnetRound(task.id, { failed: true, character: activeCharacter() }); r.effects.forEach((e) => showToast(e)); rerender(); }
-      }));
-      card.append(el('button', {
-        type: 'button', class: 'secondary', text: 'Survived round',
-        onclick: () => { const r = dragnetRound(task.id, { failed: false }); r.effects.forEach((e) => showToast(e)); rerender(); }
-      }));
-    } else {
-      card.append(el('button', { type: 'button', class: 'secondary', text: '+1', 'aria-label': `Advance ${task.name}`, onclick: () => { advanceTask(task.id, 1); rerender(); } }));
-      card.append(el('button', { type: 'button', class: 'secondary', text: '−1', 'aria-label': `Roll ${task.name} back`, onclick: () => { advanceTask(task.id, -1); rerender(); } }));
-    }
-    card.append(el('button', {
-      type: 'button', class: 'secondary danger', text: 'Close', 'aria-label': `Close ${task.name}`,
-      onclick: async () => {
-        if (!(await confirmModal(`Close "${task.name}"? Its progress is discarded.`, { title: 'Close task', confirmLabel: 'Close it' }))) return;
-        closeTask(task.id); rerender();
-      }
-    }));
-    taskCard.append(card);
-  });
-  mount.append(taskCard);
 }
 
 // --- the boundaries you fire when it is all over (§3.12) ---

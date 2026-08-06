@@ -6,10 +6,10 @@ import { showToast, modal, confirmModal, renderTally, panel, accordion, emptySta
 import { PANELS } from './help.js';
 import { ORACLE, MEANING, ELEMENTS, RANDOM_EVENT, SOLO_LOOP, FATE_FOCUS } from '../data-solo.js';
 import { SYMBOLS } from '../data.js';
-import { NPC_QUICKGEN, ADVERSARY_ABILITIES } from '../data-npcs.js';
-import { RANDOM_ENCOUNTERS, MINION_GROUPS } from '../data-monsters.js';
+import { NPC_QUICKGEN } from '../data-npcs.js';
+import { RANDOM_ENCOUNTERS } from '../data-monsters.js';
 import { activeCharacter, getCell } from './store.js';
-import { applyPersonalHeat, personalEffects, cellEffects } from './heat.js';
+import { applyPersonalHeat } from './heat.js';
 import { rollPool, diceToRoll, SYMBOL_HELP } from './roller.js';
 import { renderClocks } from './clocks.js';
 import { Settings } from './settings.js';
@@ -22,7 +22,7 @@ const ORACLE_SYMBOLS = SYMBOLS
 
 // The entered tally lives at module scope so it survives navigation, the way the Roll
 // screen's does — an Oracle question part-way through entry is not lost by tapping Home.
-const state = { likelihood: 'fiftyFifty', surveilled: false, expectation: '', entered: newTally(), lastAnswer: null, lastScene: null };
+const state = { likelihood: 'fiftyFifty', surveilled: false, expectation: '', entered: newTally(), lastAnswer: null };
 
 // --- the Oracle's own log ---
 // Oracle answers are their own kind of record, so they live apart from the Roll screen's
@@ -176,66 +176,6 @@ export function rollMeaning() {
 export function rollElement(kind) {
   const roll = rollDie(10);
   return { roll, entry: ELEMENTS[kind].find((r) => r.roll === roll).entry };
-}
-
-/** Passive Watch (B§2): a scene-start Oracle roll for the Informant Network, Unlikely by
- *  default and more likely when Heat has risen recently. */
-export const passiveWatch = () => ADVERSARY_ABILITIES.find((a) => a.id === 'passiveWatch');
-
-export function passiveWatchLikelihood(character, cell) {
-  const heat = Math.max(character ? (character.state.personalHeat || 0) : 0, cell ? (cell.cellHeat || 0) : 0);
-  const steps = passiveWatch().oracle.scaleByHeat;
-  const step = steps.find((x) => heat >= x.fromHeat);
-  return step ? step.likelihood : passiveWatch().oracle.likelihood;
-}
-
-/** Open a scene (B§2, §17.3, §15B): roll the informant network's standing watch at the
- *  likelihood the current suspicion earns, note what suspicion is already doing to you,
- *  and seed the scene with a place and a faction. Nothing here moves a track by itself. */
-export function startScene(character, cell) {
-  const likelihoodId = passiveWatchLikelihood(character, cell);
-  const pool = oraclePool(likelihoodId);
-  const rolled = rollPool(pool);
-  const verdict = interpretOracle(rolled.ok ? rolled.tally : newTally());
-  const focus = Settings.fateFocus()
-    ? readFocus(verdict.result, { chaos: focusChaos(character, cell) })
-    : null;
-  const noticed = verdict.id.startsWith('yes');
-
-  writeOracleLog({
-    ts: Date.now(),
-    likelihood: likelihoodId,
-    likelihoodName: ORACLE.likelihoods.find((l) => l.id === likelihoodId).name,
-    expectation: 'The network keeps its eyes down',
-    pool: { ...pool },
-    symbols: rolled.ok ? { ...rolled.tally } : {},
-    net: verdict.result.net,
-    answer: verdict.answer,
-    answerId: verdict.id,
-    focus,
-    surveilled: false,
-    rolledByApp: true,
-    lines: [`Passive Watch: ${noticed ? 'the network noticed something.' : 'nothing reported.'}`]
-  });
-
-  const place = rollElement('location');
-  const faction = rollElement('faction');
-  writeIdeaLog({ table: 'Location', text: `${place.entry} (${place.roll})` });
-  writeIdeaLog({ table: 'Faction', text: `${faction.entry} (${faction.roll})` });
-
-  return {
-    likelihoodName: ORACLE.likelihoods.find((l) => l.id === likelihoodId).name,
-    answer: verdict.answer,
-    focus,
-    noticed,
-    heatApplied: false,
-    effects: [
-      ...personalEffects(character ? (character.state.personalHeat || 0) : 0).map((t) => `On you: ${t}`),
-      ...cellEffects(cell ? (cell.cellHeat || 0) : 0).map((t) => `On the network: ${t}`)
-    ],
-    place: place.entry,
-    faction: faction.entry
-  };
 }
 
 export function renderSolo(mount) {
@@ -502,67 +442,6 @@ export function renderSolo(mount) {
     }
   }
   mount.append(logCard);
-
-  // --- scene start (B§2 Passive Watch, §17.3, §15B) ---
-  const watchLikelihood = passiveWatchLikelihood(character, cell);
-  const network = MINION_GROUPS.find((m) => m.id === 'informantNetwork');
-  const sceneCard = panel('Scene start', PANELS.soloScene, []);
-  sceneCard.append(el('p', { class: 'small muted', text: `${network.name}: ${network.hook}` }));
-  sceneCard.append(el('p', { class: 'small', text: `Suspicion makes this watch ${ORACLE.likelihoods.find((l) => l.id === watchLikelihood).name.toLowerCase()} to turn something up right now.` }));
-  sceneCard.append(el('button', {
-    type: 'button', class: 'primary', id: 'scene-start', text: 'Start the scene',
-    onclick: () => { state.lastScene = startScene(character, cell); rerender(); }
-  }));
-  // The encounter table always yields something, so it stays on its own button: a quiet
-  // scene is allowed to open quietly.
-  sceneCard.append(el('button', {
-    type: 'button', class: 'secondary', id: 'scene-encounter', text: 'Roll an encounter',
-    onclick: () => {
-      const roll = rollDie(10);
-      const row = RANDOM_ENCOUNTERS.table.find((r) => r.roll === roll);
-      const escalate = roll === 10 && cell.cellHeat >= 4 ? ' Cell Heat is 4 or more — escalate toward a nemesis.' : '';
-      writeIdeaLog({ table: 'Random encounter', text: `${row.entry} (${roll}).${escalate}` });
-      ideaShown = IDEA_LOG_PAGE;
-      rerender();
-    }
-  }));
-
-  const scene = state.lastScene;
-  if (scene) {
-    const box = el('div', { id: 'scene-result', 'aria-live': 'polite' });
-    box.append(el('h3', { text: scene.noticed ? 'You were noticed' : 'Nothing reported' }));
-    box.append(el('p', { class: 'small', text: `Passive Watch, asked as ${scene.likelihoodName.toLowerCase()}: ${scene.answer}` }));
-    if (scene.focus) {
-      box.append(el('p', { class: 'oracle-focus' }, [
-        el('strong', { text: focusHeading(scene.focus.name) }), scene.focus.note
-      ]));
-    }
-    box.append(el('p', { class: 'small', text: `Where: ${scene.place}. Who has a hand in it: ${scene.faction}. Both are in the prompt log.` }));
-    // The books say the network notices; they never say what that costs, so the rise is
-    // offered rather than taken.
-    if (scene.noticed && character && !scene.heatApplied) {
-      box.append(el('p', { class: 'small muted', text: passiveWatch().noticedConsequence }));
-      box.append(el('button', {
-        type: 'button', class: 'secondary', id: 'scene-apply-heat', text: 'Personal Heat +1',
-        onclick: () => {
-          const applied = applyPersonalHeat(character, 1, 'The informant network noticed you at scene start');
-          state.lastScene = { ...scene, heatApplied: true };
-          showToast(`Suspicion on you ${applied.before} → ${applied.after}`);
-          document.dispatchEvent(new CustomEvent('resource:refresh'));
-          rerender();
-        }
-      }));
-    }
-    if (scene.heatApplied) box.append(el('p', { class: 'small muted', text: 'Suspicion raised for this one.' }));
-    if (scene.effects.length) {
-      box.append(el('h3', { text: 'What suspicion is doing to you' }));
-      box.append(el('ul', { class: 'small' }, scene.effects.map((t) => el('li', { text: t }))));
-    } else {
-      box.append(el('p', { class: 'small muted', text: 'Suspicion is low enough that nothing is working against you yet.' }));
-    }
-    sceneCard.append(box);
-  }
-  mount.append(sceneCard);
 
   // --- Heat 4+ raid timing (§23) ---
   if (character && character.state.personalHeat >= SOLO_LOOP.heatRule.fromLevel) {
