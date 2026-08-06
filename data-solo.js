@@ -31,24 +31,9 @@ export const ORACLE = {
     noAnd: 'Two or more net Failure with no Advantage left over.',
     badge: 'inferred — the printed pool cannot roll a Triumph or a Despair'
   },
-  // R-22, second half — the same magnitude reading, carried the whole way up and down the
-  // scale rather than stopping at the "and" rung. How many net Success or Failure survive
-  // says how hard the answer lands. Read off the printed symbols; nothing is added to the pool.
-  intensity: {
-    ruling: 'R-22',
-    // `min` is the number of net Success (for a yes) or net Failure (for a no). The wording
-    // describes the result rather than instructing the player, and never repeats the yes or
-    // no the answer above it already gives.
-    levels: [
-      { min: 0, id: 'marginal',     note: 'It barely tipped that way.' },
-      { min: 1, id: 'slight',       note: 'A straightforward result.' },
-      { min: 2, id: 'clear',        note: 'A solid result.' },
-      { min: 3, id: 'strong',       note: 'A powerful result — more than you asked for.' },
-      { min: 4, id: 'overwhelming', note: 'About as decisive as the dice get.' }
-    ],
-    // Leftover Advantage and Threat used to ride along here as a string attached; they now
-    // drive the focus reading instead (H-2), which is the same symbols read once.
-  },
+  // R-22a retired 2026-08-06: the answer used to carry a grading of how hard it landed.
+  // The rung above it already says that — "Yes" against "Yes, and…" — and the focus line
+  // (H-2) does the interpreting, so the grading was a third sentence saying nothing new.
   procedure: [
     'Frame the question and set its likelihood.',
     'Roll the listed Ability dice against the listed Difficulty dice.',

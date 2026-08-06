@@ -606,8 +606,9 @@ async function main() {
     check('R-22: an emphatic answer chains a Random Event', /Random Event/.test(emphatic), emphatic.replace(/\n/g, ' | '));
     check('R-22: it feeds Heat in a surveilled context like a Despair would',
       (await page.locator('#resource-header').innerText()) !== heatBeforeEmphatic);
-    check('R-22: how hard it landed is recorded under the dice',
-      /barely tipped|straightforward result|solid result|powerful result|as decisive as the dice get/i
+    // R-22a retired: the grading sentence is gone, the rung and the focus line carry it.
+    check('the answer carries no grading sentence',
+      !/barely tipped|straightforward result|solid result|powerful result|as decisive as the dice get/i
         .test(await page.locator('#oracle-answer').innerText()),
       (await page.locator('#oracle-answer').innerText()).replace(/\n/g, ' | '));
     // H-2 — every answer is read against what you expected.
@@ -639,13 +640,13 @@ async function main() {
     await page.locator('#oracle-ask-entered').click();
     await page.waitForTimeout(140);
     const graded = await page.locator('#oracle-answer').innerText();
-    check('R-22: three net failures read as more than you asked for',
-      /more than you asked for/i.test(graded), graded.replace(/\n/g, ' | '));
+    check('R-22: a surviving Advantage holds three failures to a plain No',
+      /^No\b/.test(graded.trim()) && !/No, and/.test(graded), graded.replace(/\n/g, ' | '));
     check('H-2: leftover Advantage on a no reads as the focus leaning your way',
       /not quite what you expected/i.test(graded) && /suits you/i.test(graded),
       graded.replace(/\n/g, ' | '));
-    check('R-22: the Oracle log records how hard the answer landed',
-      /barely|nothing attached|comes with it|more than you asked for|as certain as it gets/i
+    check('the Oracle log carries no grading sentence',
+      !/barely tipped|straightforward result|solid result|powerful result|as decisive as the dice get/i
         .test(await page.locator('#oracle-log').innerText()));
     check('the Oracle log row leads with the answer, not the likelihood',
       !/^(Likely|50-50|Unlikely)/.test((await page.locator('#oracle-log .result-title').first().innerText()).trim()),

@@ -171,25 +171,6 @@ export async function pinChecks({ check, equal }) {
   equal('R-22: a Despair still reads "No, and" where one can occur',
     Solo.interpretOracle({ success: 1, advantage: 0, triumph: 0, failure: 0, threat: 0, despair: 1 }).id, 'noAnd');
 
-  // R-22 intensity — the same magnitude reading carried up and down the scale.
-  const grade = (t) => Solo.interpretOracle(t).intensity;
-  const tal = (o) => ({ success: 0, advantage: 0, triumph: 0, failure: 0, threat: 0, despair: 0, ...o });
-  equal('R-22: one net Success reads Slight', grade(tal({ success: 1 })).level, 'slight');
-  equal('R-22: two net Success read Clear', grade(tal({ success: 2 })).level, 'clear');
-  equal('R-22: three net Success read Strong', grade(tal({ success: 3 })).level, 'strong');
-  equal('R-22: four net Success read Overwhelming', grade(tal({ success: 4 })).level, 'overwhelming');
-  equal('R-22: three net Failure read Strong', grade(tal({ failure: 3 })).level, 'strong');
-  equal('R-22: a but-rung answer with no net Success or Failure reads Marginal',
-    grade(tal({ advantage: 1 })).level, 'marginal');
-  check('R-22: the degree wording never repeats the yes or no above it',
-    S.ORACLE.intensity.levels.every((l) => !/^(yes|no)\b/i.test(l.note)));
-  // The degree says how hard it landed and nothing else; only the rider speaks to strings
-  // attached, so "nothing attached" can never sit above "there's a catch".
-  check('R-22: no degree wording claims anything about strings attached',
-    S.ORACLE.intensity.levels.every((l) => !/attach|catch|comes with it|consolation/i.test(l.note)));
-  check('R-22: intensity rises with the count',
-    grade(tal({ success: 4 })).weight > grade(tal({ success: 1 })).weight);
-
   // H-2 — the focus layer, now read off the Oracle roll itself rather than a separate d100.
   check('H-2: the focus table is flagged as a house aid', S.FATE_FOCUS.houseAid === true);
   check('H-2: it no longer needs a die of its own', !S.FATE_FOCUS.die && !!S.FATE_FOCUS.readsFrom);
