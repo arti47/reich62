@@ -57,15 +57,6 @@ export function oraclePool(likelihoodId = state.likelihood) {
   return { ability: l.ability, proficiency: 0, difficulty: l.difficulty, challenge: 0, boost: 0, setback: 0 };
 }
 
-/** How hard the answer lands, and what rides along with it (R-22). The direction comes from
- *  the rungs below; this grades it by how many symbols survived cancelling. */
-export function oracleIntensity(result, answerId) {
-  const yes = answerId.startsWith('yes');
-  const weight = yes ? result.netSuccess : result.netFailure;
-  const level = [...ORACLE.intensity.levels].reverse().find((l) => weight >= l.min);
-  return { weight, level: level.id, note: level.note };
-}
-
 /** The Oracle answers from entered symbols, exactly like every other check (R-B1). */
 export function interpretOracle(tally) {
   const result = outcome(tally);
@@ -84,7 +75,7 @@ export function interpretOracle(tally) {
     if (result.netThreat > 0) return { answer: 'No, but…', id: 'noBut', event: false };
     return { answer: 'No', id: 'no', event: false };
   })();
-  return { ...rung, result, intensity: oracleIntensity(result, rung.id) };
+  return { ...rung, result };
 }
 
 /** The chaos dial for the "let chaos decide" band: the higher of the two suspicion tracks,
@@ -236,7 +227,6 @@ export function renderSolo(mount) {
       net: verdict.result.net,
       answer: verdict.answer,
       answerId: verdict.id,
-      intensity: verdict.intensity,
       focus,
       expectation: state.expectation,
       surveilled: state.surveilled,
@@ -245,7 +235,7 @@ export function renderSolo(mount) {
     });
     state.lastAnswer = {
       answer: verdict.answer, net: verdict.result.net, symbols: { ...tally },
-      intensity: verdict.intensity, focus, expectation: state.expectation, lines
+      focus, expectation: state.expectation, lines
     };
     state.entered = newTally();
     rerender();
@@ -265,7 +255,6 @@ export function renderSolo(mount) {
     // The answer, then one plain sentence saying how hard it landed, then the string
     // attached if there is one. No grading word on screen — it says what happened (R-22a).
     answerNode.append(el('h3', { text: state.lastAnswer.answer }));
-    const power = state.lastAnswer.intensity;
     const focused = state.lastAnswer.focus;
     // The focus is the reading: how this answer sits against what you were expecting (H-2).
     if (focused) {
@@ -279,7 +268,6 @@ export function renderSolo(mount) {
     // Strength, the catch and the dice are all evidence for the answer above, so they fold
     // away under it rather than crowding it.
     const evidence = [];
-    if (power) evidence.push(el('p', { class: 'small', text: power.note }));
     evidence.push(el('p', { class: 'small muted', text: 'What came up' }));
     evidence.push(el('p', {}, [renderTally(state.lastAnswer.symbols || {})]));
     evidence.push(el('p', { class: 'small muted', text: 'What is left after cancelling' }));
@@ -377,7 +365,6 @@ export function renderSolo(mount) {
       if (item.expectation) row.append(el('p', { class: 'small muted', text: `You expected: ${item.expectation}` }));
       if (item.focus) row.append(el('p', { class: 'small', text: `${focusHeading(item.focus.name)}${item.focus.note}` }));
       // The row reads back the way it played: the answer, then how hard it landed.
-      if (item.intensity) row.append(el('p', { class: 'small', text: item.intensity.note }));
       if (item.surveilled) row.append(el('p', { class: 'small muted', text: 'Asked about somewhere the regime is watching.' }));
       (item.lines || []).forEach((line) => row.append(el('p', { class: 'small muted', text: line })));
       row.append(el('button', {
