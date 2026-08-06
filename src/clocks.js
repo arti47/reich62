@@ -95,9 +95,9 @@ export function clockFace(clock) {
 }
 
 /** The clocks panel, used on Combat, Roll and Solo alike. */
-export function renderClocks(mount, { compact = false, onChange = () => {} } = {}) {
+export function renderClocks(mount, { compact = false, onChange = () => {}, title = 'Clocks' } = {}) {
   const clocks = listClocks();
-  const card = panel('Clocks', PANELS.clocks, []);
+  const card = panel(title, PANELS.clocks, []);
 
   if (!compact) {
     const name = el('input', { type: 'text', id: 'clock-name', placeholder: 'What is coming?', 'aria-label': 'Clock name' });

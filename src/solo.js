@@ -184,8 +184,15 @@ export function renderSolo(mount) {
   const character = activeCharacter();
   const cell = getCell();
 
+  // The screen runs in the order the printed loop runs (§23): what a turn is, then frame the
+  // scene, ask the Oracle, resolve your own attempt, track what is closing in, and only then
+  // read back what has already happened.
+  mount.append(accordion('How a turn goes', [
+    el('ol', { class: 'small' }, SOLO_LOOP.steps.map((s) => el('li', { text: s })))
+  ], { key: 'solo-loop', summary: `${SOLO_LOOP.steps.length} steps`, defaultOpen: false }));
+
   // --- Oracle ---
-  const oracleCard = panel('Ask the Oracle', PANELS.soloOracle, []);
+  const oracleCard = panel('2 · Ask the Oracle', PANELS.soloOracle, []);
   const likelihood = el('select', { id: 'oracle-likelihood', 'aria-label': 'Likelihood', onchange: (e) => { state.likelihood = e.target.value; rerender(); } });
   ORACLE.likelihoods.forEach((l) => likelihood.append(el('option', {
     value: l.id, selected: state.likelihood === l.id,
@@ -323,10 +330,8 @@ export function renderSolo(mount) {
     key: 'oracle-manual', summary: 'tap in what came up'
   }));
 
-  mount.append(oracleCard);
-
-  // --- tables ---
-  const tables = panel('Need an idea?', PANELS.soloTables, []);
+  // --- frame the scene (§23 step 1) ---
+  const tables = panel('1 · Frame the scene', PANELS.soloTables, []);
   // A rolled prompt is written to its own log rather than replacing the last one on screen.
   const show = (table, text) => { writeIdeaLog({ table, text }); ideaShown = IDEA_LOG_PAGE; rerender(); };
 
@@ -357,13 +362,38 @@ export function renderSolo(mount) {
     }
   }));
 
-  // Everything rolled here, newest first, kept until you clear it.
+  mount.append(tables);
+  mount.append(oracleCard);
+
+  // --- resolve it yourself (§23 step 4) ---
+  // The Oracle says what the world does; what the character attempts is an ordinary check,
+  // and that lives on the Roll screen. Without this the loop has a step with no door.
+  mount.append(panel('3 · Resolve what you do', PANELS.soloResolve, [
+    el('a', { class: 'empty-action', href: '#/roll', text: 'Open the Roll screen' })
+  ]));
+
+  // --- track what is closing in (§23 step 6) ---
+  renderClocks(mount, { onChange: rerender, title: '4 · Track what is closing in' });
+
+  // Raid timing is a suspicion consequence, so it sits with the tracks rather than beside
+  // the Oracle that resolves it.
+  if (character && character.state.personalHeat >= SOLO_LOOP.heatRule.fromLevel) {
+    mount.append(el('div', { class: 'card' }, [
+      el('h2', { text: 'Raid timing' }),
+      el('p', { class: 'small', text: SOLO_LOOP.heatRule.note }),
+      el('p', { class: 'small muted', text: `Personal Heat ${character.state.personalHeat}: ask the Oracle whether the raid lands this scene rather than deciding it.` })
+    ]));
+  }
+
+  // --- what has happened ---
+  // Both logs are a read-back of play, not a step in it, so they sit last and folded.
   const ideas = readIdeaLog();
+  const ideaCard = panel('Prompts you have rolled', PANELS.soloIdeaLog, []);
   const ideaBody = el('div', { id: 'solo-output', 'aria-live': 'polite' });
   if (!ideas.length) {
     ideaBody.append(emptyState('Nothing rolled yet — tap a table above and it lands here.'));
   } else {
-    tables.append(el('button', {
+    ideaCard.append(el('button', {
       type: 'button', class: 'secondary', id: 'idea-log-clear', text: `Clear all ${ideas.length}`,
       onclick: async () => {
         if (!(await confirmModal(`Delete all ${ideas.length} rolled prompts? This cannot be undone.`, { title: 'Clear the prompts', confirmLabel: 'Delete them' }))) return;
@@ -387,15 +417,14 @@ export function renderSolo(mount) {
       })
     ]));
   });
-  tables.append(ideaBody);
+  ideaCard.append(ideaBody);
   if (ideas.length > ideaShown) {
-    tables.append(el('button', {
+    ideaCard.append(el('button', {
       type: 'button', class: 'secondary', id: 'idea-log-more',
       text: `Show ${Math.min(IDEA_LOG_PAGE, ideas.length - ideaShown)} more of ${ideas.length - ideaShown}`,
       onclick: () => { ideaShown += IDEA_LOG_PAGE; rerender(); }
     }));
   }
-  mount.append(tables);
 
   // --- the Oracle's own log ---
   const log = readOracleLog();
@@ -441,22 +470,9 @@ export function renderSolo(mount) {
       }));
     }
   }
-  mount.append(logCard);
-
-  // --- Heat 4+ raid timing (§23) ---
-  if (character && character.state.personalHeat >= SOLO_LOOP.heatRule.fromLevel) {
-    mount.append(el('div', { class: 'card' }, [
-      el('h2', { text: 'Raid timing' }),
-      el('p', { class: 'small', text: SOLO_LOOP.heatRule.note }),
-      el('p', { class: 'small muted', text: `Personal Heat ${character.state.personalHeat}: ask the Oracle whether the raid lands this scene rather than deciding it.` })
-    ]));
-  }
-
-  renderClocks(mount, { onChange: rerender });
-
-  // --- the loop itself ---
-  mount.append(el('div', { class: 'card' }, [
-    el('h2', { text: 'Solo loop' }),
-    el('ol', { class: 'small' }, SOLO_LOOP.steps.map((s) => el('li', { text: s })))
-  ]));
+  mount.append(accordion('What has happened', [logCard, ideaCard], {
+    key: 'solo-history',
+    summary: `${log.length} answer${log.length === 1 ? '' : 's'} · ${ideas.length} prompt${ideas.length === 1 ? '' : 's'}`,
+    defaultOpen: false
+  }));
 }
