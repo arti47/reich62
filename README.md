@@ -1,4 +1,4 @@
-# REICH '62 Player
+# REICH '62 Player 
 
 An installable PWA player-character companion for **REICH '62**, a Genesys narrative-dice
 system: character creation wizard, in-play tracker, dice engine, Heat system, solo oracle,
