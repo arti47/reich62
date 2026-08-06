@@ -723,3 +723,14 @@ details.accordion > *:last-child { padding-bottom: 0.6rem; }
 #screen label + select,
 #screen label + input,
 #screen label + textarea { margin-top: 0.15rem; }
+
+
+/* --- clocks (H-4) --- */
+.clock-face { display: inline-flex; gap: 0.2rem; margin: 0.3rem 0; }
+.clock-seg {
+  width: 0.85rem; height: 0.85rem;
+  border: 1px solid var(--brass);
+  border-radius: 50%;
+}
+.clock-seg.is-filled { background: var(--oxblood); border-color: var(--oxblood); }
+.clock-row .result-body { margin-top: 0.15rem; }

@@ -11,6 +11,7 @@ import { RANDOM_ENCOUNTERS, MINION_GROUPS } from '../data-monsters.js';
 import { activeCharacter, getCell } from './store.js';
 import { applyPersonalHeat, personalEffects, cellEffects } from './heat.js';
 import { rollPool, diceToRoll, SYMBOL_HELP } from './roller.js';
+import { renderClocks } from './clocks.js';
 import { Settings } from './settings.js';
 
 // The Oracle pool is Ability against Difficulty, and per D§ neither die carries a Triumph
@@ -229,7 +230,7 @@ export function startScene(character, cell) {
     noticed,
     heatApplied: false,
     effects: [
-      ...personalEffects(character ? (character.state.personalHeat || 0) : 0, character ? character.identity.allegiance : null).map((t) => `On you: ${t}`),
+      ...personalEffects(character ? (character.state.personalHeat || 0) : 0).map((t) => `On you: ${t}`),
       ...cellEffects(cell ? (cell.cellHeat || 0) : 0).map((t) => `On the network: ${t}`)
     ],
     place: place.entry,
@@ -571,6 +572,8 @@ export function renderSolo(mount) {
       el('p', { class: 'small muted', text: `Personal Heat ${character.state.personalHeat}: ask the Oracle whether the raid lands this scene rather than deciding it.` })
     ]));
   }
+
+  renderClocks(mount, { onChange: rerender });
 
   // --- the loop itself ---
   mount.append(el('div', { class: 'card' }, [
