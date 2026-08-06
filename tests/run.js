@@ -554,6 +554,9 @@ async function main() {
     await go('#/solo');
     await page.waitForSelector('#oracle-likelihood');
     check('the Oracle offers all three likelihoods', (await page.locator('#oracle-likelihood option').count()) === 3);
+    // H-2 — what you expect is captured with the question and read back in the log.
+    check('H-2: the Oracle asks what you expect', (await page.locator('#oracle-expectation').count()) === 1);
+    await page.fill('#oracle-expectation', 'He waves me through');
 
     // One button rolls the Oracle's dice and answers in the same tap.
     check('the Oracle asks in one tap, with no separate roll step',
@@ -603,8 +606,13 @@ async function main() {
     check('R-22: an emphatic answer chains a Random Event', /Random Event/.test(emphatic), emphatic.replace(/\n/g, ' | '));
     check('R-22: it feeds Heat in a surveilled context like a Despair would',
       (await page.locator('#resource-header').innerText()) !== heatBeforeEmphatic);
-    check('R-22: the answer says in plain words how hard it landed',
-      (await page.locator('#oracle-answer .oracle-degree').count()) === 1,
+    check('R-22: how hard it landed is recorded under the dice',
+      /barely tipped|straightforward result|solid result|powerful result|as decisive as the dice get/i
+        .test(await page.locator('#oracle-answer').innerText()),
+      (await page.locator('#oracle-answer').innerText()).replace(/\n/g, ' | '));
+    // H-2 — every answer is read against what you expected.
+    check('H-2: the answer carries a focus reading',
+      (await page.locator('#oracle-answer .oracle-focus').count()) === 1,
       (await page.locator('#oracle-answer').innerText()).replace(/\n/g, ' | '));
     check('R-22: no bare grading word is shown',
       !/\b(marginal|slight|clear|strong|overwhelming)\b/i.test(await page.locator('#oracle-answer').innerText()),
@@ -630,6 +638,11 @@ async function main() {
       await page.locator('#oracle-log .result-title').first().innerText());
 
     // --- the Oracle keeps its own log, separate from the Roll screen's ---
+    check('H-2: the log records what you expected',
+      /He waves me through/.test(await page.locator('#oracle-log').innerText()));
+    check('H-2: the log records the focus reading',
+      /as you expected|not quite|surprise|in your favour|works against you|turn in the story|as expected/i
+        .test(await page.locator('#oracle-log').innerText()));
     check('answers land in the Oracle log', (await page.locator('#oracle-log .log-row').count()) >= 2,
       String(await page.locator('#oracle-log .log-row').count()));
     const rollLogRows = await page.evaluate(() => {

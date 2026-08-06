@@ -4,7 +4,7 @@
 import { el, clear, titleCase, rollDie, newTally, outcome, uid, STORAGE_PREFIX } from './core.js';
 import { showToast, modal, confirmModal, renderTally, panel, accordion, emptyState, symbolGlyph } from './ui.js';
 import { PANELS } from './help.js';
-import { ORACLE, MEANING, ELEMENTS, RANDOM_EVENT, SOLO_LOOP } from '../data-solo.js';
+import { ORACLE, MEANING, ELEMENTS, RANDOM_EVENT, SOLO_LOOP, FATE_FOCUS } from '../data-solo.js';
 import { SYMBOLS } from '../data.js';
 import { NPC_QUICKGEN } from '../data-npcs.js';
 import { RANDOM_ENCOUNTERS, MINION_GROUPS } from '../data-monsters.js';
@@ -21,7 +21,7 @@ const ORACLE_SYMBOLS = SYMBOLS
 
 // The entered tally lives at module scope so it survives navigation, the way the Roll
 // screen's does — an Oracle question part-way through entry is not lost by tapping Home.
-const state = { likelihood: 'fiftyFifty', surveilled: false, entered: newTally(), lastAnswer: null };
+const state = { likelihood: 'fiftyFifty', surveilled: false, expectation: '', entered: newTally(), lastAnswer: null };
 
 // --- the Oracle's own log ---
 // Oracle answers are their own kind of record, so they live apart from the Roll screen's
@@ -101,6 +101,49 @@ export function interpretOracle(tally) {
   return { ...rung, result, intensity: oracleIntensity(result, rung.id) };
 }
 
+/** The chaos dial for the "let chaos decide" band: the higher of the two suspicion tracks,
+ *  doubled to cover the whole d10 (H-2). Heat 0 never turns the answer against you; Heat 5
+ *  always does. */
+export function focusChaos(character, cell) {
+  const heat = Math.max(character ? (character.state.personalHeat || 0) : 0, cell ? (cell.cellHeat || 0) : 0);
+  return heat * FATE_FOCUS.chaos.multiplier;
+}
+
+const focusBand = (roll) => FATE_FOCUS.bands.find((b) => roll >= b.min && roll <= b.max);
+
+/** Roll the focus: how to read the answer against what you expected (H-2). A 96–100 chains
+ *  an event and rolls again for the focus itself; a second one reads as what you expected. */
+export function rollFocus({ chaos = 0, roll = null, rerollValue = null, chaosRoll = null } = {}) {
+  const first = roll || rollDie(100);
+  let band = focusBand(first);
+  const out = { roll: first, chainsEvent: false, rerolledFrom: null };
+
+  if (band.reroll) {
+    out.chainsEvent = true;
+    out.rerolledFrom = first;
+    const second = rerollValue || rollDie(100);
+    out.roll = second;
+    band = focusBand(second);
+    // A second such roll is read as what you expected rather than looping.
+    if (band.reroll) band = FATE_FOCUS.bands[0];
+  }
+
+  if (band.resolvesTo) {
+    const d10 = chaosRoll || rollDie(10);
+    out.chaosRoll = d10;
+    out.chaos = chaos;
+    const [against, favour] = band.resolvesTo;
+    const resolvedId = d10 <= chaos ? against : favour;
+    out.decidedBy = band.id;
+    band = FATE_FOCUS.bands.find((b) => b.id === resolvedId);
+  }
+
+  out.id = band.id;
+  out.name = band.name;
+  out.note = band.note;
+  return out;
+}
+
 export function rollRandomEvent() {
   const categoryRoll = rollDie(10);
   const subjectRoll = rollDie(10);
@@ -159,6 +202,17 @@ export function renderSolo(mount) {
   // One button: it rolls the pool, shows what came up, and gives the answer. The Oracle is
   // the GM's die, not the character's, so the app rolls it — with a fallback below for
   // anyone using physical dice.
+  // What you expect is what the focus reads against, so it is captured with the question
+  // rather than held in your head (H-2). Optional — blank still works.
+  if (Settings.fateFocus()) {
+    oracleCard.append(el('label', { class: 'small', for: 'oracle-expectation', text: 'What do you expect?' }));
+    oracleCard.append(el('input', {
+      type: 'text', id: 'oracle-expectation', value: state.expectation,
+      placeholder: 'He waves me through', 'aria-label': 'What do you expect the answer to be',
+      oninput: (e) => { state.expectation = e.target.value; }
+    }));
+  }
+
   const pool = oraclePool();
   // The likelihood picker above already says why the pool is what it is, and R-22's
   // substitution is stated in the panel's own "how this works" (§4).
@@ -175,10 +229,16 @@ export function renderSolo(mount) {
       lines.push(`${verdict.byMagnitude ? 'An emphatic no' : 'Despair'} in a surveilled context: Personal Heat ${applied.before} → ${applied.after}.`);
       document.dispatchEvent(new CustomEvent('resource:refresh'));
     }
+    // How to read that answer against what you expected (H-2).
+    const focus = Settings.fateFocus()
+      ? rollFocus({ chaos: focusChaos(character, cell) })
+      : null;
+
+    // One event per question: either trigger fires it, never both (H-2).
     let event = null;
-    if (verdict.event) {
+    if (verdict.event || (focus && focus.chainsEvent)) {
       event = rollRandomEvent();
-      lines.push(`Random Event: ${event.category} (${event.categoryRoll}) concerning ${event.subject.toLowerCase()} (${event.subjectRoll}).${event.complication ? ` Complication: ${event.complication}.` : ''} ${RANDOM_EVENT.skewByAnswer[verdict.id] || ''}`);
+      lines.push(`Random Event: ${event.category} (${event.categoryRoll}) concerning ${event.subject.toLowerCase()} (${event.subjectRoll}).${event.complication ? ` Complication: ${event.complication}.` : ''} ${verdict.event ? (RANDOM_EVENT.skewByAnswer[verdict.id] || '') : ''}`);
     }
 
     writeOracleLog({
@@ -191,13 +251,15 @@ export function renderSolo(mount) {
       answer: verdict.answer,
       answerId: verdict.id,
       intensity: verdict.intensity,
+      focus,
+      expectation: state.expectation,
       surveilled: state.surveilled,
       rolledByApp: rolled,
       lines
     });
     state.lastAnswer = {
       answer: verdict.answer, net: verdict.result.net, symbols: { ...tally },
-      intensity: verdict.intensity, lines
+      intensity: verdict.intensity, focus, expectation: state.expectation, lines
     };
     state.entered = newTally();
     rerender();
@@ -218,17 +280,31 @@ export function renderSolo(mount) {
     // attached if there is one. No grading word on screen — it says what happened (R-22a).
     answerNode.append(el('h3', { text: state.lastAnswer.answer }));
     const power = state.lastAnswer.intensity;
-    if (power) {
-      answerNode.append(el('p', { class: 'oracle-degree', text: power.note }));
-      if (power.rider) answerNode.append(el('p', { class: 'oracle-rider', text: power.rider.text }));
+    const focused = state.lastAnswer.focus;
+    // The focus is the reading: how this answer sits against what you were expecting (H-2).
+    if (focused) {
+      if (state.lastAnswer.expectation) {
+        answerNode.append(el('p', { class: 'small muted', text: `You expected: ${state.lastAnswer.expectation}` }));
+      }
+      answerNode.append(el('p', { class: 'oracle-focus' }, [
+        el('strong', { text: `${focused.name}. ` }), focused.note
+      ]));
     }
-    // The dice are evidence, not the answer, so they fold away under it.
-    answerNode.append(accordion('Show the dice', [
-      el('p', { class: 'small muted', text: 'What came up' }),
-      el('p', {}, [renderTally(state.lastAnswer.symbols || {})]),
-      el('p', { class: 'small muted', text: 'What is left after cancelling' }),
-      el('p', {}, [renderTally(state.lastAnswer.net)])
-    ], { key: 'oracle-dice', summary: 'what came up' }));
+    // Strength, the catch and the dice are all evidence for the answer above, so they fold
+    // away under it rather than crowding it.
+    const evidence = [];
+    if (power) {
+      evidence.push(el('p', { class: 'small', text: power.note }));
+      if (power.rider) evidence.push(el('p', { class: 'small', text: power.rider.text }));
+    }
+    evidence.push(el('p', { class: 'small muted', text: 'What came up' }));
+    evidence.push(el('p', {}, [renderTally(state.lastAnswer.symbols || {})]));
+    evidence.push(el('p', { class: 'small muted', text: 'What is left after cancelling' }));
+    evidence.push(el('p', {}, [renderTally(state.lastAnswer.net)]));
+    if (focused && focused.chaosRoll) {
+      evidence.push(el('p', { class: 'small muted', text: `Suspicion decided this one: rolled ${focused.chaosRoll} against ${focused.chaos}.` }));
+    }
+    answerNode.append(accordion('Show the dice', evidence, { key: 'oracle-dice', summary: 'how it landed' }));
     (state.lastAnswer.lines || []).forEach((line) => answerNode.append(el('p', { class: 'small', text: line })));
   }
   oracleCard.append(answerNode);
@@ -315,6 +391,8 @@ export function renderSolo(mount) {
         ]),
         el('div', { class: 'log-symbols' }, [renderTally(item.net || {})])
       ]);
+      if (item.expectation) row.append(el('p', { class: 'small muted', text: `You expected: ${item.expectation}` }));
+      if (item.focus) row.append(el('p', { class: 'small', text: `${item.focus.name}. ${item.focus.note}` }));
       // The row reads back the way it played: the answer, then how hard it landed.
       if (item.intensity) {
         row.append(el('p', { class: 'small', text: item.intensity.note }));

@@ -203,6 +203,33 @@ export async function pinChecks({ check, equal }) {
   check('R-22: intensity rises with the count',
     grade(tal({ success: 4 })).weight > grade(tal({ success: 1 })).weight);
 
+  // H-2 — the Fate Question Focus layer, a labelled house aid over the printed §18 Oracle.
+  check('H-2: the focus table is flagged as a house aid', S.FATE_FOCUS.houseAid === true);
+  equal('H-2: it is a d100 in 10 bands', `${S.FATE_FOCUS.die}/${S.FATE_FOCUS.bands.length}`, 'd100/10');
+  let focusCursor = 0, focusContiguous = true;
+  S.FATE_FOCUS.bands.forEach((b) => { if (b.min !== focusCursor + 1) focusContiguous = false; focusCursor = b.max; });
+  check('H-2: the bands cover 1–100 with no gap or overlap', focusContiguous && focusCursor === 100);
+  equal('H-2: 1 reads as what you expected', Solo.rollFocus({ roll: 1 }).id, 'asExpected');
+  equal('H-2: 42 is a surprise', Solo.rollFocus({ roll: 42 }).id, 'surprise');
+  equal('H-2: 75 diminishes the answer', Solo.rollFocus({ roll: 75 }).id, 'expectedBut');
+  equal('H-2: 90 adds to the answer', Solo.rollFocus({ roll: 90 }).id, 'expectedAnd');
+  // The chaos row resolves off the suspicion dial: the roll or lower goes against you.
+  equal('H-2: chaos at or under the dial works against you',
+    Solo.rollFocus({ roll: 60, chaos: 6, chaosRoll: 6 }).id, 'againstYou');
+  equal('H-2: chaos above the dial works in your favour',
+    Solo.rollFocus({ roll: 60, chaos: 6, chaosRoll: 7 }).id, 'inFavour');
+  equal('H-2: with no suspicion chaos never turns on you',
+    Solo.rollFocus({ roll: 60, chaos: 0, chaosRoll: 1 }).id, 'inFavour');
+  equal('H-2: the dial is the higher track, doubled',
+    Solo.focusChaos({ state: { personalHeat: 2 } }, { cellHeat: 4 }), 8);
+  // 96–100 chains an event and rerolls for the focus; a second one reads as expected.
+  check('H-2: a 96+ chains an event', Solo.rollFocus({ roll: 97, rerollValue: 10 }).chainsEvent === true);
+  equal('H-2: and rerolls for the real focus', Solo.rollFocus({ roll: 97, rerollValue: 42 }).id, 'surprise');
+  equal('H-2: a second 96+ reads as what you expected',
+    Solo.rollFocus({ roll: 97, rerollValue: 99 }).id, 'asExpected');
+  check('H-2: no band leaves the focus unnamed',
+    S.FATE_FOCUS.bands.every((b) => !!b.name && !!b.note));
+
   // Compendium inventory (CLAUDE.md §13.5).
   equal('bestiary: 10 minion groups', M.MINION_GROUPS.length, 10);
   equal('bestiary: 12 rivals', M.RIVALS.length, 12);

@@ -690,3 +690,6 @@ details.accordion > *:last-child { padding-bottom: 0.6rem; }
 }
 .update-bar .update-text { flex: 1 1 100%; font-size: 0.9rem; }
 .update-bar button { margin: 0; }
+
+/* The Oracle's focus reading: how the answer sits against what you expected (H-2). */
+.oracle-focus { font-size: 0.95rem; margin-bottom: 0.3rem; }

@@ -35,6 +35,7 @@ export const FLAGS = [
     note: () => DIE_FACES === null ? 'No face table is loaded, so the app cannot roll for you.' : `Rolls against the supplied face table. ${plain(DIE_FACES_SOURCE.note)}`,
     blocked: () => DIE_FACES === null },
   { id: 'showNonSettingTalents', label: 'Show non-setting talents', desc: 'Reveals the 12 talents that reference things this setting does not have — hacking rules, bows, aircraft, cybernetics, animal companions.' },
+  { id: 'fateFocus', defaultOn: true, label: 'Oracle focus table', desc: 'Reads every Oracle answer against what you expected before you asked — as expected, not quite, in your favour, against you, and so on. A house aid from another solo system, not a printed rule; on by default.' },
   { id: 'gmDiscretionaryDice', label: 'GM discretionary dice', desc: 'Exposes the outnumbered and ganging-up dice, which the book says to use sparingly rather than automatically.' },
   { id: 'advancedAutomation', label: 'Advanced automation', desc: 'Applies environmental dice, encumbrance penalties and Heat setbacks without prompting first.' }
 ];
@@ -53,6 +54,8 @@ export const Settings = {
   digitalRoller: () => DIE_FACES !== null && !!get('digitalRoller'),
   showNonSettingTalents: () => !!get('showNonSettingTalents'),
   gmDiscretionaryDice: () => !!get('gmDiscretionaryDice'),
+  // H-2 — the one flag that starts on: the Oracle panel is built around the focus reading.
+  fateFocus: () => get('fateFocus') !== false,
   advancedAutomation: () => !!get('advancedAutomation'),
 
   // R-8 — house aids, relabellable, never presented as printed rules.
