@@ -194,6 +194,12 @@ export async function pinChecks({ check, equal }) {
   check('R-22: the degree wording never repeats the yes or no above it',
     S.ORACLE.intensity.levels.every((l) => !/^(yes|no)\b/i.test(l.note)));
   check('R-22: a clean answer carries no rider', grade(tal({ success: 3 })).rider === null);
+  // The degree says how hard it landed and nothing else; only the rider speaks to strings
+  // attached, so "nothing attached" can never sit above "there's a catch".
+  check('R-22: no degree wording claims anything about strings attached',
+    S.ORACLE.intensity.levels.every((l) => !/attach|catch|comes with it|consolation/i.test(l.note)));
+  check('R-22: a yes with leftover Threat still states the catch',
+    grade(tal({ success: 1, threat: 2 })).rider !== null);
   check('R-22: intensity rises with the count',
     grade(tal({ success: 4 })).weight > grade(tal({ success: 1 })).weight);
 
