@@ -17,7 +17,8 @@ import {
 import { woundThreshold, strainThreshold, soak, derivedFor } from './derived.js';
 import {
   getCombat, saveCombat, blankCombat, listTasks, saveTasks, activeCharacter, listCharacters,
-  saveCharacter, getCell, saveCell, snapshot, undoSnapshot, lastSnapshot, setSceneWatched
+  saveCharacter, getCell, saveCell, snapshot, undoSnapshot, lastSnapshot, setSceneWatched,
+  getScene, startScene, endScene
 } from './store.js';
 import { applyCellHeat, applyPersonalHeat, safehouseFor } from './heat.js';
 import { renderClocks } from './clocks.js';
@@ -558,6 +559,12 @@ const FLAG_KEYS = {
   week: 'perWeekFlags'
 };
 
+/** How a scene reads back: its number, and its name when it was given one. */
+export function sceneLabel(scene) {
+  if (!scene) return 'no scene';
+  return scene.name ? `scene ${scene.number}, "${scene.name}"` : `scene ${scene.number}`;
+}
+
 export function previewBoundary(boundaryId, options = {}) {
   const boundary = LIFECYCLE.boundaries.find((b) => b.id === boundaryId);
   if (!boundary) return null;
@@ -571,6 +578,10 @@ export function previewBoundary(boundaryId, options = {}) {
     deltas.push('Clear "out of ammunition for the encounter" states and expire round-duration effects.');
   }
   if (boundaryId === 'scene') {
+    const scene = getScene();
+    deltas.push(scene
+      ? `Close ${sceneLabel(scene)}${scene.name ? '' : ', which has no name'}.`
+      : 'No scene is running, so this just clears whatever the last one left set up.');
     // What this boundary actually does, rather than what a synthesised bundle once claimed:
     // it clears the state that belongs to the scene just ended. Nothing in the app carries a
     // scene-duration effect or a dread-check flag, so it no longer says it clears them.
@@ -655,6 +666,7 @@ export function fireBoundary(boundaryId, options = {}) {
   // The scene's own state lives on two screens, so the boundary clears it there too rather
   // than leaving the next scene set up as the last one ended.
   if (boundaryId === 'scene') {
+    endScene();
     setSceneWatched(false);
     // The Roll screen and the Oracle each own their own scene state, so they are told the
     // scene ended rather than reached into from here (§13.9 module discipline).
@@ -1037,6 +1049,19 @@ function sectionTasks(mount, rerender) {
 function sectionLifecycle(mount, rerender) {
   const lifecycle = panel('Wrapping up', PANELS.combatLifecycle, []);
   const sessionOptions = { downtime: false, motivationPlay: false, lengthAdjustment: 0 };
+
+  // A scene needs a beginning if End Scene is to have anything to end, and the two screens
+  // read the same record, so starting one here shows up on the Solo tab and the reverse.
+  const scene = getScene();
+  if (scene) {
+    lifecycle.append(el('p', { class: 'small', id: 'combat-scene-now', text: `You are in ${sceneLabel(scene)}, started ${new Date(scene.startedAt).toLocaleTimeString()}.` }));
+  } else {
+    const sceneName = el('input', { type: 'text', id: 'combat-scene-name', placeholder: 'Name this scene (optional)', 'aria-label': 'Name this scene' });
+    lifecycle.append(sceneName, el('button', {
+      type: 'button', class: 'secondary', id: 'combat-scene-start', text: 'Start a scene',
+      onclick: () => { startScene(sceneName.value.trim()); rerender(); }
+    }));
+  }
   LIFECYCLE.boundaries.forEach((boundary) => {
     lifecycle.append(el('button', {
       type: 'button', class: 'secondary', text: boundary.name,

@@ -559,6 +559,26 @@ async function main() {
     await page.waitForSelector('#oracle-likelihood');
     check('the Oracle offers all three likelihoods', (await page.locator('#oracle-likelihood option').count()) === 3);
 
+    // A scene needs a beginning if End Scene is to have anything to end, and the result of
+    // a rolled prompt has to appear where the button is — sending it only to a log folded
+    // away at the bottom of the screen made the buttons look broken.
+    check('a scene can be started', (await page.locator('#scene-start').count()) === 1);
+    await page.fill('#scene-name', 'Checkpoint on the river road');
+    await page.locator('#scene-start').click();
+    await page.waitForTimeout(150);
+    check('and the screen says which scene you are in',
+      /scene 1, "Checkpoint on the river road"/.test(await page.locator('#scene-now').innerText()),
+      await page.locator('#scene-now').innerText());
+    check('the end control names the scene it will close',
+      /Checkpoint on the river road/.test(await page.locator('#solo-end-scene').innerText()),
+      await page.locator('#solo-end-scene').innerText());
+    await page.getByRole('button', { name: 'Meaning', exact: true }).click();
+    await page.waitForTimeout(200);
+    check('a rolled prompt shows its result where the button is',
+      (await page.locator('#idea-latest').isVisible())
+      && (await page.locator('#idea-latest').innerText()).trim().length > 10,
+      (await page.locator('#idea-latest').innerText()).replace(/\n/g, ' | '));
+
     // The screen runs in the order the printed loop runs (§23), so the buttons follow play
     // rather than the order they happened to be written in.
     const soloHeadings = await page.evaluate(() =>
@@ -837,6 +857,8 @@ async function main() {
       /scene ended/i.test(await page.locator('#screen .outcome').last().innerText()),
       (await page.locator('#screen .outcome').last().innerText()).replace(/\n/g, ' | '));
     check('and offers a one-step undo', (await page.locator('#solo-undo-scene').count()) === 1);
+    check('the scene is closed, so a new one can be started',
+      (await page.locator('#scene-start').count()) === 1);
     // The boundary is not a no-op: the state the scene owned is genuinely gone.
     check('ending the scene clears the watched flag on the character',
       await page.evaluate(() => {

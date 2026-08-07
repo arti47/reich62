@@ -8,11 +8,11 @@ import { ORACLE, MEANING, ELEMENTS, RANDOM_EVENT, SOLO_LOOP, FATE_FOCUS } from '
 import { SYMBOLS } from '../data.js';
 import { NPC_QUICKGEN } from '../data-npcs.js';
 import { RANDOM_ENCOUNTERS } from '../data-monsters.js';
-import { activeCharacter, getCell, sceneWatched, setSceneWatched } from './store.js';
+import { activeCharacter, getCell, sceneWatched, setSceneWatched, getScene, startScene } from './store.js';
 import { applyPersonalHeat } from './heat.js';
 import { rollPool, diceToRoll, SYMBOL_HELP } from './roller.js';
 import { renderClocks, listClocks, applyCheckToClock } from './clocks.js';
-import { previewBoundary, fireBoundary, undoLastBoundary } from './combat.js';
+import { previewBoundary, fireBoundary, undoLastBoundary, sceneLabel } from './combat.js';
 import { HEAT } from '../data.js';
 import { Settings } from './settings.js';
 
@@ -395,7 +395,24 @@ export function renderSolo(mount) {
 
   // --- frame the scene (§23 step 1) ---
   const tables = panel('1 · Frame the scene', PANELS.soloTables, []);
-  // A rolled prompt is written to its own log rather than replacing the last one on screen.
+
+  // A scene needs a beginning if it is going to have an end. This is app bookkeeping, not a
+  // rule: a number, an optional name, and a start time, so the boundary has something to
+  // close and the screen can say which scene you are in.
+  const scene = getScene();
+  if (scene) {
+    tables.append(el('p', { class: 'small', id: 'scene-now', text: `You are in ${sceneLabel(scene)}, started ${new Date(scene.startedAt).toLocaleTimeString()}. Close it in step 6 when it has played out.` }));
+  } else {
+    const sceneName = el('input', { type: 'text', id: 'scene-name', placeholder: 'Checkpoint on the river road', 'aria-label': 'Name this scene' });
+    tables.append(el('label', { class: 'small', for: 'scene-name', text: 'What is this scene? (optional)' }), sceneName);
+    tables.append(el('button', {
+      type: 'button', class: 'primary', id: 'scene-start', text: 'Start a scene',
+      onclick: () => { startScene(sceneName.value.trim()); rerender(); }
+    }));
+  }
+
+  // A rolled prompt is shown right here, where the button is, and kept in its own log.
+  // Sending it only to a log folded away at the bottom made the buttons look broken.
   const show = (table, text) => { writeIdeaLog({ table, text }); ideaShown = IDEA_LOG_PAGE; rerender(); };
 
   tables.append(el('button', { type: 'button', class: 'secondary', text: 'Meaning', onclick: () => { const r = rollMeaning(); show('Meaning', `${r.phrase} (${r.actionRoll}, ${r.subjectRoll})`); } }));
@@ -424,6 +441,27 @@ export function renderSolo(mount) {
       show('Random encounter', `${row.entry} (${roll}).${escalate}`);
     }
   }));
+
+  // What you just rolled, in front of you. The full run of them lives in the history
+  // section; this is the one you are looking at.
+  const ideasNow = readIdeaLog();
+  const latest = el('div', { id: 'idea-latest', 'aria-live': 'polite' });
+  if (!ideasNow.length) {
+    latest.append(emptyState('Nothing rolled yet — tap a table above and the result appears here.'));
+  } else {
+    const item = ideasNow[0];
+    latest.append(el('div', { class: 'result' }, [
+      el('div', { class: 'result-head' }, [
+        el('span', { class: 'result-title', text: item.table }),
+        el('span', { class: 'cite', text: new Date(item.ts).toLocaleTimeString() })
+      ]),
+      el('p', { text: item.text })
+    ]));
+    if (ideasNow.length > 1) {
+      latest.append(el('p', { class: 'small muted', text: `${ideasNow.length - 1} earlier prompt${ideasNow.length === 2 ? '' : 's'} kept under "What has happened".` }));
+    }
+  }
+  tables.append(latest);
 
   mount.append(tables);
   mount.append(oracleCard);
@@ -471,11 +509,16 @@ export function renderSolo(mount) {
   const scenePreview = previewBoundary('scene');
   sceneCard.append(el('ul', { class: 'small' }, scenePreview.deltas.map((d) => el('li', { text: d }))));
   sceneCard.append(el('button', {
-    type: 'button', class: 'secondary', id: 'solo-end-scene', text: 'End the scene, start the next',
+    type: 'button', class: 'secondary', id: 'solo-end-scene',
+    text: scene ? `End ${sceneLabel(scene)}` : 'Clear the last scene',
     onclick: async () => {
       if (!(await confirmModal('End the scene? The watched flag, the last Oracle answer, the clock it was feeding and the check setup on the Roll screen are all cleared for the next scene.', { title: 'End the scene', confirmLabel: 'End it' }))) return;
+      const ended = getScene();
       const fired = fireBoundary('scene');
       lastScene = fired.deltas;
+      // The outcome box sits at the bottom of a long screen, so the boundary also says so
+      // where you are looking.
+      showToast(ended ? `${titleCase(sceneLabel(ended))} closed.` : 'The last scene is cleared.');
       document.dispatchEvent(new CustomEvent('resource:refresh'));
       rerender();
     }

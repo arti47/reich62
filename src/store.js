@@ -63,6 +63,36 @@ export function activeCharacter() {
   return id ? getCharacter(id) : null;
 }
 
+// --- the scene itself ---
+// App bookkeeping, not a rule: the books talk about scenes without giving them a record.
+// A scene here is a number, an optional name and when it started, so that "end the scene"
+// has something to end and the screen can say which scene you are in. Everything a scene
+// mechanically owns is still stored where it belongs — the watched flag on the character,
+// the situation on the Roll screen.
+const K_SCENE = STORAGE_PREFIX + 'scene';
+
+export function getScene() {
+  return readJson(K_SCENE, null);
+}
+
+export function startScene(name = '') {
+  const previous = getScene();
+  const scene = {
+    number: (previous ? previous.number : (readJson(K_SCENE + ':count', 0))) + 1,
+    name: name || '',
+    startedAt: Date.now()
+  };
+  writeJson(K_SCENE, scene);
+  writeJson(K_SCENE + ':count', scene.number);
+  return scene;
+}
+
+export function endScene() {
+  const scene = getScene();
+  localStorage.removeItem(K_SCENE);
+  return scene;
+}
+
 // --- the scene's watched flag (§17.1) ---
 // Whether the regime is watching where you are is a fact about the scene, not about one
 // screen, and both the Roll screen and the Oracle ask it. It lives on the character —
@@ -130,6 +160,7 @@ export function exportAll() {
     rollLog: readJson(K_LOG, []),
     oracleLog: readJson(K_ORACLE_LOG, []),
     ideaLog: readJson(K_IDEA_LOG, []),
+    scene: readJson(K_SCENE, null),
     combat: readJson(K_COMBAT, null),
     tasks: readJson(K_TASKS, [])
   }, null, 2);
@@ -179,6 +210,7 @@ export function importAll(json, { mode = 'replace' } = {}) {
     if (parsed.rollLog) localStorage.setItem(K_LOG, JSON.stringify(parsed.rollLog));
     if (parsed.oracleLog) localStorage.setItem(K_ORACLE_LOG, JSON.stringify(parsed.oracleLog));
     if (parsed.ideaLog) localStorage.setItem(K_IDEA_LOG, JSON.stringify(parsed.ideaLog));
+    if (parsed.scene) writeJson(K_SCENE, parsed.scene);
     if (parsed.combat) writeJson(K_COMBAT, parsed.combat);
     if (parsed.tasks) writeJson(K_TASKS, parsed.tasks);
     if (parsed.cell) writeJson(K_CELL, parsed.cell);
