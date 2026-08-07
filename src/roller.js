@@ -16,7 +16,7 @@ import {
   criticalInjuryFor, criticalInjuryTotal, attackDifficulty, rangedDifficultyFor,
   weaponBaseDamage, weaponPierce, weapon as weaponById, encounterBlock, stepDifficulty
 } from './rules.js';
-import { getCombat } from './store.js';
+import { getCombat, sceneWatched, setSceneWatched } from './store.js';
 import { damageCombatant } from './combat.js';
 import { activeCharacter, getCell, saveCell, saveCharacter } from './store.js';
 import { soak as soakOf, woundThreshold, strainThreshold, criticalModifier } from './derived.js';
@@ -120,6 +120,35 @@ export const state = {
   downgradeAbility: 0,
   downgradeDifficulty: 0
 };
+
+/** The situational half of a check describes the scene it happens in — cover, concealment,
+ *  size, range, who you are shooting at, whether the place is watched. When the scene ends
+ *  it stops being true, so the End Scene boundary clears it rather than carrying the last
+ *  scene's setup into the next one (§3.12). The skill, difficulty and kind of check are
+ *  left alone: they belong to whatever you attempt next. */
+export function resetSceneSetup() {
+  state.surveilled = false;
+  state.concealment = 0;
+  state.concealmentRole = 'none';
+  state.cover = false;
+  state.silhouetteDelta = 0;
+  state.calledShot = null;
+  state.twoWeapon = false;
+  state.audienceSize = null;
+  state.targetId = null;
+  state.targetAdversary = 0;
+  state.rangeBand = null;
+  state.clockId = null;
+  state.blackMarket = false;
+  state.talentDice = { boost: 0, setback: 0 };
+  state.talentNotes = [];
+  state.upgradeAbility = 0;
+  state.upgradeDifficulty = 0;
+  state.downgradeAbility = 0;
+  state.downgradeDifficulty = 0;
+}
+
+document.addEventListener('scene:end', resetSceneSetup);
 
 /** Assemble the pool for the current check, applying automatic dice, in the manual's
  *  modification order (§2.4): assemble → add → upgrade → downgrade → remove. */
@@ -317,6 +346,7 @@ export function setUpEncounterBlock(blockId) {
   state.skillId = res.activeSkills[0];
   state.context = 'social';
   state.surveilled = true;
+  setSceneWatched(true);
   state.weaponId = null;
   state.rangeBand = null;
   state.audienceSize = null;
@@ -528,6 +558,9 @@ export function renderRoller(mount) {
   clear(mount);
   const character = activeCharacter();
   const rerender = () => renderRoller(mount);
+  // Whether this scene is watched is scene state, not screen state, so the toggle reads the
+  // scene rather than remembering its own answer — and End Scene clearing it clears this.
+  state.surveilled = sceneWatched();
 
   const setup = panel('What are you attempting?', PANELS.rollCheck, []);
 
@@ -572,7 +605,7 @@ export function renderRoller(mount) {
     setup.append(numberField('opp-char', 'Their characteristic', state.opponent.characteristic, (v) => { state.opponent.characteristic = v; rerender(); }));
   }
   setup.append(toggle('roller-blackmarket', 'Black-market deal (house rule)', state.blackMarket, (v) => { state.blackMarket = v; rerender(); }));
-  setup.append(toggle('roller-surveilled', 'Surveilled context', state.surveilled, (v) => { state.surveilled = v; rerender(); }));
+  setup.append(toggle('roller-surveilled', 'Surveilled context', state.surveilled, (v) => { state.surveilled = v; setSceneWatched(v); rerender(); }));
   setup.append(toggle('roller-triumph-heat', 'Spend a Triumph to reduce Personal Heat by 1', state.spendTriumphOnHeat, (v) => { state.spendTriumphOnHeat = v; rerender(); }));
   setup.append(toggle('roller-public', 'Public check (Heat Setbacks apply)', state.publicCheck, (v) => { state.publicCheck = v; rerender(); }));
   mount.append(setup);

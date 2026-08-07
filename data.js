@@ -1267,10 +1267,16 @@ export const LIFECYCLE = {
       'Clear "out of ammunition for the encounter" states.',
       'Expire round-duration effects.'
     ], clears: ['perEncounterFlags'] },
+    // The synthesised bundle originally claimed three things this system has no state for:
+    // no effect in either book carries a scene duration, Heat thresholds are read live on
+    // every check so there is nothing to re-check, and the §29 dread check is a difficulty
+    // ladder rather than a tracked flag. What a scene genuinely owns is the situation —
+    // whether the place is watched (§17.1) and the cover, concealment, size, range and
+    // target a check was set up against (§5E, §5J, §5B) — so that is what it clears.
     { id: 'scene', name: 'End Scene', effects: [
-      'Expire scene-duration effects.',
-      'Re-check Heat thresholds.',
-      'Clear per-scene dread-check flags — one roll per circumstance per scene.'
+      'Clear the watched-place flag: checks stop generating suspicion by themselves until you set it again.',
+      'Clear the situation the last scene was rolled in — cover, concealment, size difference, range band and target.',
+      'Clear the last Oracle answer and the clock it was feeding.'
     ], clears: ['perSceneFlags'] },
     { id: 'session', name: 'End Session', effects: [
       'Award XP: 20 base, plus or minus 5 for session length, plus 5 for meaningful Motivation play.',

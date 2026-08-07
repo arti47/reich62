@@ -63,6 +63,28 @@ export function activeCharacter() {
   return id ? getCharacter(id) : null;
 }
 
+// --- the scene's watched flag (§17.1) ---
+// Whether the regime is watching where you are is a fact about the scene, not about one
+// screen, and both the Roll screen and the Oracle ask it. It lives on the character —
+// `state.surveilledContext`, in the schema since day one and until now never read or
+// written — so the two screens cannot disagree, and the End Scene boundary clears it.
+// With no character loaded there is nothing to store it on, so it falls back to a
+// module-level flag that lasts as long as the tab does.
+let watchedWithoutCharacter = false;
+
+export function sceneWatched() {
+  const character = activeCharacter();
+  return character ? !!character.state.surveilledContext : watchedWithoutCharacter;
+}
+
+export function setSceneWatched(on) {
+  const character = activeCharacter();
+  watchedWithoutCharacter = !!on;
+  if (!character) return;
+  character.state.surveilledContext = !!on;
+  saveCharacter(character);
+}
+
 // --- the Cell (CLAUDE.md §3.8): campaign-level shared state ---
 export function blankCell(over = {}) {
   return {

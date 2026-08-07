@@ -8,7 +8,7 @@ import { ORACLE, MEANING, ELEMENTS, RANDOM_EVENT, SOLO_LOOP, FATE_FOCUS } from '
 import { SYMBOLS } from '../data.js';
 import { NPC_QUICKGEN } from '../data-npcs.js';
 import { RANDOM_ENCOUNTERS } from '../data-monsters.js';
-import { activeCharacter, getCell } from './store.js';
+import { activeCharacter, getCell, sceneWatched, setSceneWatched } from './store.js';
 import { applyPersonalHeat } from './heat.js';
 import { rollPool, diceToRoll, SYMBOL_HELP } from './roller.js';
 import { renderClocks, listClocks, applyCheckToClock } from './clocks.js';
@@ -29,6 +29,19 @@ const state = { likelihood: 'fiftyFifty', surveilled: false, expectation: '', en
 // The scene boundary is fired from this screen too, so a solo player never has to open the
 // combat tracker to close a scene (§23 step 7). Its outcome stays on screen with the undo.
 let lastScene = null;
+
+/** What on this screen belonged to the scene that just ended. The Oracle's last answer is
+ *  about that scene, the clock it was feeding was this scene's choice, and the watched flag
+ *  is cleared on the character by the boundary itself. The logs are history and stay. */
+export function resetSoloScene() {
+  state.surveilled = false;
+  state.expectation = '';
+  state.entered = newTally();
+  state.lastAnswer = null;
+  state.clockId = null;
+}
+
+document.addEventListener('scene:end', resetSoloScene);
 
 // --- the Oracle's own log ---
 // Oracle answers are their own kind of record, so they live apart from the Roll screen's
@@ -189,6 +202,9 @@ export function renderSolo(mount) {
   const rerender = () => renderSolo(mount);
   const character = activeCharacter();
   const cell = getCell();
+  // The watched flag belongs to the scene, shared with the Roll screen and cleared when the
+  // scene ends, rather than being this screen's own memory.
+  state.surveilled = sceneWatched();
 
   // The screen runs in the order the printed loop runs (§23): what a turn is, then frame the
   // scene, ask the Oracle, resolve your own attempt, track what is closing in, and only then
@@ -206,7 +222,7 @@ export function renderSolo(mount) {
   })));
   oracleCard.append(el('label', { class: 'small', for: 'oracle-likelihood', text: 'Likelihood' }), likelihood);
   oracleCard.append(el('div', { class: 'toggle-row' }, [
-    el('input', { type: 'checkbox', id: 'oracle-surveilled', checked: state.surveilled, onchange: (e) => { state.surveilled = e.target.checked; } }),
+    el('input', { type: 'checkbox', id: 'oracle-surveilled', checked: state.surveilled, onchange: (e) => { state.surveilled = e.target.checked; setSceneWatched(e.target.checked); } }),
     el('label', { for: 'oracle-surveilled' }, [el('span', { text: 'The question concerns somewhere the regime is watching, so an emphatic no draws attention' })])
   ]));
 
@@ -455,9 +471,9 @@ export function renderSolo(mount) {
   const scenePreview = previewBoundary('scene');
   sceneCard.append(el('ul', { class: 'small' }, scenePreview.deltas.map((d) => el('li', { text: d }))));
   sceneCard.append(el('button', {
-    type: 'button', class: 'secondary', id: 'solo-end-scene', text: 'End the scene',
+    type: 'button', class: 'secondary', id: 'solo-end-scene', text: 'End the scene, start the next',
     onclick: async () => {
-      if (!(await confirmModal('End the scene? Scene-length effects expire and every suspicion threshold is re-checked.', { title: 'End the scene', confirmLabel: 'End it' }))) return;
+      if (!(await confirmModal('End the scene? The watched flag, the last Oracle answer, the clock it was feeding and the check setup on the Roll screen are all cleared for the next scene.', { title: 'End the scene', confirmLabel: 'End it' }))) return;
       const fired = fireBoundary('scene');
       lastScene = fired.deltas;
       document.dispatchEvent(new CustomEvent('resource:refresh'));

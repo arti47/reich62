@@ -807,16 +807,54 @@ async function main() {
     await page.waitForSelector('#solo-end-scene');
 
     // §23 step 7 — the scene boundary is fired from here, so a solo player never has to
-    // open the combat tracker to close a scene.
+    // open the combat tracker to close a scene. It has real work to do: the watched flag is
+    // one fact shared by the Oracle and the Roll screen, and the scene owns it.
+    await page.locator('#oracle-surveilled').check();
+    check('the watched flag is stored on the character, not on one screen',
+      await page.evaluate(() => {
+        try {
+          return JSON.parse(localStorage.getItem('reich62:characters') || '[]')
+            .some((c) => c.state.surveilledContext === true);
+        } catch { return false; }
+      }));
+    await go('#/roll');
+    await page.waitForSelector('#roller-surveilled');
+    check('and the Roll screen reads the same scene flag',
+      await page.locator('#roller-surveilled').isChecked());
+    await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+    await page.locator('#roller-cover').check();
+    await page.waitForTimeout(120);
+    await go('#/solo');
+    await page.waitForSelector('#solo-end-scene');
     await page.locator('#solo-end-scene').click();
     await page.waitForSelector('.modal-backdrop');
-    check('ending a scene asks first', /suspicion threshold/i.test(await page.locator('.modal').innerText()));
+    check('ending a scene asks first, naming what it clears',
+      /watched flag/i.test(await page.locator('.modal').innerText()),
+      (await page.locator('.modal').innerText()).replace(/\n/g, ' | '));
     await page.getByRole('button', { name: 'End it' }).click();
     await page.waitForTimeout(160);
     check('the scene boundary reports what it did',
       /scene ended/i.test(await page.locator('#screen .outcome').last().innerText()),
       (await page.locator('#screen .outcome').last().innerText()).replace(/\n/g, ' | '));
     check('and offers a one-step undo', (await page.locator('#solo-undo-scene').count()) === 1);
+    // The boundary is not a no-op: the state the scene owned is genuinely gone.
+    check('ending the scene clears the watched flag on the character',
+      await page.evaluate(() => {
+        try {
+          return JSON.parse(localStorage.getItem('reich62:characters') || '[]')
+            .every((c) => !c.state.surveilledContext);
+        } catch { return false; }
+      }));
+    check('and the Oracle no longer shows the last scene as watched',
+      !(await page.locator('#oracle-surveilled').isChecked()));
+    await go('#/roll');
+    await page.waitForSelector('#roller-surveilled');
+    await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+    check('and the Roll screen\'s situation is cleared for the next scene',
+      !(await page.locator('#roller-surveilled').isChecked())
+      && !(await page.locator('#roller-cover').isChecked()));
+    await go('#/solo');
+    await page.waitForSelector('#solo-undo-scene');
     await page.locator('#solo-undo-scene').click();
     await page.waitForTimeout(160);
     check('undoing clears the outcome', (await page.locator('#solo-undo-scene').count()) === 0);

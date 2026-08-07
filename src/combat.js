@@ -17,7 +17,7 @@ import {
 import { woundThreshold, strainThreshold, soak, derivedFor } from './derived.js';
 import {
   getCombat, saveCombat, blankCombat, listTasks, saveTasks, activeCharacter, listCharacters,
-  saveCharacter, getCell, saveCell, snapshot, undoSnapshot, lastSnapshot
+  saveCharacter, getCell, saveCell, snapshot, undoSnapshot, lastSnapshot, setSceneWatched
 } from './store.js';
 import { applyCellHeat, applyPersonalHeat, safehouseFor } from './heat.js';
 import { renderClocks } from './clocks.js';
@@ -571,10 +571,17 @@ export function previewBoundary(boundaryId, options = {}) {
     deltas.push('Clear "out of ammunition for the encounter" states and expire round-duration effects.');
   }
   if (boundaryId === 'scene') {
-    deltas.push('Expire scene-duration effects and per-scene dread-check flags.');
-    characters.forEach((c) => {
-      if (c.state.personalHeat >= 1) deltas.push(`${c.identity.name || 'Unnamed'}: Heat threshold re-check at Personal ${c.state.personalHeat}.`);
-    });
+    // What this boundary actually does, rather than what a synthesised bundle once claimed:
+    // it clears the state that belongs to the scene just ended. Nothing in the app carries a
+    // scene-duration effect or a dread-check flag, so it no longer says it clears them.
+    const watched = characters.filter((c) => c.state.surveilledContext);
+    if (watched.length) {
+      watched.forEach((c) => deltas.push(`${c.identity.name || 'Unnamed'}: the scene is no longer a watched one, so checks stop generating suspicion by themselves.`));
+    } else {
+      deltas.push('No character is in a watched place, so nothing is carried over on that count.');
+    }
+    deltas.push('Clear the check setup the last scene left behind: cover, concealment, size, range band and target.');
+    deltas.push('Clear the Oracle\'s last answer and the clock it was feeding, ready for the next scene.');
   }
   if (boundaryId === 'session') {
     const xp = XP_AWARDS.standardPerSession + (options.lengthAdjustment || 0) + (options.motivationPlay ? XP_AWARDS.motivationBonus : 0);
@@ -623,12 +630,10 @@ export function fireBoundary(boundaryId, options = {}) {
       if (options.downtime && character.state.personalHeat > 0) character.state.personalHeat -= 1;
     }
     if (boundaryId === 'day') character.state.perDayFlags = { painkillers: 0 };
-    if (boundaryId === 'encounter') {
-      Object.keys(character.state.conditions || {}).forEach((id) => {
-        if (['staggered', 'disoriented'].includes(id)) return; // these last until healed when a Critical caused them
-        if (character.state.conditions[id] === 'encounter') character.state.conditions[id] = false;
-      });
-    }
+    // Conditions are stored as booleans and are cleared by hand or by healing, so the
+    // encounter boundary has nothing to expire among them; it used to compare a boolean
+    // against the string 'encounter', which could never match.
+    if (boundaryId === 'scene') character.state.surveilledContext = false;
     saveCharacter(character);
   });
 
@@ -645,6 +650,15 @@ export function fireBoundary(boundaryId, options = {}) {
   if (boundaryId === 'encounter') {
     const combat = getCombat();
     if (combat.active) endEncounterState();
+  }
+
+  // The scene's own state lives on two screens, so the boundary clears it there too rather
+  // than leaving the next scene set up as the last one ended.
+  if (boundaryId === 'scene') {
+    setSceneWatched(false);
+    // The Roll screen and the Oracle each own their own scene state, so they are told the
+    // scene ended rather than reached into from here (§13.9 module discipline).
+    document.dispatchEvent(new CustomEvent('scene:end'));
   }
 
   return { ok: true, boundary, deltas: preview.deltas, undoAvailable: true };
