@@ -566,9 +566,11 @@ async function main() {
     const at = (t) => soloHeadings.findIndex((h) => h.startsWith(t));
     check('the solo screen follows the printed loop order',
       at('1 · Frame') >= 0 && at('1 · Frame') < at('2 · Ask') && at('2 · Ask') < at('3 · Resolve')
-      && at('3 · Resolve') < at('4 · Track'), soloHeadings.join(' | '));
+      && at('3 · Resolve') < at('4 · Track') && at('4 · Track') < at('5 · Where suspicion')
+      && at('5 · Where suspicion') < at('6 · Close the scene'), soloHeadings.join(' | '));
     check('the two logs sit last, after every step',
-      at('Questions you have asked') > at('4 · Track') && at('Prompts you have rolled') > at('4 · Track'),
+      at('Questions you have asked') > at('6 · Close the scene')
+      && at('Prompts you have rolled') > at('6 · Close the scene'),
       soloHeadings.join(' | '));
     check('the loop itself opens the screen, folded',
       await page.evaluate(() => {
@@ -595,6 +597,12 @@ async function main() {
     const asked = await page.locator('#oracle-answer').innerText();
     check('it gives the answer, with the dice folded away under it',
       /(Yes|No)/.test(asked) && /show the dice/i.test(asked), asked.replace(/\n/g, ' | '));
+    // H-2 — what you expected belongs to the question just answered; leaving it in the
+    // field would read the next question against the last one's expectation.
+    check('asking clears what you expected, so the next question starts clean',
+      (await page.locator('#oracle-expectation').inputValue()) === '',
+      await page.locator('#oracle-expectation').inputValue());
+    await page.fill('#oracle-expectation', 'He waves me through');
 
     // An emphatic no chains a Random Event and feeds Heat when the question concerned a
     // surveilled context (§18, §19, §17.1). The pad offers only symbols this pool can roll.
@@ -617,6 +625,15 @@ async function main() {
       oracleAnswer.replace(/\n/g, ' | '));
     check('an emphatic no in a surveilled context raises Heat (§17.1)',
       (await page.locator('#resource-header').innerText()) !== heatBeforeOracle);
+    // A chained event is content in the same way a hand-rolled prompt is, so it is kept
+    // where every other rolled prompt is kept rather than only inside the answer's row.
+    check('a chained Random Event also lands in the prompt log',
+      await page.evaluate(() => {
+        try {
+          return JSON.parse(localStorage.getItem('reich62:ideaLog') || '[]')
+            .some((e) => e.table === 'Random Event' && /chained from/.test(e.text));
+        } catch { return false; }
+      }));
 
     // R-22 — the printed pool holds no die that can show a Triumph or a Despair, so the two
     // emphatic rungs are reached by weight of result instead, and the screen says so.
@@ -738,6 +755,72 @@ async function main() {
     await page.getByRole('button', { name: 'Random encounter', exact: true }).click();
     check('the random encounter table rolls', /\(\d+\)/.test(await page.locator('#solo-output').innerText()));
 
+    // --- the loop's last two steps: suspicion, and closing the scene (§23) ---
+    check('the screen states where suspicion stands',
+      /Personal \d of \d/.test(await page.locator('#screen').innerText()),
+      (await page.locator('#screen').innerText()).slice(0, 0) || 'no suspicion readout');
+    const heatSaved = await page.evaluate(() => {
+      const raw = localStorage.getItem('reich62:characters');
+      const chars = JSON.parse(raw || '[]');
+      const before = chars.map((c) => c.state.personalHeat);
+      chars.forEach((c) => { c.state.personalHeat = 4; });
+      localStorage.setItem('reich62:characters', JSON.stringify(chars));
+      return before;
+    });
+    await go('#/');
+    await go('#/solo');
+    await page.waitForSelector('#oracle-likelihood');
+    check('at suspicion 4 the raid question gets a button, not an instruction',
+      (await page.locator('#raid-ask').count()) === 1);
+    const oracleRowsPreRaid = await page.evaluate(() => {
+      try { return JSON.parse(localStorage.getItem('reich62:oracleLog') || '[]').length; } catch { return -1; }
+    });
+    await page.locator('#raid-ask').click();
+    await page.waitForTimeout(160);
+    check('asking it answers in the Oracle panel and logs the question',
+      /(Yes|No)/.test(await page.locator('#oracle-answer').innerText())
+      && (await page.evaluate(() => {
+        try { return JSON.parse(localStorage.getItem('reich62:oracleLog') || '[]').length; } catch { return -1; }
+      })) === oracleRowsPreRaid + 1);
+    check('and it records what the raid question expected',
+      await page.evaluate(() => {
+        try { return /raid does not land/i.test(JSON.parse(localStorage.getItem('reich62:oracleLog') || '[]')[0].expectation || ''); }
+        catch { return false; }
+      }));
+    await page.evaluate(() => {
+      const chars = JSON.parse(localStorage.getItem('reich62:characters') || '[]');
+      chars.forEach((c) => { c.state.personalHeat = 3; });
+      localStorage.setItem('reich62:characters', JSON.stringify(chars));
+    });
+    await go('#/');
+    await go('#/solo');
+    await page.waitForSelector('#solo-end-scene');
+    check('the raid button goes away once suspicion drops back below 4',
+      (await page.locator('#raid-ask').count()) === 0);
+    await page.evaluate((before) => {
+      const chars = JSON.parse(localStorage.getItem('reich62:characters') || '[]');
+      chars.forEach((c, i) => { c.state.personalHeat = before[i]; });
+      localStorage.setItem('reich62:characters', JSON.stringify(chars));
+    }, heatSaved);
+    await go('#/');
+    await go('#/solo');
+    await page.waitForSelector('#solo-end-scene');
+
+    // §23 step 7 — the scene boundary is fired from here, so a solo player never has to
+    // open the combat tracker to close a scene.
+    await page.locator('#solo-end-scene').click();
+    await page.waitForSelector('.modal-backdrop');
+    check('ending a scene asks first', /suspicion threshold/i.test(await page.locator('.modal').innerText()));
+    await page.getByRole('button', { name: 'End it' }).click();
+    await page.waitForTimeout(160);
+    check('the scene boundary reports what it did',
+      /scene ended/i.test(await page.locator('#screen .outcome').last().innerText()),
+      (await page.locator('#screen .outcome').last().innerText()).replace(/\n/g, ' | '));
+    check('and offers a one-step undo', (await page.locator('#solo-undo-scene').count()) === 1);
+    await page.locator('#solo-undo-scene').click();
+    await page.waitForTimeout(160);
+    check('undoing clears the outcome', (await page.locator('#solo-undo-scene').count()) === 0);
+
     // --- H-4 clocks: named, ticked by the symbols a check already produced ---
     await go('#/combat');
     await page.waitForSelector('#clock-add');
@@ -767,6 +850,22 @@ async function main() {
     await page.waitForTimeout(120);
     check('the fill is on the clock face too',
       (await clockRow().locator('.clock-seg.is-filled').count()) === 2);
+
+    // H-4 — an Oracle answer is a resolved roll too, so it can feed a clock on the same
+    // rules. A solo player mostly asks rather than rolls skills, so without this the clocks
+    // could only be moved by hand.
+    await go('#/solo');
+    await page.waitForSelector('#oracle-clock');
+    await page.selectOption('#oracle-clock', { label: 'Gestapo closing in (2/4)' });
+    await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+    await page.getByRole('button', { name: 'One more oracle threat' }).click();
+    await page.locator('#oracle-ask-entered').click();
+    await page.waitForTimeout(160);
+    check('H-4: an Oracle answer can feed a clock',
+      /Gestapo closing in: .*3 of 4/.test(await page.locator('#oracle-answer').innerText()),
+      (await page.locator('#oracle-answer').innerText()).replace(/\n/g, ' | '));
+    await go('#/combat');
+    await page.waitForTimeout(120);
     await clockRow().getByRole('button', { name: /^Fill one segment/ }).click();
     await page.waitForTimeout(120);
     await clockRow().getByRole('button', { name: /^Fill one segment/ }).click();

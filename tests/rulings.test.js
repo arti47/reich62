@@ -170,6 +170,12 @@ export async function pinChecks({ check, equal }) {
     Solo.interpretOracle({ success: 1, advantage: 0, triumph: 0, failure: 0, threat: 0, despair: 0 }).id, 'yes');
   equal('R-22: a Despair still reads "No, and" where one can occur',
     Solo.interpretOracle({ success: 1, advantage: 0, triumph: 0, failure: 0, threat: 0, despair: 1 }).id, 'noAnd');
+  // The printed loop's own step 3 keys the event to the same two symbols, so it reads off
+  // the rungs too rather than telling the player to watch for a face that cannot come up.
+  check('R-22: the printed loop names the rungs, not the symbols this pool cannot roll',
+    S.SOLO_LOOP.steps.every((s) => !/Triumph|Despair/.test(s))
+    && S.SOLO_LOOP.steps.some((s) => /Yes, and/.test(s) && /No, and/.test(s)),
+    S.SOLO_LOOP.steps.join(' | '));
 
   // H-2 — the focus layer, now read off the Oracle roll itself rather than a separate d100.
   check('H-2: the focus table is flagged as a house aid', S.FATE_FOCUS.houseAid === true);

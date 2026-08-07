@@ -2,7 +2,7 @@
 // rather than invented; it stays behind the soloMode flag.
 
 import { el, clear, titleCase, rollDie, newTally, outcome, uid, STORAGE_PREFIX } from './core.js';
-import { showToast, modal, confirmModal, renderTally, panel, accordion, emptyState, symbolGlyph } from './ui.js';
+import { showToast, modal, confirmModal, renderTally, panel, accordion, emptyState, outcomeBox, symbolGlyph } from './ui.js';
 import { PANELS } from './help.js';
 import { ORACLE, MEANING, ELEMENTS, RANDOM_EVENT, SOLO_LOOP, FATE_FOCUS } from '../data-solo.js';
 import { SYMBOLS } from '../data.js';
@@ -11,7 +11,9 @@ import { RANDOM_ENCOUNTERS } from '../data-monsters.js';
 import { activeCharacter, getCell } from './store.js';
 import { applyPersonalHeat } from './heat.js';
 import { rollPool, diceToRoll, SYMBOL_HELP } from './roller.js';
-import { renderClocks } from './clocks.js';
+import { renderClocks, listClocks, applyCheckToClock } from './clocks.js';
+import { previewBoundary, fireBoundary, undoLastBoundary } from './combat.js';
+import { HEAT } from '../data.js';
 import { Settings } from './settings.js';
 
 // The Oracle pool is Ability against Difficulty, and per D§ neither die carries a Triumph
@@ -22,7 +24,11 @@ const ORACLE_SYMBOLS = SYMBOLS
 
 // The entered tally lives at module scope so it survives navigation, the way the Roll
 // screen's does — an Oracle question part-way through entry is not lost by tapping Home.
-const state = { likelihood: 'fiftyFifty', surveilled: false, expectation: '', entered: newTally(), lastAnswer: null };
+const state = { likelihood: 'fiftyFifty', surveilled: false, expectation: '', entered: newTally(), lastAnswer: null, clockId: null };
+
+// The scene boundary is fired from this screen too, so a solo player never has to open the
+// combat tracker to close a scene (§23 step 7). Its outcome stays on screen with the undo.
+let lastScene = null;
 
 // --- the Oracle's own log ---
 // Oracle answers are their own kind of record, so they live apart from the Roll screen's
@@ -218,21 +224,42 @@ export function renderSolo(mount) {
     }));
   }
 
+  // H-4 — the same control the Roll screen carries: does this answer feed a clock?
+  const runningClocks = listClocks();
+  if (runningClocks.length) {
+    const clockSelect = el('select', { id: 'oracle-clock', 'aria-label': 'Clock this answer feeds', onchange: (e) => { state.clockId = e.target.value || null; } });
+    clockSelect.append(el('option', { value: '', text: 'No clock', selected: !state.clockId }));
+    runningClocks.forEach((c) => clockSelect.append(el('option', {
+      value: c.id, selected: state.clockId === c.id, text: `${c.name} (${c.progress}/${c.target})`
+    })));
+    oracleCard.append(el('label', { class: 'small', for: 'oracle-clock', text: 'Does this answer feed a clock?' }), clockSelect);
+  } else if (state.clockId) {
+    state.clockId = null;
+  }
+
   const pool = oraclePool();
   // The likelihood picker above already says why the pool is what it is, and R-22's
   // substitution is stated in the panel's own "how this works" (§4).
   oracleCard.append(diceToRoll(pool, []));
 
   const answerNode = el('div', { id: 'oracle-answer', 'aria-live': 'polite' });
-  const ask = (tally, { rolled = true } = {}) => {
+  // `forPool` is passed explicitly so a question asked from further down the screen — the
+  // raid-timing button — logs the pool it actually rolled rather than the one on screen.
+  const ask = (tally, { rolled = true, forPool = null } = {}) => {
     const verdict = interpretOracle(tally);
     const lines = [];
 
     // The Heat hook rides on the "No, and…" rung, however it was reached (R-22).
-    if (state.surveilled && verdict.id === 'noAnd' && character) {
-      const applied = applyPersonalHeat(character, 1, 'An emphatic no from the Oracle in a watched place');
-      lines.push(`${verdict.byMagnitude ? 'An emphatic no' : 'Despair'} in a surveilled context: Personal Heat ${applied.before} → ${applied.after}.`);
-      document.dispatchEvent(new CustomEvent('resource:refresh'));
+    if (state.surveilled && verdict.id === 'noAnd') {
+      if (character) {
+        const applied = applyPersonalHeat(character, 1, 'An emphatic no from the Oracle in a watched place');
+        lines.push(`${verdict.byMagnitude ? 'An emphatic no' : 'Despair'} in a surveilled context: Personal Heat ${applied.before} → ${applied.after}.`);
+        document.dispatchEvent(new CustomEvent('resource:refresh'));
+      } else {
+        // The toggle promises a consequence; with no sheet loaded there is nothing to
+        // move, and saying so is better than the rule silently not firing.
+        lines.push('An emphatic no in a watched place would raise Personal Heat, but no character is loaded to take it.');
+      }
     }
     // How to read that answer against what you expected (H-2).
     const focus = Settings.fateFocus()
@@ -243,14 +270,30 @@ export function renderSolo(mount) {
     let event = null;
     if (verdict.event || (focus && focus.chainsEvent)) {
       event = rollRandomEvent();
-      lines.push(`Random Event: ${event.category} (${event.categoryRoll}) concerning ${event.subject.toLowerCase()} (${event.subjectRoll}).${event.complication ? ` Complication: ${event.complication}.` : ''} ${verdict.event ? (RANDOM_EVENT.skewByAnswer[verdict.id] || '') : ''}`);
+      const text = `${event.category} (${event.categoryRoll}) concerning ${event.subject.toLowerCase()} (${event.subjectRoll}).${event.complication ? ` Complication: ${event.complication}.` : ''}${verdict.event ? ` ${RANDOM_EVENT.skewByAnswer[verdict.id] || ''}` : ''}`;
+      lines.push(`Random Event: ${text}`);
+      // A chained event is content in exactly the way a hand-rolled one is, so it lands in
+      // the prompt log with the rest rather than only inside this answer's row.
+      writeIdeaLog({ table: 'Random Event', text: `${text} (chained from "${verdict.answer}")` });
+    }
+
+    // H-4 — an Oracle answer is a resolved roll like any other, so it can feed a clock on
+    // the same tick rules. Without this a solo player, who mostly asks rather than rolls
+    // skills, could never move a clock except by hand.
+    if (state.clockId) {
+      const ticked = applyCheckToClock(state.clockId, verdict.result.net, 'an Oracle answer');
+      if (ticked && ticked.amount) {
+        lines.push(`${ticked.clock.name}: ${ticked.reasons.join(', ')} — now ${ticked.clock.progress} of ${ticked.clock.target}.${ticked.filled ? ' It has arrived.' : ''}`);
+      } else if (ticked) {
+        lines.push(`${ticked.clock.name}: nothing left over pointed its way, so it does not move.`);
+      }
     }
 
     writeOracleLog({
       ts: Date.now(),
       likelihood: state.likelihood,
       likelihoodName: ORACLE.likelihoods.find((l) => l.id === state.likelihood).name,
-      pool: { ...pool },
+      pool: { ...(forPool || pool) },
       symbols: { ...tally },
       net: verdict.result.net,
       answer: verdict.answer,
@@ -266,6 +309,10 @@ export function renderSolo(mount) {
       focus, expectation: state.expectation, lines
     };
     state.entered = newTally();
+    // What you expected belongs to the question that was just answered. Leaving it in the
+    // field means the next question is silently read against the last one's expectation.
+    state.expectation = '';
+    ideaShown = IDEA_LOG_PAGE;
     rerender();
   };
 
@@ -375,15 +422,62 @@ export function renderSolo(mount) {
   // --- track what is closing in (§23 step 6) ---
   renderClocks(mount, { onChange: rerender, title: '4 · Track what is closing in' });
 
-  // Raid timing is a suspicion consequence, so it sits with the tracks rather than beside
-  // the Oracle that resolves it.
-  if (character && character.state.personalHeat >= SOLO_LOOP.heatRule.fromLevel) {
-    mount.append(el('div', { class: 'card' }, [
-      el('h2', { text: 'Raid timing' }),
-      el('p', { class: 'small', text: SOLO_LOOP.heatRule.note }),
-      el('p', { class: 'small muted', text: `Personal Heat ${character.state.personalHeat}: ask the Oracle whether the raid lands this scene rather than deciding it.` })
-    ]));
+  // Suspicion is the loop's own track, and the raid rule keys off it, so the screen states
+  // where it stands rather than making you go and look (§23 step 6).
+  const suspicion = panel('5 · Where suspicion stands', PANELS.soloSuspicion, []);
+  if (character) {
+    suspicion.append(el('p', { class: 'small', text: `${character.identity.name || 'Your character'}: Personal ${character.state.personalHeat} of ${HEAT.max}. The network: Cell ${cell.cellHeat} of ${HEAT.max}, safehouse ${cell.safehouseStatus}.` }));
+  } else {
+    suspicion.append(el('p', { class: 'small muted', text: `No character is loaded, so nothing here can take suspicion. The network sits at Cell ${cell.cellHeat} of ${HEAT.max}.` }));
   }
+  // Raid timing is a suspicion consequence, and the one place the loop hands a decision
+  // straight to the Oracle — so it gets a button rather than an instruction.
+  if (character && character.state.personalHeat >= SOLO_LOOP.heatRule.fromLevel) {
+    suspicion.append(el('p', { class: 'small', text: SOLO_LOOP.heatRule.note }));
+    suspicion.append(el('button', {
+      type: 'button', class: 'primary', id: 'raid-ask', text: 'Ask whether the raid lands this scene',
+      onclick: () => {
+        state.expectation = 'The raid does not land this scene';
+        const raidPool = oraclePool();
+        const rolled = rollPool(raidPool);
+        if (!rolled.ok) { showToast(rolled.reason); return; }
+        ask(rolled.tally, { rolled: true, forPool: raidPool });
+        showToast('Answered in the Oracle panel above.');
+      }
+    }));
+  }
+  mount.append(suspicion);
+
+  // --- close the scene (§23 step 7) ---
+  // The lifecycle bundles live on the combat tracker, which a solo player never opens, so
+  // the one boundary the solo loop names is fired from here too — same preview, same undo.
+  const sceneCard = panel('6 · Close the scene', PANELS.soloScene, []);
+  const scenePreview = previewBoundary('scene');
+  sceneCard.append(el('ul', { class: 'small' }, scenePreview.deltas.map((d) => el('li', { text: d }))));
+  sceneCard.append(el('button', {
+    type: 'button', class: 'secondary', id: 'solo-end-scene', text: 'End the scene',
+    onclick: async () => {
+      if (!(await confirmModal('End the scene? Scene-length effects expire and every suspicion threshold is re-checked.', { title: 'End the scene', confirmLabel: 'End it' }))) return;
+      const fired = fireBoundary('scene');
+      lastScene = fired.deltas;
+      document.dispatchEvent(new CustomEvent('resource:refresh'));
+      rerender();
+    }
+  }));
+  if (lastScene) {
+    sceneCard.append(outcomeBox(lastScene, { title: 'The scene ended' }));
+    sceneCard.append(el('button', {
+      type: 'button', class: 'secondary', id: 'solo-undo-scene', text: 'Undo that',
+      onclick: () => {
+        const undone = undoLastBoundary();
+        showToast(undone.ok ? `Undone: ${undone.label}.` : undone.reason);
+        lastScene = null;
+        document.dispatchEvent(new CustomEvent('resource:refresh'));
+        rerender();
+      }
+    }));
+  }
+  mount.append(sceneCard);
 
   // --- what has happened ---
   // Both logs are a read-back of play, not a step in it, so they sit last and folded.

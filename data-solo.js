@@ -184,7 +184,10 @@ export const SOLO_LOOP = {
   steps: [
     'Frame the scene yourself: where the character is, and what they want.',
     'Ask the Oracle whenever the outcome is uncertain and no roll of the character\'s applies.',
-    'On a Triumph or Despair from the Oracle, roll the Random Event table to inject content.',
+    // R-22 — §23 keys this step to a Triumph or Despair, which the printed Ability-against-
+    // Difficulty pool cannot roll. It reads off the emphatic rungs instead, and the app
+    // rolls the event itself rather than leaving it to be remembered.
+    'On either emphatic answer — "Yes, and" or "No, and" — the Random Event table is rolled to inject content.',
     'Resolve the character\'s own actions with ordinary skill checks, exactly as in group play.',
     'Generate NPCs as needed with quick-gen.',
     'Track suspicion exactly as in group play; at suspicion 4 or 5 the Oracle decides when a raid or arrest lands, rather than you deciding it.',
