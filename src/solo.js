@@ -9,7 +9,7 @@ import { SYMBOLS } from '../data.js';
 import { NPC_QUICKGEN } from '../data-npcs.js';
 import { RANDOM_ENCOUNTERS } from '../data-monsters.js';
 import { activeCharacter, getCell, sceneWatched, setSceneWatched, getScene, startScene } from './store.js';
-import { applyHeat, heatIsSplit, currentHeat } from './heat.js';
+import { applyHeat, heatIsSplit, currentHeat, heatWording } from './heat.js';
 import { rollPool, diceToRoll, SYMBOL_HELP } from './roller.js';
 import { renderClocks, listClocks, applyCheckToClock } from './clocks.js';
 import { previewBoundary, fireBoundary, undoLastBoundary, sceneLabel } from './combat.js';
@@ -443,8 +443,8 @@ export function renderSolo(mount) {
     onclick: () => {
       const roll = rollDie(10);
       const row = RANDOM_ENCOUNTERS.table.find((r) => r.roll === roll);
-      const escalate = roll === 10 && cell.cellHeat >= 4 ? ' Cell Heat is 4 or more — escalate toward a nemesis.' : '';
-      show('Random encounter', `${row.entry} (${roll}).${escalate}`);
+      const escalate = roll === 10 && cell.cellHeat >= 4 ? heatWording(' Cell Heat is 4 or more — escalate toward a nemesis.') : '';
+      show('Random encounter', `${heatWording(row.entry)} (${roll}).${escalate}`);
     }
   }));
 

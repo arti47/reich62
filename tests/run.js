@@ -1789,6 +1789,53 @@ async function main() {
       check(`${label} has no horizontal overflow at 390px`, overflow <= 0, `overflow ${overflow}px`);
     }
 
+    // §17 — with one shared track the two old track names no longer refer to anything, so
+    // no screen may print them. Bestiary text that names them is relabelled on the way out.
+    {
+      await go('#/settings');
+      if (await page.locator('#flag-heatSplit').isChecked()) await page.locator('#flag-heatSplit').uncheck();
+      if (!(await page.locator('#flag-gmScreen').isChecked())) await page.locator('#flag-gmScreen').check();
+      if (!(await page.locator('#flag-soloMode').isChecked())) await page.locator('#flag-soloMode').check();
+      await page.waitForTimeout(80);
+      const offenders = [];
+      for (const route of ['#/', '#/sheet', '#/roll', '#/combat', '#/solo', '#/gm', '#/rules']) {
+        await go(route);
+        await page.waitForTimeout(220);
+        await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+        await page.waitForTimeout(120);
+        const text = await page.locator('#screen').innerText();
+        // The rules library deliberately documents the §17.5 variant, so it is exempt.
+        if (route !== '#/rules' && /Personal Heat|Cell Heat/.test(text)) offenders.push(route);
+      }
+      check('no screen names the old two-track suspicion while the shared track is in force',
+        offenders.length === 0, offenders.join(', '));
+      // GM sub-tabs carry the bestiary strings that used to name them.
+      await go('#/gm');
+      await page.waitForTimeout(200);
+      const gmOffenders = [];
+      for (const tab of ['Network', 'Opponents', 'Encounters', 'Tables', 'Build']) {
+        await page.locator('.subtab', { hasText: tab }).click();
+        await page.waitForTimeout(200);
+        await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+        await page.waitForTimeout(120);
+        if (/Personal Heat|Cell Heat/.test(await page.locator('#screen').innerText())) gmOffenders.push(tab);
+      }
+      check('nor does any GM sub-tab, including the bestiary and its encounter blocks',
+        gmOffenders.length === 0, gmOffenders.join(', '));
+      // And the printed names come back when the variant is switched on.
+      await go('#/settings');
+      await page.locator('#flag-heatSplit').check();
+      await page.waitForTimeout(80);
+      await go('#/gm');
+      await page.locator('.subtab', { hasText: 'Encounters' }).click();
+      await page.waitForTimeout(250);
+      check('the two-track variant shows the printed wording again',
+        /Personal Heat|Cell Heat/.test(await page.locator('#screen').innerText()));
+      await go('#/settings');
+      await page.locator('#flag-heatSplit').uncheck();
+      await page.waitForTimeout(80);
+    }
+
     check('zero console errors', consoleErrors.length === 0, consoleErrors.join(' | '));
   } finally {
     await browser.close();

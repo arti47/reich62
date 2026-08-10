@@ -444,6 +444,15 @@ export async function dataChecks({ check, equal }) {
   equal('dragnet opposition caps at 4 dice', dragnet.resolution.oppositionDiceMax, 4);
   check('dragnet advances both Heat tracks on a failed round', /Personal Heat and Cell Heat by 1/.test(dragnet.consequence));
 
+  // The bestiary keeps its printed wording; the relabelling is a rendering step only.
+  check('the printed dragnet text still names both tracks, as B§6 prints it',
+    /Personal Heat and Cell Heat/.test(R.encounterBlock('manhuntDragnet').consequence));
+  equal('and shared mode relabels it on the way to the screen',
+    H.heatWording('Every failed round advances Personal Heat and Cell Heat by 1.'),
+    'Every failed round advances suspicion by 1.');
+  equal('a lone Cell Heat reference is relabelled too',
+    H.heatWording('Cell Heat is 4 or more'), 'suspicion is 4 or more');
+
   // --- §8 Push ---
   equal('a push costs one story point', D.STORY_POINTS.push.cost, 1);
   check('a check can only be pushed once', D.STORY_POINTS.push.oncePerCheck === true);

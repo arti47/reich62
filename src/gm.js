@@ -20,7 +20,7 @@ import { setUpEncounterBlock } from './roller.js';
 import { activeCharacter } from './store.js';
 import { getCell, saveCell } from './store.js';
 import { Settings } from './settings.js';
-import { applyCellHeat, applyHeat, heatIsSplit } from './heat.js';
+import { applyCellHeat, applyHeat, heatIsSplit, heatWording } from './heat.js';
 
 const filters = { tier: 'all', heatOnly: false, challengingOnly: false, query: '' };
 
@@ -28,7 +28,7 @@ const filters = { tier: 'all', heatOnly: false, challengingOnly: false, query: '
  *  when the guards are not on the combat tracker (B§2). */
 function applyCellHeatless(character) {
   const applied = applyHeat(1, { character, reason: 'Papers-Check Reflex at a checkpoint' });
-  return { applied, note: `Papers-Check Reflex: Personal Heat ${applied.before} → ${applied.after}.` };
+  return { applied, note: heatWording(`Papers-Check Reflex: Personal Heat ${applied.before} → ${applied.after}.`) };
 }
 
 const GM_TABS = [
@@ -176,7 +176,7 @@ function gmEncounters(mount, rerender) {
         el('span', { class: 'cite', text: 'encounter' })
       ]),
       el('div', { class: 'result-body', text: block.hook }),
-      el('div', { class: 'result-body', text: `${block.resolution.activeSkills.map(titleCase).join(' or ')} against ${titleCase(block.resolution.opposingSkill)}${dice ? `, ${Array.isArray(dice) ? dice.join('–') : dice} opposition dice` : ''}. ${block.consequence}` })
+      el('div', { class: 'result-body', text: `${block.resolution.activeSkills.map(titleCase).join(' or ')} against ${titleCase(block.resolution.opposingSkill)}${dice ? `, ${Array.isArray(dice) ? dice.join('–') : dice} opposition dice` : ''}. ${heatWording(block.consequence)}` })
     ]);
     if (block.extended) {
       card.append(el('button', {
@@ -211,8 +211,8 @@ function gmTables(mount, rerender) {
       const roll = rollDie(10); // R-10
       const row = RANDOM_ENCOUNTERS.table.find((r) => r.roll === roll);
       const cellNow = getCell();
-      const extra = roll === 10 && cellNow.cellHeat >= 4 ? ' Cell Heat is 4 or more — escalate toward a nemesis.' : '';
-      modal({ title: `Random encounter — ${roll}`, body: `${row.entry}.${extra}`, actions: [{ label: 'Close', primary: true }] });
+      const extra = roll === 10 && cellNow.cellHeat >= 4 ? heatWording(' Cell Heat is 4 or more — escalate toward a nemesis.') : '';
+      modal({ title: `Random encounter — ${roll}`, body: `${heatWording(row.entry)}.${extra}`, actions: [{ label: 'Close', primary: true }] });
     }
   }));
   tables.append(el('button', {
@@ -339,7 +339,7 @@ function gmBuild(mount, rerender) {
           el('span', { class: 'result-title', text: ability.name }),
           el('span', { class: 'cite', text: ability.type || '' })
         ]),
-        el('div', { class: 'result-body', text: ability.summary })
+        el('div', { class: 'result-body', text: heatWording(ability.summary) })
       ]));
     });
     abilityList.append(el('details', { class: 'accordion', open: index === 0 }, [
@@ -384,7 +384,7 @@ function gmBuild(mount, rerender) {
   // --- Papers-Check Reflex (B§2), driven from the GM screen ---
   const reflexCard = el('div', { class: 'card' }, [
     el('h3', { text: 'Papers-Check Reflex' }),
-    el('p', { class: 'small muted', text: 'A PC who fails a Deception or Cool check against a group with this ability takes a Personal Heat check automatically.' }),
+    el('p', { class: 'small muted', text: heatWording('A PC who fails a Deception or Cool check against a group with this ability takes a Personal Heat check automatically.') }),
     el('button', {
       type: 'button', class: 'secondary', id: 'papers-check-failed', text: 'The check failed',
       onclick: () => {

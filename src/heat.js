@@ -92,6 +92,18 @@ export function heatSetbackDice({ personalHeat = 0, cellHeat = 0, isPublicCheck 
   return sum(personalHeat, 'personalEffect') + sum(cellHeat, 'cellEffect');
 }
 
+/** The bestiary (B§) was written against the two-track model the manual has since replaced,
+ *  and so were the two §12D hooks that cite it. With one shared track those names no longer
+ *  refer to anything, so the printed wording is relabelled on its way to the screen rather
+ *  than edited in the data files, which stay faithful to what is printed. */
+export function heatWording(text) {
+  if (heatIsSplit()) return text;
+  return String(text)
+    .replace(/Personal Heat and Cell Heat/g, 'suspicion')
+    .replace(/Personal Heat/g, 'suspicion')
+    .replace(/Cell Heat/g, 'suspicion');
+}
+
 /** How many moves a track remembers. Enough to answer "why am I at 3?" without becoming
  *  a second log. */
 const HEAT_TRAIL_CAP = 12;

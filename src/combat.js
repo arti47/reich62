@@ -20,7 +20,7 @@ import {
   saveCharacter, getCell, saveCell, snapshot, undoSnapshot, lastSnapshot, setSceneWatched,
   getScene, startScene, endScene
 } from './store.js';
-import { applyCellHeat, applyHeat, safehouseFor, heatIsSplit, currentHeat } from './heat.js';
+import { applyCellHeat, applyHeat, safehouseFor, heatIsSplit, currentHeat, heatWording } from './heat.js';
 import { renderClocks } from './clocks.js';
 import { VEHICLE_COMPONENT_DAMAGE, JOURNEY, TRAVEL_ENCOUNTERS, TENSION } from '../data-journey.js';
 import { Settings } from './settings.js';
@@ -349,7 +349,7 @@ export function papersCheckReflex(combatantId, character, { failed }) {
   const applied = applyHeat(1, { character, reason: `Papers-Check Reflex from ${c.name}` });
   return {
     ok: true, triggered: true, applied,
-    note: `Papers-Check Reflex: Personal Heat ${applied.before} → ${applied.after}.`
+    note: heatWording(`Papers-Check Reflex: Personal Heat ${applied.before} → ${applied.after}.`)
   };
 }
 
@@ -364,7 +364,7 @@ export function nemesisEscalation() {
   return {
     triggered: true, threshold, cellHeat: cell.cellHeat,
     inPlay: escalating.length > 0,
-    note: `Cell Heat is ${cell.cellHeat}: ${source.name} escalates personally.`
+    note: heatWording(`Cell Heat is ${cell.cellHeat}: ${source.name} escalates personally.`)
   };
 }
 
