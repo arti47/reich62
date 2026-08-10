@@ -9,6 +9,8 @@ import {
 import { BLACK_MARKET } from '../data.js';
 import { ADVERSARY_ABILITIES, ADVERSARY_TIERS } from '../data-npcs.js';
 import { BESTIARY, ENCOUNTER_BLOCKS, RANDOM_ENCOUNTERS } from '../data-monsters.js';
+import { MEANING, ELEMENTS } from '../data-solo.js';
+import { rollDie } from './core.js';
 
 const byId = (list) => (id) => list.find((entry) => entry.id === id) || null;
 
@@ -285,3 +287,24 @@ export function minionCriticalWoundCost(perMember) {
 }
 
 export { RANDOM_ENCOUNTERS };
+
+/** A seed for the Kicker (§13 step 6): what happened, to whom or what, and where.
+ *  It is the §15A Meaning pair plus a §15B location — the same tables the solo screen
+ *  rolls — used here as a writing prompt rather than as content in its own right. The
+ *  sentence is still the player's to write; this only unsticks a blank page. */
+export function rollKickerSeed() {
+  const action = rollDie(10);
+  const subject = rollDie(10);
+  const place = rollDie(10);
+  return {
+    action: MEANING.action.find((r) => r.roll === action).word,
+    subject: MEANING.subject.find((r) => r.roll === subject).word,
+    location: ELEMENTS.location.find((r) => r.roll === place).entry,
+    rolls: { action, subject, location: place }
+  };
+}
+
+/** The seed as one line to put in front of the player. */
+export function kickerSeedLine(seed) {
+  return `${seed.action} — ${seed.subject.toLowerCase()}, at ${seed.location.toLowerCase()}.`;
+}

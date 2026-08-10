@@ -96,6 +96,13 @@ h3 { font-size: 1rem; }
 
 p { margin: 0 0 0.6rem; }
 
+/* Lists keep room for their own markers. Without this the accordion body rule below —
+   which sets padding on every child — collapses a list's indent to nothing and the numbers
+   hang outside the panel. */
+ol, ul { margin: 0 0 0.6rem; padding-inline-start: 1.5rem; }
+li { margin: 0 0 0.35rem; }
+li:last-child { margin-bottom: 0; }
+
 a { color: var(--focus); }
 
 :focus-visible {
@@ -472,6 +479,9 @@ details.howto > p { padding: 0 0.6rem 0.6rem; margin: 0; color: var(--ink-soft);
 
 details.accordion { margin: 0 0 0.5rem; background: var(--panel); }
 details.accordion > *:not(summary) { padding: 0 0.6rem; }
+/* …except lists, which need their marker column kept on top of that padding. */
+details.accordion > ol, details.accordion > ul,
+details.howto > ol, details.howto > ul { padding: 0 0.6rem 0 2.1rem; }
 details.accordion > *:last-child { padding-bottom: 0.6rem; }
 .accordion-title { font-family: var(--font-head); text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.8rem; }
 .accordion-summary { color: var(--ink-soft); font-size: 0.8rem; font-family: var(--font-mono); text-align: right; margin-left: auto; }

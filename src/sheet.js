@@ -14,7 +14,7 @@ import {
 } from './rules.js';
 import { ITEM_DAMAGE, ATTACHMENTS, DIFFICULTIES, GEAR, WEAPONS, ARMOUR, RARITY, BLACK_MARKET, CREATION_RULES } from '../data.js';
 import { PERSONAL_THREAT } from '../data-journey.js';
-import { blackMarketPurchase } from './rules.js';
+import { blackMarketPurchase, rollKickerSeed, kickerSeedLine } from './rules.js';
 import { hardPoints } from './derived.js';
 import { Settings } from './settings.js';
 import { rollCriticalInjury, spendStoryPoint, applyTalentToCheck, state as rollerState } from './roller.js';
@@ -251,11 +251,22 @@ function pane_vitals(mount, character, derived, rerender) {
   // the thing the GM calls back to.
   const kicker = panel('Kicker', PANELS.sheetKicker, []);
   kicker.append(el('label', { class: 'small', for: 'kicker-text', text: CREATION_RULES.kicker.prompt }));
-  kicker.append(el('textarea', {
+  const kickerField = el('textarea', {
     id: 'kicker-text', rows: '2', value: character.identity.kicker || '',
     placeholder: CREATION_RULES.kicker.examples[0],
     onchange: (e) => { character.identity.kicker = e.target.value.trim(); saveCharacter(character); }
+  });
+  kicker.append(kickerField);
+  // The same writing seed the creation step offers, for a kicker written or rewritten later.
+  const seedOut = el('p', { class: 'small', id: 'kicker-seed', 'aria-live': 'polite' });
+  kicker.append(el('button', {
+    type: 'button', class: 'secondary', id: 'kicker-roll', text: 'Stuck? Roll an idea',
+    onclick: () => {
+      const seed = rollKickerSeed();
+      seedOut.textContent = `${kickerSeedLine(seed)} Write the sentence that puts your character in the middle of it.`;
+    }
   }));
+  kicker.append(seedOut);
   mount.append(kicker);
 
   // §33 — the optional per-character antagonist thread, three steps.

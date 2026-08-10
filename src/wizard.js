@@ -11,7 +11,7 @@ import {
   BASE_WOUND_THRESHOLD, BASE_STRAIN_THRESHOLD
 } from '../data.js';
 import { PREGENS } from '../data-pregens.js';
-import { canBuyTalent, pyramidLegal, visibleTalents, xpCost, talent, career as careerById } from './rules.js';
+import { canBuyTalent, pyramidLegal, visibleTalents, xpCost, talent, career as careerById, rollKickerSeed, kickerSeedLine } from './rules.js';
 import { blankCharacter, derivedFor, normalise } from './derived.js';
 import { saveCharacter, setActiveCharacter } from './store.js';
 import { Settings } from './settings.js';
@@ -321,7 +321,30 @@ function renderKickerStep(mount) {
     oninput: (e) => { draft.identity.kicker = e.target.value; }
   }));
   mount.append(el('p', { class: 'small muted', text: `Other examples: ${CREATION_RULES.kicker.examples.slice(1).join('; ')}.` }));
+  // Stuck for one? The Meaning and Element tables are the book's own prompt generator, so
+  // they are offered here as a writing seed. The sentence stays the player's to write.
+  // The seed is written straight into its own line — a rerender here would wipe it.
+  mount.append(kickerSeedControl());
   mount.append(el('p', { class: 'small muted', text: 'You can leave this blank and add it later from the sheet.' }));
+}
+
+/** The shared "give me an idea" control, used by the wizard step and the sheet panel. */
+export function kickerSeedControl(onChange = () => {}, seedHolder = null) {
+  const wrap = el('div', {});
+  const out = el('p', { class: 'small', id: 'kicker-seed', 'aria-live': 'polite',
+    text: seedHolder && seedHolder.line ? seedHolder.line : '' });
+  wrap.append(el('button', {
+    type: 'button', class: 'secondary', id: 'kicker-roll', text: 'Stuck? Roll an idea',
+    onclick: () => {
+      const seed = rollKickerSeed();
+      const line = kickerSeedLine(seed);
+      out.textContent = `${line} Write the sentence that puts your character in the middle of it.`;
+      if (seedHolder) seedHolder.line = out.textContent;
+      onChange();
+    }
+  }));
+  wrap.append(out);
+  return wrap;
 }
 
 // --- rendering ---

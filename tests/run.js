@@ -222,6 +222,15 @@ async function main() {
 
     await page.getByRole('button', { name: 'Next', exact: true }).click();   // kicker (§13 step 6)
     check('creation asks for a kicker', (await page.locator('#wizard-kicker').count()) === 1);
+    // Stuck for one? The book's own Meaning and Element tables seed the sentence.
+    check('the kicker step offers to roll an idea', (await page.locator('#kicker-roll').count()) === 1);
+    await page.locator('#kicker-roll').click();
+    await page.waitForTimeout(120);
+    const seeded = await page.locator('#kicker-seed').innerText();
+    check('and the idea is a phrase and a place, not an empty line',
+      seeded.length > 20 && /, at /.test(seeded), seeded);
+    check('the roll seeds but never writes the sentence for you',
+      (await page.inputValue('#wizard-kicker')) === '');
     await page.fill('#wizard-kicker', 'Her brother was taken in a night raid.');
     check('the kicker is optional and never blocks the step',
       !(await page.getByRole('button', { name: 'Next', exact: true }).isDisabled()));
@@ -632,6 +641,16 @@ async function main() {
       at('Questions you have asked') > at('6 · Close the scene')
       && at('Prompts you have rolled') > at('6 · Close the scene'),
       soloHeadings.join(' | '));
+    // A list's numbers must sit inside the panel that holds them: the accordion body rule
+    // sets padding on every child, which collapsed the list's own marker column.
+    check('list markers sit inside their panel, not hanging off the edge',
+      await page.evaluate(() => {
+        const lists = [...document.querySelectorAll('#screen ol, #screen ul')];
+        return lists.every((list) => {
+          const style = getComputedStyle(list);
+          return parseFloat(style.paddingInlineStart || style.paddingLeft) >= 16;
+        });
+      }));
     check('the loop itself opens the screen, folded',
       await page.evaluate(() => {
         const d = document.querySelector('#screen > details.accordion');
