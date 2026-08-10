@@ -138,7 +138,12 @@ export function buildIndex() {
       t.settingApplicable ? {} : { note: 'Not used in this setting.' })));
 
   Object.entries(D.MOTIVATIONS).filter(([, v]) => Array.isArray(v)).forEach(([kind, list]) => {
-    list.forEach((m) => out.push(entry(`${kind}: ${m.name}`, m.detail || '', '§12B')));
+    // Several §12B entries are a bare word — Death, Adaptable, Courageous — with nothing
+    // printed beside them. An entry with an empty body renders as a title and a blank line,
+    // so the facet itself becomes the body rather than leaving the row saying nothing.
+    const facet = { desire: 'A Desire', fear: 'A Fear', strength: 'A Strength', flaw: 'A Flaw' }[kind] || 'A Motivation';
+    list.forEach((m) => out.push(entry(`${kind}: ${m.name}`,
+      m.detail || `${facet} a character can take, printed without further explanation.`, '§12B')));
   });
 
   N.ADVERSARY_TIERS.forEach((t) => out.push(entry(`Adversary tier: ${t.name}`, `${t.summary} ${t.rules.join(' ')}`, t.cite)));
