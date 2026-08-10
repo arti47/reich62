@@ -16,7 +16,8 @@ import {
   criticalInjuryFor, criticalInjuryTotal, attackDifficulty, rangedDifficultyFor,
   weaponBaseDamage, weaponPierce, weapon as weaponById, encounterBlock, stepDifficulty
 } from './rules.js';
-import { getCombat, sceneWatched, setSceneWatched } from './store.js';
+import { getCombat, sceneWatched, setSceneWatched, getScene } from './store.js';
+import { renderSoloNow } from './now.js';
 import { damageCombatant } from './combat.js';
 import { activeCharacter, getCell, saveCell, saveCharacter } from './store.js';
 import { soak as soakOf, woundThreshold, strainThreshold, criticalModifier } from './derived.js';
@@ -634,6 +635,11 @@ export function renderRoller(mount) {
   // Whether this scene is watched is scene state, not screen state, so the toggle reads the
   // scene rather than remembering its own answer — and End Scene clearing it clears this.
   state.surveilled = sceneWatched();
+
+  // A solo player sent here by the Now bar arrives with no GM to say what happens next, so
+  // the bar follows: same state, same precedence, and a way back to the Oracle. It only
+  // appears with a solo scene actually running, so group play never sees it.
+  if (Settings.soloMode() && getScene()) renderSoloNow(mount, { route: 'roll', onChange: rerender });
 
   const setup = panel('What are you attempting?', PANELS.rollCheck, []);
 

@@ -14,6 +14,7 @@ import { rollPool, diceToRoll, SYMBOL_HELP } from './roller.js';
 import { renderClocks, listClocks, applyCheckToClock } from './clocks.js';
 import { renderJourney } from './journey.js';
 import { previewBoundary, fireBoundary, undoLastBoundary, sceneLabel } from './combat.js';
+import { renderSoloNow, writeAck, suspicionLevel } from './now.js';
 import { HEAT } from '../data.js';
 import { NPC_BEHAVIOR, CONVERSATION, TRAVEL_ENCOUNTERS, JOURNEY } from '../data-journey.js';
 import { Settings } from './settings.js';
@@ -213,15 +214,16 @@ export function renderSolo(mount) {
   // scene ends, rather than being this screen's own memory.
   state.surveilled = sceneWatched();
 
-  // The screen runs in the order the printed loop runs (§23): what a turn is, then frame the
-  // scene, ask the Oracle, resolve your own attempt, track what is closing in, and only then
-  // read back what has already happened.
-  mount.append(accordion('How a turn goes', [
+  // The screen runs in the order the printed loop runs (§23): frame the scene, ask the
+  // Oracle, resolve your own attempt, track what is closing in, and only then read back
+  // what has already happened. The panels are not numbered, because a loop is not a queue —
+  // the Now bar above them carries the sequence, and these are where you change a setting.
+  const loopCard = accordion('How a turn goes', [
     el('ol', { class: 'small' }, SOLO_LOOP.steps.map((s) => el('li', { text: s })))
-  ], { key: 'solo-loop', summary: `${SOLO_LOOP.steps.length} steps`, defaultOpen: false }));
+  ], { key: 'solo-loop', summary: `${SOLO_LOOP.steps.length} steps`, defaultOpen: false });
 
   // --- Oracle ---
-  const oracleCard = panel('2 · Ask the Oracle', PANELS.soloOracle, []);
+  const oracleCard = panel('Ask the Oracle', PANELS.soloOracle, []);
   const likelihood = el('select', { id: 'oracle-likelihood', 'aria-label': 'Likelihood', onchange: (e) => { state.likelihood = e.target.value; rerender(); } });
   ORACLE.likelihoods.forEach((l) => likelihood.append(el('option', {
     value: l.id, selected: state.likelihood === l.id,
@@ -291,9 +293,11 @@ export function renderSolo(mount) {
 
     // One event per question: either trigger fires it, never both (H-2).
     let event = null;
+    let eventText = null;
     if (verdict.event || (focus && focus.chainsEvent)) {
       event = rollRandomEvent();
       const text = `${event.category} (${event.categoryRoll}) concerning ${event.subject.toLowerCase()} (${event.subjectRoll}).${event.complication ? ` Complication: ${event.complication}.` : ''}${verdict.event ? ` ${RANDOM_EVENT.skewByAnswer[verdict.id] || ''}` : ''}`;
+      eventText = text;
       lines.push(`Random Event: ${text}`);
       // A chained event is content in exactly the way a hand-rolled one is, so it lands in
       // the prompt log with the rest rather than only inside this answer's row.
@@ -327,9 +331,12 @@ export function renderSolo(mount) {
       rolledByApp: rolled,
       lines
     });
+    // The Now bar reads the answer to decide what comes next, so it keeps the rung's id and
+    // whether an event fired alongside the text the panel shows.
     state.lastAnswer = {
-      answer: verdict.answer, net: verdict.result.net, symbols: { ...tally },
-      focus, expectation: state.expectation, lines
+      answer: verdict.answer, id: verdict.id, net: verdict.result.net, symbols: { ...tally },
+      focus, expectation: state.expectation, lines,
+      event: eventText, eventRead: false
     };
     state.entered = newTally();
     // What you expected belongs to the question that was just answered. Leaving it in the
@@ -339,13 +346,32 @@ export function renderSolo(mount) {
     rerender();
   };
 
+  // The one tap that rolls the Oracle's dice and answers. Shared with the Now bar, which
+  // offers the same act without making you scroll to this panel to find it.
+  const askNow = () => {
+    const rolled = rollPool(pool);
+    if (!rolled.ok) { showToast(rolled.reason); return false; }
+    ask(rolled.tally, { rolled: true });
+    return true;
+  };
+
+  // Raid timing is a suspicion consequence, and the one place the loop hands a decision
+  // straight to the Oracle (§23), so it is an act rather than an instruction — from the
+  // suspicion panel or from the Now bar, whichever the player is looking at.
+  const askRaid = () => {
+    state.expectation = 'The raid does not land this scene';
+    const raidPool = oraclePool();
+    const rolled = rollPool(raidPool);
+    if (!rolled.ok) { showToast(rolled.reason); return false; }
+    const openScene = getScene();
+    writeAck({ raidAtScene: openScene ? openScene.number : 0 });
+    ask(rolled.tally, { rolled: true, forPool: raidPool });
+    return true;
+  };
+
   oracleCard.append(el('button', {
     type: 'button', class: 'primary', id: 'oracle-ask', text: 'Ask the Oracle',
-    onclick: () => {
-      const rolled = rollPool(pool);
-      if (!rolled.ok) { showToast(rolled.reason); return; }
-      ask(rolled.tally, { rolled: true });
-    }
+    onclick: askNow
   }));
 
   // The last answer stays on screen: what the dice showed, then what it means.
@@ -401,14 +427,14 @@ export function renderSolo(mount) {
   }));
 
   // --- frame the scene (§23 step 1) ---
-  const tables = panel('1 · Frame the scene', PANELS.soloTables, []);
+  const tables = panel('Frame the scene', PANELS.soloTables, []);
 
   // A scene needs a beginning if it is going to have an end. This is app bookkeeping, not a
   // rule: a number, an optional name, and a start time, so the boundary has something to
   // close and the screen can say which scene you are in.
   const scene = getScene();
   if (scene) {
-    tables.append(el('p', { class: 'small', id: 'scene-now', text: `You are in ${sceneLabel(scene)}, started ${new Date(scene.startedAt).toLocaleTimeString()}. Close it in step 6 when it has played out.` }));
+    tables.append(el('p', { class: 'small', id: 'scene-now', text: `You are in ${sceneLabel(scene)}, started ${new Date(scene.startedAt).toLocaleTimeString()}. Close it under "Close the scene" when it has played out.` }));
   } else {
     const sceneName = el('input', { type: 'text', id: 'scene-name', placeholder: 'Checkpoint on the river road', 'aria-label': 'Name this scene' });
     tables.append(el('label', { class: 'small', for: 'scene-name', text: 'What is this scene? (optional)' }), sceneName);
@@ -501,25 +527,51 @@ export function renderSolo(mount) {
   }
   tables.append(latest);
 
+  // --- what to do now ---
+  // Pinned above every panel, because the reported fault was never "I cannot find the
+  // control", it was "I do not know what to press". Every state it can be in is a rule the
+  // app already runs; the bar only decides which one is in front of you. It is appended
+  // first but built last, so its buttons can act with the Oracle's own machinery.
+  renderSoloNow(mount, {
+    route: 'solo',
+    lastAnswer: state.lastAnswer,
+    onChange: rerender,
+    handlers: {
+      'now-raid': () => { askRaid(); },
+      'now-start-scene': () => { startScene(''); rerender(); },
+      'now-ask': () => { askNow(); },
+      'now-read-event': () => {
+        modal({
+          title: 'What happened',
+          body: state.lastAnswer ? state.lastAnswer.event : '',
+          actions: [{ label: 'Got it', value: true, primary: true }]
+        });
+        state.lastAnswer.eventRead = true;
+        rerender();
+      }
+    }
+  });
+
+  mount.append(loopCard);
   mount.append(tables);
   mount.append(oracleCard);
 
   // --- resolve it yourself (§23 step 4) ---
   // The Oracle says what the world does; what the character attempts is an ordinary check,
   // and that lives on the Roll screen. Without this the loop has a step with no door.
-  mount.append(panel('3 · Resolve what you do', PANELS.soloResolve, [
+  mount.append(panel('Resolve what you do', PANELS.soloResolve, [
     el('a', { class: 'empty-action', href: '#/roll', text: 'Open the Roll screen' })
   ]));
 
   // --- track what is closing in (§23 step 6) ---
-  renderClocks(mount, { onChange: rerender, title: '4 · Track what is closing in' });
+  renderClocks(mount, { onChange: rerender, title: 'Track what is closing in' });
   if (Settings.journeyModule()) renderJourney(mount, { onChange: rerender, title: 'The road' });
 
   // Suspicion is the loop's own track, and the raid rule keys off it, so the screen states
   // where it stands rather than making you go and look (§23 step 6).
-  const suspicion = panel('5 · Where suspicion stands', PANELS.soloSuspicion, []);
+  const suspicion = panel('Where suspicion stands', PANELS.soloSuspicion, []);
   const heatNow = currentHeat(character);
-  const raidLevel = heatIsSplit() ? heatNow.personal : heatNow.shared;
+  const raidLevel = suspicionLevel(character);
   suspicion.append(el('p', { class: 'small', id: 'solo-suspicion', text: heatIsSplit()
     ? `${character ? (character.identity.name || 'Your character') : 'No character loaded'}: Personal ${heatNow.personal} of ${HEAT.max}. The network: Cell ${cell.cellHeat} of ${HEAT.max}, safehouse ${cell.safehouseStatus}.`
     : `Suspicion ${heatNow.shared} of ${HEAT.max}, shared by the whole party. Safehouse ${cell.safehouseStatus}.` }));
@@ -529,14 +581,7 @@ export function renderSolo(mount) {
     suspicion.append(el('p', { class: 'small', text: SOLO_LOOP.heatRule.note }));
     suspicion.append(el('button', {
       type: 'button', class: 'primary', id: 'raid-ask', text: 'Ask whether the raid lands this scene',
-      onclick: () => {
-        state.expectation = 'The raid does not land this scene';
-        const raidPool = oraclePool();
-        const rolled = rollPool(raidPool);
-        if (!rolled.ok) { showToast(rolled.reason); return; }
-        ask(rolled.tally, { rolled: true, forPool: raidPool });
-        showToast('Answered in the Oracle panel above.');
-      }
+      onclick: () => { if (askRaid()) showToast('Answered in the Oracle panel above.'); }
     }));
   }
   mount.append(suspicion);
@@ -544,7 +589,7 @@ export function renderSolo(mount) {
   // --- close the scene (§23 step 7) ---
   // The lifecycle bundles live on the combat tracker, which a solo player never opens, so
   // the one boundary the solo loop names is fired from here too — same preview, same undo.
-  const sceneCard = panel('6 · Close the scene', PANELS.soloScene, []);
+  const sceneCard = panel('Close the scene', PANELS.soloScene, []);
   const scenePreview = previewBoundary('scene');
   sceneCard.append(el('ul', { class: 'small' }, scenePreview.deltas.map((d) => el('li', { text: d }))));
   sceneCard.append(el('button', {

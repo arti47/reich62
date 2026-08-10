@@ -103,6 +103,9 @@ async function main() {
     check('every screen is still reachable from the header menu', (await page.locator('#screen-menu').count()) === 1);
 
     for (const label of ['Home', 'Sheet', 'Roll', 'Create', 'Combat', 'Rules', 'Settings']) {
+      // Wait for the card rather than sampling: boot-time work (the service worker
+      // handshake) can re-render the screen under the assertion, which made this flake.
+      await page.waitForSelector('#screen .card', { state: 'visible' });
       check(`${label} renders content`, await page.locator('#screen .card, #screen section.card').first().isVisible());
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       check(`${label} has no horizontal overflow at 360px`, overflow <= 0, `overflow ${overflow}px`);
@@ -623,6 +626,32 @@ async function main() {
     await page.waitForSelector('#oracle-likelihood');
     check('the Oracle offers all three likelihoods', (await page.locator('#oracle-likelihood option').count()) === 3);
 
+    // The Now bar: one instruction above every panel, because the reported fault was not
+    // "I cannot find the control", it was "I do not know what to press".
+    // An alert outranks the loop step, and earlier blocks have already moved suspicion, so
+    // the track is put somewhere quiet before the loop states themselves are checked. That
+    // precedence is exercised deliberately further down.
+    await page.evaluate(() => {
+      const cell = JSON.parse(localStorage.getItem('reich62:cell') || '{}');
+      cell.cellHeat = 0;
+      localStorage.setItem('reich62:cell', JSON.stringify(cell));
+      localStorage.removeItem('reich62:soloAck');
+    });
+    await go('#/');
+    await go('#/solo');
+    await page.waitForSelector('#oracle-likelihood');
+    check('the solo screen opens with a "do this next" bar',
+      (await page.locator('#solo-now').count()) === 1
+      && (await page.evaluate(() => {
+        const bar = document.querySelector('#solo-now');
+        const first = document.querySelector('#screen > *');
+        return bar === first;
+      })), 'bar must be the first thing on the screen');
+    check('with no scene running the bar says to start one',
+      /no scene is running/i.test(await page.locator('#solo-now-text').innerText())
+      && (await page.locator('#now-start-scene').count()) === 1,
+      await page.locator('#solo-now-text').innerText());
+
     // A scene needs a beginning if End Scene is to have anything to end, and the result of
     // a rolled prompt has to appear where the button is — sending it only to a log folded
     // away at the bottom of the screen made the buttons look broken.
@@ -643,18 +672,29 @@ async function main() {
       && (await page.locator('#idea-latest').innerText()).trim().length > 10,
       (await page.locator('#idea-latest').innerText()).replace(/\n/g, ' | '));
 
+    // With a scene open and nothing asked, the bar points at the Oracle.
+    check('with a scene open the bar names it and offers the question',
+      /scene 1, "Checkpoint on the river road"/i.test(await page.locator('#solo-now-text').innerText())
+      && (await page.locator('#now-ask').count()) === 1,
+      await page.locator('#solo-now-text').innerText());
+
     // The screen runs in the order the printed loop runs (§23), so the buttons follow play
-    // rather than the order they happened to be written in.
+    // rather than the order they happened to be written in. The panels are no longer
+    // numbered — the bar carries the sequence, and a loop is not a queue.
     const soloHeadings = await page.evaluate(() =>
       [...document.querySelectorAll('#screen .card > h2')].map((h) => h.textContent.trim()));
     const at = (t) => soloHeadings.findIndex((h) => h.startsWith(t));
     check('the solo screen follows the printed loop order',
-      at('1 · Frame') >= 0 && at('1 · Frame') < at('2 · Ask') && at('2 · Ask') < at('3 · Resolve')
-      && at('3 · Resolve') < at('4 · Track') && at('4 · Track') < at('5 · Where suspicion')
-      && at('5 · Where suspicion') < at('6 · Close the scene'), soloHeadings.join(' | '));
+      at('Frame the scene') >= 0 && at('Frame the scene') < at('Ask the Oracle')
+      && at('Ask the Oracle') < at('Resolve what you do')
+      && at('Resolve what you do') < at('Track what is closing in')
+      && at('Track what is closing in') < at('Where suspicion')
+      && at('Where suspicion') < at('Close the scene'), soloHeadings.join(' | '));
+    check('no panel heading is numbered, because the bar carries the sequence',
+      soloHeadings.every((h) => !/^\d+\s·/.test(h)), soloHeadings.join(' | '));
     check('the two logs sit last, after every step',
-      at('Questions you have asked') > at('6 · Close the scene')
-      && at('Prompts you have rolled') > at('6 · Close the scene'),
+      at('Questions you have asked') > at('Close the scene')
+      && at('Prompts you have rolled') > at('Close the scene'),
       soloHeadings.join(' | '));
     // A list's numbers must sit inside the panel that holds them: the accordion body rule
     // sets padding on every child, which collapsed the list's own marker column.
@@ -757,6 +797,70 @@ async function main() {
     check('R-22: an emphatic answer chains a Random Event', /Random Event/.test(emphatic), emphatic.replace(/\n/g, ' | '));
     check('R-22: it feeds Heat in a surveilled context like a Despair would',
       (await page.locator('#resource-header').innerText()) !== heatBeforeEmphatic);
+
+    // The Now bar's precedence: that answer both fired an event and pushed suspicion over a
+    // threshold, and the threshold wins — the fiction has changed under you, and the next
+    // question would otherwise be asked in a world you have not noticed yet.
+    check('an alert outranks the loop step: the new threshold is announced first',
+      /suspicion is 1/i.test(await page.locator('#solo-now-text').innerText())
+      && (await page.locator('#now-ack-heat').count()) === 1,
+      await page.locator('#solo-now-text').innerText());
+    check('and it names the effect now in force, not just the number',
+      /setback/i.test(await page.locator('#solo-now-text').innerText()),
+      await page.locator('#solo-now-text').innerText());
+    await page.locator('#now-ack-heat').click();
+    await page.waitForTimeout(140);
+    check('acknowledging it hands the bar back to the loop step',
+      /random event fired/i.test(await page.locator('#solo-now-text').innerText())
+      && (await page.locator('#now-read-event').count()) === 1,
+      await page.locator('#solo-now-text').innerText());
+    check('and the same threshold is not announced twice',
+      await page.evaluate(() => {
+        try { return JSON.parse(localStorage.getItem('reich62:soloAck') || '{}').heat === 1; }
+        catch { return false; }
+      }));
+    await page.locator('#now-read-event').click();
+    await page.waitForSelector('.modal-backdrop');
+    check('reading the event shows what happened',
+      (await page.locator('.modal-body').innerText()).trim().length > 10,
+      (await page.locator('.modal-body').innerText()).replace(/\n/g, ' | '));
+    await page.getByRole('button', { name: 'Got it' }).click();
+    await page.waitForTimeout(160);
+    check('an answer with something attached sends you to the dice',
+      (await page.locator('#now-to-roll').count()) === 1,
+      await page.locator('#solo-now-text').innerText());
+
+    // The bar follows to the Roll screen, so the hand-off is not a dead end.
+    await go('#/roll');
+    await page.waitForSelector('#roller-skill');
+    check('the bar follows to the Roll screen while a solo scene is open',
+      (await page.locator('#solo-now').count()) === 1
+      && (await page.locator('#now-to-oracle').count()) === 1,
+      await page.locator('#solo-now-text').innerText());
+    check('and it says the scene is still open, with a way back',
+      /scene \d/i.test(await page.locator('#solo-now-text').innerText()),
+      await page.locator('#solo-now-text').innerText());
+    await go('#/solo');
+    await page.waitForSelector('#oracle-likelihood');
+
+    // A plain yes or no simply moves the scene on: ask the next thing you do not know.
+    await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+    await page.getByRole('button', { name: 'One more oracle success' }).click();
+    await page.locator('#oracle-ask-entered').click();
+    await page.waitForTimeout(160);
+    check('a plain answer offers the next question',
+      /ask the next/i.test(await page.locator('#solo-now-text').innerText())
+      && (await page.locator('#now-ask').count()) === 1,
+      await page.locator('#solo-now-text').innerText());
+    const asksBefore = await page.evaluate(() => {
+      try { return JSON.parse(localStorage.getItem('reich62:oracleLog') || '[]').length; } catch { return -1; }
+    });
+    await page.locator('#now-ask').click();
+    await page.waitForTimeout(180);
+    check('and the bar asks it right there, without scrolling to the panel',
+      (await page.evaluate(() => {
+        try { return JSON.parse(localStorage.getItem('reich62:oracleLog') || '[]').length; } catch { return -1; }
+      })) === asksBefore + 1);
     // R-22a retired: the grading sentence is gone, the rung and the focus line carry it.
     check('the answer carries no grading sentence',
       !/barely tipped|straightforward result|solid result|powerful result|as decisive as the dice get/i

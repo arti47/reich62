@@ -526,6 +526,29 @@ details.accordion > *:last-child { padding-bottom: 0.6rem; }
 .outcome ul { margin: 0; padding-left: 1.1rem; }
 .outcome-warn { border-left-color: var(--oxblood); }
 
+/* The solo "Do this next" bar. It sits above every panel and carries one instruction, so it
+   is deliberately louder than a card and shorter than one: a label, a line, a button. */
+.now-bar {
+  border: 1px solid var(--brass);
+  border-left-width: 4px;
+  background: var(--panel-2);
+  border-radius: var(--radius);
+  padding: 0.7rem 0.8rem;
+  margin-bottom: 0.8rem;
+}
+.now-bar .now-label {
+  font-family: var(--font-head);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--brass);
+  margin-bottom: 0.25rem;
+}
+.now-bar .now-text { margin-bottom: 0.5rem; }
+.now-bar button, .now-bar .empty-action { margin-top: 0; }
+.now-alert { border-color: var(--oxblood); }
+.now-alert .now-label { color: var(--oxblood); }
+
 .stepper { padding: 0.4rem 0; border-bottom: 1px solid var(--rule); }
 .stepper:last-child { border-bottom: 0; }
 .stepper-label { display: block; font-size: 0.85rem; margin-bottom: 0.25rem; }
