@@ -27,6 +27,7 @@ if (typeof globalThis.CustomEvent === 'undefined') {
 import { createServer, listen } from './serve.js';
 import { pinChecks } from './rulings.test.js';
 import { dataChecks } from './data.test.js';
+import { manualChecks } from './manual.test.js';
 
 // The pre-installed Chromium in this environment; PLAYWRIGHT_BROWSERS_PATH points at it.
 const BROWSER_ROOT = process.env.PLAYWRIGHT_BROWSERS_PATH || '/opt/pw-browsers';
@@ -55,6 +56,7 @@ async function main() {
   // --- pure data and engine checks, no browser needed ---
   await dataChecks({ check, equal });
   await pinChecks({ check, equal });
+  await manualChecks({ check });
 
   // --- browser checks ---
   const server = createServer();
