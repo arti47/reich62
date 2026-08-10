@@ -338,12 +338,25 @@ async function main() {
     const resultText = await page.locator('#roll-result').innerText();
     check('an uncancelled Despair on an evasion check reads +2 suspicion (§17.1)',
       /Heat \+2/.test(resultText), resultText);
+    // The roll control is on the Roll screen whether or not the simulated roller is on:
+    // gating it behind the setting left the default state with no way to roll at all.
+    check('the Roll screen always offers to roll the pool',
+      (await page.locator('#roll-digitally').count()) === 1);
+    check('and hand entry is still there beside it',
+      (await page.getByRole('button', { name: 'One more success' }).count()) === 1);
+    await page.locator('#roll-digitally').click();
+    await page.waitForTimeout(200);
+    check('rolling with the setting off still fills the symbols',
+      (await page.locator('#roll-result').innerText()).length > 0);
+    await page.getByRole('button', { name: 'Clear symbols' }).click();
+    await page.waitForTimeout(120);
+
     // The simulated roller fills the symbol entry from the supplied face table (D§).
     await go('#/settings');
     await page.locator('#flag-digitalRoller').check();
     await go('#/roll');
     await page.waitForSelector('#roll-digitally');
-    await page.getByRole('button', { name: 'Roll this pool' }).click();
+    await page.locator('#roll-digitally').click();
     await page.waitForTimeout(80);
     const rolledText = await page.locator('#screen').innerText();
     check('a digital roll fills the symbol entry without a per-die readout',
@@ -362,8 +375,8 @@ async function main() {
     await page.locator('#flag-digitalRoller').uncheck();
     await go('#/roll');
     await page.waitForTimeout(60);
-    check('manual entry remains available with the simulated roller off',
-      (await page.locator('#roll-digitally').count()) === 0);
+    check('the roll control stays on the screen with the simulated roller off',
+      (await page.locator('#roll-digitally').count()) === 1);
     check('the symbol pad comes back with the simulated roller off (R-B1)',
       (await page.getByRole('button', { name: 'One more success' }).count()) === 1);
 

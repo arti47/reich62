@@ -441,6 +441,9 @@ export function commit(character = activeCharacter()) {
  *  Only reachable while `digitalRoller` is on, which needs DIE_FACES to exist (R-B1). */
 export function rollPool(pool) {
   if (!DIE_FACES) return { ok: false, reason: 'No die face data is loaded, so the app cannot roll for you.' };
+  if (!Object.values(pool).some((n) => n > 0)) {
+    return { ok: false, reason: 'There are no dice in this pool yet — pick a skill and a difficulty first.' };
+  }
   const tally = newTally();
   const dice = [];
   Object.entries(pool).forEach(([dieType, count]) => {
@@ -796,13 +799,18 @@ export function renderRoller(mount) {
       DIE_FACES === null
         ? 'The manual never prints die face distributions, so the app cannot roll these dice for you. Roll them physically and tap what came up — everything after that is automatic.'
         : Settings.digitalRoller()
-          ? 'The app rolls the pool for you. Switch the simulated roller off in Settings to tap in what your own dice showed instead.'
-          : 'Switch on the simulated roller in Settings to have the app roll the pool for you.'
+          ? 'The app rolls the pool for you. Switch the simulated roller off in Settings to key in what your own dice showed instead.'
+          : 'Roll your own dice and tap in what they showed, or have the app roll this pool for you.'
     ])
   ]);
-  if (Settings.digitalRoller()) {
+  // The roll control is always here once the face table exists. It used to be gated behind
+  // the simulated-roller setting, which meant that with the setting off — the default —
+  // the Roll screen offered no way to roll at all, only a sentence pointing at Settings.
+  // Hand entry stays the default input; this is the other way in, reachable from the screen
+  // that needs it rather than from a toggle two taps away (R-B1).
+  if (DIE_FACES !== null) {
     entry.append(el('button', {
-      type: 'button', class: 'primary', id: 'roll-digitally', text: 'Roll this pool',
+      type: 'button', class: 'primary', id: 'roll-digitally', text: 'Roll these dice for me',
       onclick: () => {
         const rolled = rollPool(pool);
         if (!rolled.ok) { showToast(rolled.reason); return; }
