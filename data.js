@@ -553,7 +553,23 @@ export const STORY_POINTS = {
   flow: 'A spent point moves to the other pool once its effect resolves, so the total in circulation is the effective cap.',
   reset: 'Unspent points carry over between sessions unless the GM rules otherwise.',
   otherMovers: ['Critical Injury 26–30, Discouraging Wound, moves one point from the player pool to the GM pool, or the reverse if the target is an NPC.'],
-  talentSpends: ['luckyStrike', 'grenadier', 'heroicWill', 'indomitable']
+  talentSpends: ['luckyStrike', 'grenadier', 'heroicWill', 'indomitable'],
+  // §8 Push — spend a Story Point to reroll the whole pool after a check. It is not free:
+  // every uncancelled Threat or Despair the reroll shows **beyond what the first roll
+  // showed** costs one of three things, the player's choice.
+  push: {
+    cite: '§8',
+    cost: 1,
+    oncePerCheck: true,
+    rerolls: 'the entire pool',
+    when: 'After a check — a failure, or a success you want to improve.',
+    priceOptions: [
+      { id: 'heat',   label: 'Take 1 suspicion (only in a surveilled context)', requiresSurveilled: true },
+      { id: 'gear',   label: 'Damage a piece of gear one step, to Minor' },
+      { id: 'strain', label: 'Suffer 1 strain' }
+    ],
+    freshSymbols: 'Triumph and Despair on the reroll are read fresh.'
+  }
 };
 
 // T26 — Critical Injury table — §9
@@ -924,7 +940,10 @@ export const CREATION_STEPS = [
   { id: 'xp', name: 'Spend 70 XP', summary: 'Every PC gets the same 70 XP. Skill ranks cannot pass 2 during creation and characteristics can only be raised here.', cite: '§13, §7' },
   { id: 'derived', name: 'Derived attributes', summary: 'Compute wound and strain thresholds, soak, defences and encumbrance after the XP spend.', cite: '§6' },
   { id: 'motivation', name: 'Motivation', summary: 'One Desire, one Fear, one Strength and one Flaw, rolled or chosen.', cite: '§12B' },
-  { id: 'gear', name: 'Gear', summary: 'Spend the starting budget or pick from the gear list.', cite: '§13, §15', ruling: 'R-8' }
+  { id: 'gear', name: 'Gear', summary: 'Spend the starting budget or pick from the gear list.', cite: '§13, §15', ruling: 'R-8' },
+  // §13 step 6 — one sentence, no mechanics. It is the hook the GM calls back to, and it
+  // pairs with the Personal Threat Countdown (§33) if the journey module is on.
+  { id: 'kicker', name: 'Kicker', summary: 'One sentence naming the event that forced this character onto the path they are on. Not a mechanic — an anchor the GM can call back to.', cite: '§13' }
 ];
 
 export const CREATION_RULES = {
@@ -934,6 +953,12 @@ export const CREATION_RULES = {
   characteristicFloor: CHARACTERISTIC_MIN, // R-5
   skillRankCap: SKILL_RANK_MAX_AT_CREATION,
   careerSkillPicks: 4,
+  kicker: {
+    cite: '§13',
+    prompt: 'What happened that forced your hand? One sentence.',
+    examples: ['a raid on their street', 'a friend\'s arrest', 'a forged order they were told to sign'],
+    mechanical: false
+  },
   // R-8 — the manual states neither a budget nor a currency name. House aid, labelled as one.
   houseAid: {
     currencyLabel: 'RM', currencyName: 'Reichsmark', startingBudget: 500,
@@ -1159,46 +1184,62 @@ export const SHEET_FIELDS = {
     { id: 'weapons', name: 'Weapons', fields: ['Name, skill, damage, crit rating, range, qualities'] },
     { id: 'gear', name: 'Gear log', fields: ['Weapons and armour', 'Personal gear', 'Money'] },
     { id: 'criticals', name: 'Critical Injuries', fields: ['Severity and result, tracked until healed'] },
-    { id: 'reich62', name: 'Reich \'62 additions', fields: ['Personal Heat 0–5', 'Cell Heat 0–5 (shared)', 'Quality of forged papers carried'] }
+    { id: 'reich62', name: 'Reich \'62 additions', fields: ['Heat 0–5, shared by the party', 'Quality of forged papers carried', 'Kicker — the sentence that started it'] }
   ]
 };
 
-// T45 — Heat — §17
+// T45 — Suspicion / Heat — §17.
+// The manual now runs **one shared 0–5 track for the whole party** (§17), with the older
+// Personal + Cell split kept as an optional variant for larger parties (§17.5). Both
+// ladders live here; `Settings.heatSplit()` chooses which one the app reads.
 export const HEAT = {
   cite: '§17',
   max: 5,
   min: 0,
+  shared: true,           // §17 — one value for the party, not one per character
   safehouseDefault: 'clear', // §3.8 — the status before any threshold sets one
   generation: {
     cite: '§17.1',
     scope: 'Only checks made in Reich-surveilled contexts — public spaces, checkpoints, dealings with officials or informants.',
     rules: [
-      { id: 'despair', trigger: 'Uncancelled Despair on a surveilled-context check', personalHeat: 1 },
-      { id: 'despairEvasion', trigger: 'Uncancelled Despair on an evasion check (Deception, Skulduggery, Streetwise or Cool used to evade or mislead surveillance)', personalHeat: 2,
+      { id: 'despair', trigger: 'Uncancelled Despair on a surveilled-context check', heat: 1, personalHeat: 1 },
+      { id: 'despairEvasion', trigger: 'Uncancelled Despair on an evasion check (Deception, Skulduggery, Streetwise or Cool used to evade or mislead surveillance)', heat: 2, personalHeat: 2,
         skills: ['deception', 'skulduggery', 'streetwise', 'cool'] },
-      { id: 'triumph', trigger: 'Uncancelled Triumph — the player may choose to spend it', personalHeat: -1, optional: true }
+      { id: 'triumph', trigger: 'Uncancelled Triumph — any player may choose to spend it', heat: -1, personalHeat: -1, optional: true }
     ],
     note: 'Ordinary Threat and Advantage never generate Heat; they stay narrative complications.'
   },
-  tracks: {
-    cite: '§17.2',
-    personal: 'Tracked per character, 0 to 5.',
-    cell: 'Shared across the whole party or network, 0 to 5. Rises when any member reaches Personal Heat 3 or more, or from group-implicating failures such as a blown safehouse or a flipped informant.',
-    cellEscalationAtPersonal: 3
-  },
+  // §17.2 — the printed ladder, one column.
   thresholds: [
-    { level: 1, personal: 'One Setback die on public checks', personalEffect: { setback: 1, scope: 'public' }, cell: null, cellEffect: null },
-    { level: 2, personal: 'Papers checked on sight — opposed Deception or Cool against Perception', cell: 'One Setback die on every cell member\'s public checks', cellEffect: { setback: 1, scope: 'public' } },
-    { level: 3, personal: 'Tailed — an opposed Vigilance check to notice', cell: 'The safehouse is placed under watch, at GM discretion', safehouseStatus: 'watched' },
-    { level: 4, personal: 'An informant is assigned and the residence is searched', cell: 'Oracle roll: a cell member is flipped or arrested' },
-    { level: 5, personal: 'An arrest warrant is issued and a raid is imminent; the Oracle determines timing', cell: 'The cell is burned — the network collapses', safehouseStatus: 'blown' }
+    { level: 1, effect: 'One Setback die on public checks', dice: { setback: 1, scope: 'public' } },
+    { level: 2, effect: 'Papers checked on sight — opposed Deception or Cool against Perception' },
+    { level: 3, effect: 'Tailed, an opposed Vigilance check to notice; a shared safehouse is placed under watch', safehouseStatus: 'watched' },
+    { level: 4, effect: 'An informant is assigned to the cell and a residence is searched; an Oracle roll may decide a member is flipped or arrested' },
+    { level: 5, effect: 'A raid is imminent, with the Oracle deciding when — the cell is burned and the network collapses', safehouseStatus: 'blown' }
   ],
   decay: {
-    cite: '§17.4',
-    personal: 'Minus one per session of low-risk downtime, or through specific actions: bribery, new papers, relocating or disappearing.',
-    cell: 'Only decays once the triggering Personal Heat scores drop and no new group failures occur.'
+    cite: '§17.3',
+    note: 'Minus one per session of low-risk downtime, or through specific actions: bribery, new papers, relocating, disappearing, lying low.'
   },
-  adventureEnd: 'A PC at Personal Heat 5 either goes underground, relocating and resetting Heat to 2, or is captured, with the Oracle or GM deciding whether they escape, turn, or leave play.' // §24
+  // §17.4 — the number is shared, but the fiction is not: name whose action caused a rise.
+  attribution: 'The track is shared, so when it rises the GM still says which character\'s action caused it. The mechanical cost lands on everyone; being recognised, followed or named lands on them.',
+  // §17.5 — the optional two-track variant, for 4+ PCs acting semi-independently.
+  split: {
+    cite: '§17.5',
+    optional: true,
+    when: 'Use it when the party is four or more PCs who plausibly act apart, or when one member\'s carelessness endangering everyone is a dynamic you want to play out.',
+    cellEscalationAtPersonal: 3,
+    personal: 'Tracked per character, 0 to 5.',
+    cell: 'Shared across the whole party or network, 0 to 5. Rises when any member reaches Personal Heat 3 or more, or from group-implicating failures such as a blown safehouse or a flipped informant.',
+    thresholds: [
+      { level: 1, personal: 'One Setback die on public checks', personalEffect: { setback: 1, scope: 'public' }, cell: null, cellEffect: null },
+      { level: 2, personal: 'Papers checked on sight — opposed Deception or Cool against Perception', cell: 'One Setback die on every cell member\'s public checks', cellEffect: { setback: 1, scope: 'public' } },
+      { level: 3, personal: 'Tailed — an opposed Vigilance check to notice', cell: 'The safehouse is placed under watch, at GM discretion', safehouseStatus: 'watched' },
+      { level: 4, personal: 'An informant is assigned and the residence is searched', cell: 'Oracle roll: a cell member is flipped or arrested' },
+      { level: 5, personal: 'An arrest warrant is issued and a raid is imminent; the Oracle determines timing', cell: 'The cell is burned — the network collapses', safehouseStatus: 'blown' }
+    ]
+  },
+  adventureEnd: 'A party at Heat 5 either goes underground, relocating and resetting Heat to 2, or is captured, with the Oracle or GM deciding whether they escape, turn, or leave play.' // §24
 };
 
 // H-4 — **House aid, in neither book.** The manual publishes no progress-clock subsystem
@@ -1289,6 +1330,12 @@ export const LIFECYCLE = {
       'Reset the painkiller counter.',
       'Recover 1 vehicle system strain if the vehicle is undamaged.'
     ], clears: ['perDayFlags'] },
+    // §34 — the journey framework's own unit, between a scene and a session. Optional:
+    // it only appears once the Part V module is adopted.
+    { id: 'shift', name: 'End Shift', optionalModule: 'journey', cite: '§34', effects: [
+      'A leg of travel, a stretch of rest, or the gap between two Stops passes — five to ten hours.',
+      'Roll once on the travel encounter table if the party is on the road.'
+    ], clears: [] },
     { id: 'week', name: 'End Week', effects: [
       'Make the week-rest Critical Injury check available again.',
       'Reset the per-injury Medicine limit.'

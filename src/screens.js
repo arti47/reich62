@@ -85,7 +85,7 @@ export function renderHome(mount) {
   // --- the cell ---
   mount.append(panel(termLabel('cell'), PANELS.homeCell, [
     el('div', { class: 'stat-grid' }, [
-      stat(termLabel('cellHeat'), `${cell.cellHeat} / 5`),
+      stat(termLabel('personalHeat'), `${cell.cellHeat} / 5`),
       stat('Safehouse', cell.safehouseStatus),
       stat('Story points, players', cell.pools.storyPointsPlayer),
       stat('Story points, GM', cell.pools.storyPointsGM)
@@ -134,7 +134,7 @@ export function renderRules(mount, params = {}) {
     type: 'search',
     id: 'rules-search',
     value: initialQuery,
-    placeholder: 'Search rules, tables, talents, gear, adversaries, §17.3, B§6…',
+    placeholder: 'Search rules, tables, talents, gear, adversaries, §17.2, B§6…',
     'aria-label': 'Search the rules library'
   });
 

@@ -111,7 +111,7 @@ async function main() {
     await page.waitForSelector('#rules-results .rule-entry');
     const total = await page.locator('#rules-results .rule-entry').count();
     check('rules library is populated', total > 0, `entries rendered ${total}`);
-    await page.fill('#rules-search', '§17.3');
+    await page.fill('#rules-search', '§17.2');
     await page.waitForTimeout(60);
     check('search finds Heat thresholds by section number', await page.locator('#rules-results .rule-entry').count() >= 5);
     check('results are grouped by the part of the books they come from', (await page.locator('#rules-results .rule-section').count()) >= 1);
@@ -220,7 +220,14 @@ async function main() {
     check('pocket money cannot buy more starting gear',
       /cannot buy more starting gear/i.test(pocketText), pocketText.replace(/\n/g, ' | '));
 
+    await page.getByRole('button', { name: 'Next', exact: true }).click();   // kicker (§13 step 6)
+    check('creation asks for a kicker', (await page.locator('#wizard-kicker').count()) === 1);
+    await page.fill('#wizard-kicker', 'Her brother was taken in a night raid.');
+    check('the kicker is optional and never blocks the step',
+      !(await page.getByRole('button', { name: 'Next', exact: true }).isDisabled()));
     await page.getByRole('button', { name: 'Next', exact: true }).click();   // review
+    check('the review reads the kicker back',
+      /night raid/.test(await page.locator('#screen').innerText()));
     await page.getByRole('button', { name: 'Save character' }).click();
     await page.waitForSelector('#resource-header:not([hidden])');
 
@@ -236,7 +243,8 @@ async function main() {
     const header = await page.locator('#resource-header').innerText();
     check('the resource bar shows injury against its true limit', /Injury 0\/10/.test(header), header);
     check('the resource bar shows story points as players / GM', /Story 1\/0/.test(header), header);
-    check('header shows Personal and Cell Heat', /Heat 0·0/.test(header), header);
+    // §17 — one shared track, so the header shows one number out of the maximum.
+    check('header shows the shared suspicion track', /Heat 0\/5/.test(header), header);
 
     // Vitals stepper clamps and flips incapacitation at the threshold (§6).
     await page.fill('#vital-injury', '10');
@@ -319,8 +327,8 @@ async function main() {
     await page.getByRole('button', { name: 'One more success' }).click();
     await page.getByRole('button', { name: 'One more despair' }).click();
     const resultText = await page.locator('#roll-result').innerText();
-    check('an uncancelled Despair on an evasion check reads +2 Personal Heat (§17.1)',
-      /Personal Heat \+2/.test(resultText), resultText);
+    check('an uncancelled Despair on an evasion check reads +2 suspicion (§17.1)',
+      /Heat \+2/.test(resultText), resultText);
     // The simulated roller fills the symbol entry from the supplied face table (D§).
     await go('#/settings');
     await page.locator('#flag-digitalRoller').check();
@@ -356,13 +364,44 @@ async function main() {
     await page.getByRole('button', { name: 'Log this check' }).click();
     await page.waitForTimeout(80);
     const headerAfter = await page.locator('#resource-header').innerText();
-    check('Heat is applied to the character', /Heat 2·0/.test(headerAfter), headerAfter);
+    check('Heat is applied to the party', /Heat 2\/5/.test(headerAfter), headerAfter);
     check('the roll is logged', (await page.locator('#screen section.card', { hasText: 'Recent checks' }).locator('.log-row').count()) >= 1);
+    check('the outcome stays on screen instead of only flashing a toast',
+      /Suspicion/.test(await page.locator('.outcome').first().innerText()),
+      (await page.locator('.outcome').first().innerText()).replace(/\n/g, ' | '));
+
+    // --- §8 Push: one reroll of the whole pool, bought with a story point ---
+    await page.getByRole('button', { name: 'One more threat' }).click();
+    await page.waitForTimeout(80);
+    const poolBefore = await page.locator('#resource-header').innerText();
+    check('pushing is offered once symbols are in', (await page.locator('#roller-push').count()) === 1);
+    await page.locator('#roller-push').click();
+    await page.waitForTimeout(160);
+    check('the push spends a story point into the GM pool',
+      (await page.locator('#resource-header').innerText()) !== poolBefore,
+      await page.locator('#resource-header').innerText());
+    check('and a check can only be pushed once',
+      (await page.locator('#roller-push').count()) === 0
+      && (await page.locator('#roller-push-price').count()) === 1);
+    const priceText = await page.locator('#roller-push-price').innerText();
+    check('the push price panel says what is owed, if anything',
+      /to pay|nothing to pay/.test(priceText), priceText.replace(/\n/g, ' | '));
+    await page.getByRole('button', { name: 'Clear symbols' }).click();
+    await page.waitForTimeout(100);
+    check('clearing the check makes it pushable again',
+      (await page.locator('#roller-push-price').count()) === 0);
+    // Hand the point back so the story-point tests further down start from the same place.
+    await page.evaluate(() => {
+      const cell = JSON.parse(localStorage.getItem('reich62:cell') || '{}');
+      cell.pools = { storyPointsPlayer: 1, storyPointsGM: 0 };
+      localStorage.setItem('reich62:cell', JSON.stringify(cell));
+    });
+    await go('#/roll');
+    await page.waitForSelector('#roller-skill');
+
     const logRow = await page.locator('.log-row').first().innerText();
     check('a log row shows the result, not the whole derivation',
       /Success|Failure/.test(logRow) && !/Pool /.test(logRow) && !/entered /.test(logRow), logRow.replace(/\n/g, ' | '));
-    check('the outcome stays on screen instead of only flashing a toast',
-      /Suspicion on you/.test(await page.locator('.outcome').first().innerText()));
 
     // --- Phase 4: combat tracker, lifecycle, progress tasks ---
     await go('#/combat');
@@ -416,10 +455,10 @@ async function main() {
     await page.waitForTimeout(140);
     check('a failed dragnet round escalates the opposition to 3 dice',
       /3 opposition dice/.test(await dragnet().innerText()), await dragnet().innerText());
-    // Personal 2 → 3 from the dragnet, and Cell 0 → 2: one from the dragnet itself (B§6)
-    // and one from the member crossing Personal Heat 3 (§17.2).
+    // B§6 prints the cost as one on each track; with the single shared track (§17) there is
+    // one track to pay, so 2 → 3.
     const headerDragnet = await page.locator('#resource-header').innerText();
-    check('a failed dragnet round advances Personal and Cell Heat', /Heat 3·2/.test(headerDragnet), headerDragnet);
+    check('a failed dragnet round advances suspicion', /Heat 3\/5/.test(headerDragnet), headerDragnet);
 
     // Lifecycle: End Session awards XP, decays Heat on downtime, and undoes in one step.
     await page.getByRole('button', { name: 'End Session', exact: true }).click();
@@ -429,7 +468,7 @@ async function main() {
     await page.getByRole('button', { name: 'Apply' }).click();
     await page.waitForTimeout(120);
     const afterSession = await page.locator('#resource-header').innerText();
-    check('downtime decays Personal Heat by 1 (§17.4)', /Heat 2·/.test(afterSession), afterSession);
+    check('downtime decays suspicion by 1 (§17.3)', /Heat 2\/5/.test(afterSession), afterSession);
     await go('#/sheet');
     // 70 XP at creation, 25 spent (Brawn to 2 and one rank of Grit), plus the 20 session award.
     const xpText = await page.locator('#screen').innerText();
@@ -439,7 +478,8 @@ async function main() {
     await page.getByRole('button', { name: /^Undo End session/ }).click();
     await page.waitForTimeout(120);
     check('one-step undo restores the pre-boundary state',
-      /Heat 3·2/.test(await page.locator('#resource-header').innerText()));
+      /Heat 3\/5/.test(await page.locator('#resource-header').innerText()),
+      await page.locator('#resource-header').innerText());
 
     // --- Phase 4: guided death procedure and enforced rest limits ---
     await go('#/sheet');
@@ -662,6 +702,17 @@ async function main() {
         const d = [...document.querySelectorAll('#screen details.howto')];
         return d.some((x) => /read by weight/i.test(x.textContent));
       }));
+    // Random Oracle rolls earlier in this block can push suspicion to its maximum, where it
+    // cannot rise any further — so the track is put somewhere it can move from.
+    await page.evaluate(() => {
+      const cell = JSON.parse(localStorage.getItem('reich62:cell') || '{}');
+      cell.cellHeat = 0;
+      localStorage.setItem('reich62:cell', JSON.stringify(cell));
+    });
+    await go('#/');
+    await go('#/solo');
+    await page.waitForSelector('#oracle-likelihood');
+    await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
     const heatBeforeEmphatic = await page.locator('#resource-header').innerText();
     await page.getByRole('button', { name: 'One more oracle failure' }).click();
     await page.getByRole('button', { name: 'One more oracle failure' }).click();
@@ -775,16 +826,101 @@ async function main() {
     await page.getByRole('button', { name: 'Random encounter', exact: true }).click();
     check('the random encounter table rolls', /\(\d+\)/.test(await page.locator('#solo-output').innerText()));
 
+    // --- PART V (§31, §33–§40): the optional journey and tension module ---
+    check('the Part V generators stay hidden until the module is adopted',
+      (await page.locator('#solo-travel').count()) === 0
+      && (await page.locator('#solo-behaviour').count()) === 0);
+    await go('#/settings');
+    await page.locator('#flag-journeyModule').check();
+    await page.waitForTimeout(80);
+    await go('#/solo');
+    await page.waitForSelector('#solo-travel');
+    check('adopting it adds the four solo generators',
+      (await page.locator('#solo-travel').count()) === 1
+      && (await page.locator('#solo-behaviour').count()) === 1
+      && (await page.locator('#solo-conversation').count()) === 1
+      && (await page.locator('#solo-stop-countdown').count()) === 1);
+    await page.locator('#solo-behaviour').click();
+    await page.waitForTimeout(150);
+    check('the NPC behaviour generator rolls all five parts',
+      /Motive:/.test(await page.locator('#idea-latest').innerText())
+      && /Method:/.test(await page.locator('#idea-latest').innerText())
+      && /Tilt:/.test(await page.locator('#idea-latest').innerText()),
+      (await page.locator('#idea-latest').innerText()).replace(/\n/g, ' | '));
+    await page.locator('#solo-travel').click();
+    await page.waitForTimeout(150);
+    check('a travel encounter is rolled and kept', /Travel encounter/.test(await page.locator('#idea-latest').innerText()));
+
+    // §33 — the per-character threat countdown, on the sheet.
+    await go('#/sheet');
+    await page.waitForSelector('#threat-name');
+    await page.fill('#threat-name', 'An old SD file');
+    await page.locator('#threat-name').blur();
+    await page.waitForTimeout(150);
+    check('the threat countdown starts unnoticed', (await page.locator('#threat-advance').count()) === 1);
+    await page.locator('#threat-advance').click();
+    await page.waitForTimeout(120);
+    await page.locator('#threat-advance').click();
+    await page.waitForTimeout(120);
+    check('step 2 states the Setback it imposes',
+      /Setback die/.test(await page.locator('#screen').innerText()));
+    // §13 step 6 — the kicker is editable in play.
+    check('the sheet carries the kicker', (await page.locator('#kicker-text').count()) === 1);
+    await page.fill('#kicker-text', 'A forged order they were told to sign.');
+    await page.locator('#kicker-text').blur();
+    await page.waitForTimeout(120);
+    await go('#/');
+    await go('#/sheet');
+    check('and it is kept on the character',
+      /forged order/.test(await page.inputValue('#kicker-text')), await page.inputValue('#kicker-text'));
+
+    // §34 — the Shift boundary only exists inside the module.
+    await go('#/combat');
+    await page.waitForTimeout(120);
+    check('the journey module adds the Shift boundary',
+      (await page.getByRole('button', { name: 'End Shift', exact: true }).count()) === 1);
+    await page.getByRole('button', { name: 'End Shift', exact: true }).click();
+    await page.waitForSelector('.modal');
+    check('ending a shift previews a travel encounter roll',
+      /travel encounter/i.test(await page.locator('.modal').innerText()));
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await page.waitForTimeout(120);
+
+    await go('#/settings');
+    await page.locator('#flag-journeyModule').uncheck();
+    await page.waitForTimeout(80);
+    await go('#/combat');
+    check('dropping the module takes the Shift boundary away again',
+      (await page.getByRole('button', { name: 'End Shift', exact: true }).count()) === 0);
+
+    // --- §17.5: the optional two-track variant ---
+    await go('#/settings');
+    await page.locator('#flag-heatSplit').check();
+    await page.waitForTimeout(80);
+    await go('#/sheet');
+    check('the split variant shows two numbers in the header',
+      /Heat \d·\d/.test(await page.locator('#resource-header').innerText()),
+      await page.locator('#resource-header').innerText());
+    await go('#/settings');
+    await page.locator('#flag-heatSplit').uncheck();
+    await page.waitForTimeout(80);
+    await go('#/sheet');
+    check('and turning it off returns to one shared number',
+      /Heat \d\/5/.test(await page.locator('#resource-header').innerText()),
+      await page.locator('#resource-header').innerText());
+    await go('#/solo');
+    await page.waitForSelector('#oracle-likelihood');
+
     // --- the loop's last two steps: suspicion, and closing the scene (§23) ---
     check('the screen states where suspicion stands',
-      /Personal \d of \d/.test(await page.locator('#screen').innerText()),
-      (await page.locator('#screen').innerText()).slice(0, 0) || 'no suspicion readout');
+      /Suspicion \d of \d/.test(await page.locator('#solo-suspicion').innerText()),
+      await page.locator('#solo-suspicion').innerText());
+    // §17 — the shared track lives on the cell, so that is what the raid rule reads.
     const heatSaved = await page.evaluate(() => {
-      const raw = localStorage.getItem('reich62:characters');
-      const chars = JSON.parse(raw || '[]');
-      const before = chars.map((c) => c.state.personalHeat);
-      chars.forEach((c) => { c.state.personalHeat = 4; });
-      localStorage.setItem('reich62:characters', JSON.stringify(chars));
+      const cell = JSON.parse(localStorage.getItem('reich62:cell') || '{}');
+      const before = cell.cellHeat || 0;
+      cell.cellHeat = 4;
+      localStorage.setItem('reich62:cell', JSON.stringify(cell));
       return before;
     });
     await go('#/');
@@ -808,9 +944,9 @@ async function main() {
         catch { return false; }
       }));
     await page.evaluate(() => {
-      const chars = JSON.parse(localStorage.getItem('reich62:characters') || '[]');
-      chars.forEach((c) => { c.state.personalHeat = 3; });
-      localStorage.setItem('reich62:characters', JSON.stringify(chars));
+      const cell = JSON.parse(localStorage.getItem('reich62:cell') || '{}');
+      cell.cellHeat = 3;
+      localStorage.setItem('reich62:cell', JSON.stringify(cell));
     });
     await go('#/');
     await go('#/solo');
@@ -818,9 +954,9 @@ async function main() {
     check('the raid button goes away once suspicion drops back below 4',
       (await page.locator('#raid-ask').count()) === 0);
     await page.evaluate((before) => {
-      const chars = JSON.parse(localStorage.getItem('reich62:characters') || '[]');
-      chars.forEach((c, i) => { c.state.personalHeat = before[i]; });
-      localStorage.setItem('reich62:characters', JSON.stringify(chars));
+      const cell = JSON.parse(localStorage.getItem('reich62:cell') || '{}');
+      cell.cellHeat = before;
+      localStorage.setItem('reich62:cell', JSON.stringify(cell));
     }, heatSaved);
     await go('#/');
     await go('#/solo');

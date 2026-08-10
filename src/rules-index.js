@@ -4,6 +4,7 @@
 import * as D from '../data.js';
 import * as N from '../data-npcs.js';
 import * as M from '../data-monsters.js';
+import * as J from '../data-journey.js';
 import { Settings } from './settings.js';
 import { plain as stripMarkers } from './core.js';
 
@@ -20,8 +21,13 @@ export const SECTIONS = [
   { id: 'vehicles',   label: 'Vehicles',             test: (c) => /^§12\b/.test(c) },
   { id: 'careers',    label: 'Careers',              test: (c) => /^§14$/.test(c) },
   { id: 'heat',       label: 'Suspicion',            test: (c) => /^§17/.test(c) },
-  { id: 'opponents',  label: 'Opponents',            test: (c) => /^/.test(c) },
-  { id: 'running',    label: 'Running the game',     test: (c) => /^§(18|19|21|22|23|24|26|29|30)/.test(c) },
+  // Part V, the optional journey and tension module.
+  { id: 'journey',    label: 'Journeys and tension', test: (c) => /^§(31|33|34|35|36|37|38|39|40)\b/.test(c) },
+  { id: 'running',    label: 'Running the game',     test: (c) => /^§(18|19|20|21|22|23|24|25|26|27|28|29|30)/.test(c) },
+  // Bestiary citations, which use B§ rather than §. This used to be `/^/`, which matched
+  // everything, so every entry past Suspicion was filed here — including the whole of
+  // Running the game, which could never be reached.
+  { id: 'opponents',  label: 'Opponents',            test: (c) => /^B§/.test(c) },
   { id: 'other',      label: 'Everything else',      test: () => true }
 ];
 
@@ -169,9 +175,33 @@ export function buildIndex() {
     `Size ${v.silhouette}, top speed ${v.speed}, handling ${v.handling >= 0 ? '+' : ''}${v.handling}. It takes ${v.hull} hull trauma and ${v.systemStrain} system strain before it stops, behind ${v.armour} armour`,
     '§15E')));
 
-  D.HEAT.thresholds.forEach((t) => out.push(entry(`Heat ${t.level}`, `Personal: ${t.personal}. Cell: ${t.cell || '—'}`, '§17.3')));
-  D.HEAT.generation.rules.forEach((r) => out.push(entry('Heat generation', `${r.trigger} → Personal Heat ${r.personalHeat > 0 ? '+' : ''}${r.personalHeat}.`, '§17.1')));
-  out.push(entry('Heat decay', `${D.HEAT.decay.personal} ${D.HEAT.decay.cell}`, '§17.4'));
+  D.HEAT.thresholds.forEach((t) => out.push(entry(`Suspicion ${t.level}`, t.effect, '§17.2')));
+  D.HEAT.generation.rules.forEach((r) => out.push(entry('Suspicion generation', `${r.trigger} → suspicion ${r.heat > 0 ? '+' : ''}${r.heat}.`, '§17.1')));
+  out.push(entry('Suspicion decay', D.HEAT.decay.note, '§17.3'));
+  out.push(entry('Whose fault the suspicion is', D.HEAT.attribution, '§17.4'));
+  out.push(entry('Splitting suspicion in two', `${D.HEAT.split.when} ${D.HEAT.split.personal} ${D.HEAT.split.cell}`, '§17.5'));
+  D.HEAT.split.thresholds.forEach((t) => out.push(entry(`Split suspicion ${t.level}`, `Personal: ${t.personal}. Cell: ${t.cell || '—'}`, '§17.5')));
+
+  // §8 Push, and the whole optional Part V module.
+  out.push(entry('Pushing a check', `${D.STORY_POINTS.push.when} Spend ${D.STORY_POINTS.push.cost} story point to reroll ${D.STORY_POINTS.push.rerolls}. Every threat or despair beyond what the first roll showed costs one of: ${D.STORY_POINTS.push.priceOptions.map((o) => o.label.toLowerCase()).join('; ')}. ${D.STORY_POINTS.push.freshSymbols}`, '§8'));
+  out.push(entry('The Kicker', `${D.CREATION_RULES.kicker.prompt} For example: ${D.CREATION_RULES.kicker.examples.join(', ')}. It is an anchor, not a mechanic.`, '§13'));
+
+  out.push(entry('Tension in the cell', `${J.TENSION.levels.map((l) => `${l.level} ${l.name.toLowerCase()} — ${l.summary}`).join(' ')} The higher-tension side adds one Boost per point in an opposed check between them. ${J.TENSION.reduce}`, '§31'));
+  J.PERSONAL_THREAT.ladder.forEach((r) => out.push(entry(`Personal threat, step ${r.step}: ${r.name}`, r.summary, '§33')));
+  J.JOURNEY.timeUnits.forEach((u) => out.push(entry(`Time unit: ${u.name}`, `${u.span}. ${u.note}`, '§34')));
+  J.JOURNEY.lengths.forEach((l) => out.push(entry(`Journey length: ${l.name}`, `${l.stops} stops.`, '§34')));
+  out.push(entry('Blockers', `${J.JOURNEY.blocker.summary} ${J.JOURNEY.blocker.generate}`, '§34'));
+  J.JOURNEY.stopCountdown.table.forEach((r) => out.push(entry(`Stop countdown ${r.roll}`, r.entry, '§34')));
+  J.TRAVEL_ENCOUNTERS.table.forEach((r) => out.push(entry(`Travel encounter ${r.roll}`, r.entry, '§35')));
+  J.VEHICLE_TRAITS.table.forEach((r) => out.push(entry(`Vehicle trait: ${r.name}`, r.effect, '§36')));
+  J.VEHICLE_COMPONENT_DAMAGE.table.forEach((r) => out.push(entry(`Component damage ${r.roll}`, r.entry, '§37')));
+  J.MENTAL_TRAUMA.table.forEach((r) => out.push(entry(`Mental trauma: ${r.name}`, `${r.min}–${r.max}. ${r.effect}`, '§38')));
+  J.NPC_BEHAVIOR.personality.table.forEach((r) => out.push(entry(`NPC personality ${r.roll}`, r.entry, '§39')));
+  J.NPC_BEHAVIOR.emotionalState.table.forEach((r) => out.push(entry(`NPC mood ${r.roll}`, r.entry, '§39')));
+  J.NPC_BEHAVIOR.motive.table.forEach((r) => out.push(entry(`NPC motive ${r.roll}`, r.entry, '§39')));
+  J.NPC_BEHAVIOR.method.table.forEach((r) => out.push(entry(`NPC method ${r.roll}`, r.entry, '§39')));
+  out.push(entry('NPC tilt', `${J.NPC_BEHAVIOR.tilt.note} ${J.NPC_BEHAVIOR.tilt.bands.map((b) => `${b.min}–${b.max} ${b.entry}`).join('; ')}.`, '§39'));
+  J.CONVERSATION.subject.forEach((r) => out.push(entry(`Conversation subject ${r.roll}`, r.entry, '§40')));
 
   D.ENCOUNTER_SIZING.table.forEach((r) => out.push(entry(`Encounter sizing: ${r.setup}`, r.difficulty, '§20B')));
   D.LIFECYCLE.boundaries.forEach((b) => out.push(entry(`Lifecycle: ${b.name}`, b.effects.join(' '), '§21–§24')));

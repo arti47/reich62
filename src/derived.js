@@ -20,7 +20,9 @@ export function blankCharacter(over = {}) {
     identity: { name: '', career: null, careerSkills: [], motivation: { desire: null, fear: null, strength: null, flaw: null },
                // Which facets an opponent has worked out in play (§11).
                motivationRevealed: { desire: false, fear: false, strength: false, flaw: false },
-               knowledgeSpecialisation: '', portraitUrl: null },
+               knowledgeSpecialisation: '', portraitUrl: null,
+               // §13 step 6 — one sentence naming what forced this character's hand.
+               kicker: '' },
     attributes,
     skills,
     talents: [],
@@ -35,7 +37,11 @@ export function blankCharacter(over = {}) {
       // How the Medicine check is being made (§5G) and the last fall's summary (§5I).
       careFlags: { selfTreatment: false, noEquipment: false }, lastFall: null,
       // Why suspicion is where it is: the last dozen moves, newest first (§17).
-      heatTrail: []
+      heatTrail: [],
+      // §33 — the optional per-character antagonist thread, 0 (unnamed) to 3.
+      personalThreat: { name: '', step: 0 },
+      // §31 — tension toward other characters, by character id, 0–2 and directional.
+      tension: {}
     },
     xp: { total: 70, available: 70 },
     advancementLog: [],
@@ -54,6 +60,9 @@ export function normalise(character) {
   out.attributes = { ...base.attributes, ...(character.attributes || {}) };
   out.state = { ...base.state, ...(character.state || {}) };
   out.state.careFlags = { ...base.state.careFlags, ...((character.state || {}).careFlags || {}) };
+  // Part V additions back-fill on characters saved before the journey module existed.
+  out.state.personalThreat = { ...base.state.personalThreat, ...((character.state || {}).personalThreat || {}) };
+  out.state.tension = { ...((character.state || {}).tension || {}) };
   out.inventory = { ...base.inventory, ...(character.inventory || {}) };
   out.inventory.money = { ...base.inventory.money, ...((character.inventory || {}).money || {}) };
   out.xp = { ...base.xp, ...(character.xp || {}) };

@@ -37,7 +37,12 @@ export const FLAGS = [
   { id: 'showNonSettingTalents', label: 'Show non-setting talents', desc: 'Reveals the 12 talents that reference things this setting does not have — hacking rules, bows, aircraft, cybernetics, animal companions.' },
   { id: 'fateFocus', defaultOn: true, label: 'Oracle focus table', desc: 'Reads every Oracle answer against what you expected before you asked — as expected, not quite, in your favour, against you, and so on. A house aid from another solo system, not a printed rule; on by default.' },
   { id: 'gmDiscretionaryDice', label: 'GM discretionary dice', desc: 'Exposes the outnumbered and ganging-up dice, which the book says to use sparingly rather than automatically.' },
-  { id: 'advancedAutomation', label: 'Advanced automation', desc: 'Applies environmental dice, encumbrance penalties and Heat setbacks without prompting first.' }
+  { id: 'advancedAutomation', label: 'Advanced automation', desc: 'Applies environmental dice, encumbrance penalties and Heat setbacks without prompting first.' },
+  // §17.5 — the two-track variant the manual now prints as optional. One shared track is
+  // the default, so this flag brings the split back rather than taking it away.
+  { id: 'heatSplit', label: 'Split suspicion into personal and cell', desc: 'The book tracks one shared suspicion score for the whole party. Turn this on for the older two-track version — one score per character plus a shared cell score — which the book suggests for four or more players acting apart.' },
+  // Part V — an optional module, adopted or not as a whole surface.
+  { id: 'journeyModule', label: 'Journey and tension module', desc: 'Adds the optional Part V material: tension between characters, a personal threat countdown, journeys with stops and blockers, travel encounters, vehicle traits and component damage, mental trauma, and the NPC behaviour and conversation generators.' }
 ];
 
 export const MODE_KEY = 'mode';
@@ -57,6 +62,10 @@ export const Settings = {
   // H-2 — the one flag that starts on: the Oracle panel is built around the focus reading.
   fateFocus: () => get('fateFocus') !== false,
   advancedAutomation: () => !!get('advancedAutomation'),
+  // §17.5 — off means the printed default: one shared track.
+  heatSplit: () => !!get('heatSplit'),
+  // Part V (§31, §33–§40) — an optional module, off until adopted.
+  journeyModule: () => !!get('journeyModule'),
 
   // R-8 — house aids, relabellable, never presented as printed rules.
   currencyLabel: () => get('currencyLabel') || CREATION_RULES.houseAid.currencyLabel,

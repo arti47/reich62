@@ -1,7 +1,7 @@
 // combat.js — the combat tracker (initiative slots, turn budget, combatant cards),
 // the generic progress-task tracker, and the scene/session lifecycle engine.
 
-import { el, clear, titleCase, uid, clamp, rollDie } from './core.js';
+import { el, clear, titleCase, uid, clamp, rollDie, plain } from './core.js';
 import { showToast, confirmModal, modal, panel, accordion, emptyState, outcomeBox } from './ui.js';
 import { PANELS } from './help.js';
 import {
@@ -20,8 +20,9 @@ import {
   saveCharacter, getCell, saveCell, snapshot, undoSnapshot, lastSnapshot, setSceneWatched,
   getScene, startScene, endScene
 } from './store.js';
-import { applyCellHeat, applyPersonalHeat, safehouseFor } from './heat.js';
+import { applyCellHeat, applyHeat, safehouseFor, heatIsSplit, currentHeat } from './heat.js';
 import { renderClocks } from './clocks.js';
+import { VEHICLE_COMPONENT_DAMAGE, JOURNEY, TRAVEL_ENCOUNTERS, TENSION } from '../data-journey.js';
 import { Settings } from './settings.js';
 
 /** The conditions a GM realistically holds an NPC in. Heat and encumbrance are the
@@ -345,7 +346,7 @@ export function papersCheckReflex(combatantId, character, { failed }) {
     return { ok: false, reason: 'This combatant does not have Papers-Check Reflex.' };
   }
   if (!failed) return { ok: true, triggered: false, note: 'The check held up; no Heat.' };
-  const applied = applyPersonalHeat(character, 1, `Papers-Check Reflex from ${c.name}`);
+  const applied = applyHeat(1, { character, reason: `Papers-Check Reflex from ${c.name}` });
   return {
     ok: true, triggered: true, applied,
     note: `Papers-Check Reflex: Personal Heat ${applied.before} → ${applied.after}.`
@@ -439,6 +440,20 @@ export function crashVehicle(vehicleId) {
   };
 }
 
+/** §37 — for a granular outcome, roll what specifically was hit instead of flat trauma.
+ *  Part of the optional Part V module, so the control only appears once it is adopted. */
+export function rollComponentDamage(vehicleId) {
+  const combat = getCombat();
+  const v = combat.vehicles[vehicleId];
+  if (!v) return { ok: false, reason: 'Unknown vehicle.' };
+  const roll = rollDie(10);
+  const row = VEHICLE_COMPONENT_DAMAGE.table.find((r) => r.roll === roll);
+  if (row.apply && row.apply.systemStrain) vehicleDamage(vehicleId, { systemStrain: row.apply.systemStrain });
+  v.componentDamage = [...(v.componentDamage || []), { roll, entry: row.entry, ts: Date.now() }].slice(-6);
+  saveCombat(combat);
+  return { ok: true, roll, entry: row.entry, note: `${row.entry} (${roll}).` };
+}
+
 export function repairSystemStrain(vehicleId) {
   const combat = getCombat();
   const v = combat.vehicles[vehicleId];
@@ -527,12 +542,19 @@ export function dragnetRound(taskId, { failed, character = null, hoursElapsed = 
   const effects = [];
   if (failed) {
     task.progress = clamp(task.progress + 1, 0, task.target);
-    if (character) {
-      const personal = applyPersonalHeat(character, 1, `A failed round of ${task.name}`);
-      effects.push(`Personal Heat ${personal.before} → ${personal.after}.`);
+    // B§6 prints the cost as one on each track. With the single shared track (§17) there
+    // is one track to pay, so a failed round costs one; the split variant pays both.
+    if (heatIsSplit()) {
+      if (character) {
+        const personal = applyHeat(1, { character, reason: `A failed round of ${task.name}` });
+        if (personal.ok) effects.push(`Personal Heat ${personal.before} → ${personal.after}.`);
+      }
+      const cell = applyCellHeat(1, `A failed round of ${task.name}`);
+      effects.push(`Cell Heat ${cell.before} → ${cell.after}.`);
+    } else {
+      const moved = applyHeat(1, { character, reason: `A failed round of ${task.name}` });
+      effects.push(`Suspicion ${moved.before} → ${moved.after}.`);
     }
-    const cell = applyCellHeat(1);
-    effects.push(`Cell Heat ${cell.before} → ${cell.after}.`);
   } else {
     effects.push('The round is survived; the dragnet grinds on until the search zone is left behind.');
   }
@@ -598,10 +620,16 @@ export function previewBoundary(boundaryId, options = {}) {
     const xp = XP_AWARDS.standardPerSession + (options.lengthAdjustment || 0) + (options.motivationPlay ? XP_AWARDS.motivationBonus : 0);
     deltas.push(`Award ${xp} XP to every character (${XP_AWARDS.standardPerSession} base${options.lengthAdjustment ? `, ${options.lengthAdjustment > 0 ? '+' : ''}${options.lengthAdjustment} for length` : ''}${options.motivationPlay ? `, +${XP_AWARDS.motivationBonus} for Motivation play` : ''}).`);
     if (options.downtime) {
-      characters.filter((c) => c.state.personalHeat > 0)
-        .forEach((c) => deltas.push(`${c.identity.name || 'Unnamed'}: Personal Heat ${c.state.personalHeat} → ${c.state.personalHeat - 1} for low-risk downtime.`));
-      if (cell.cellHeat > 0 && characters.every((c) => c.state.personalHeat - 1 < 3)) {
-        deltas.push(`Cell Heat ${cell.cellHeat} → ${cell.cellHeat - 1}: no member is at Personal Heat 3 or more.`);
+      if (heatIsSplit()) {
+        characters.filter((c) => c.state.personalHeat > 0)
+          .forEach((c) => deltas.push(`${c.identity.name || 'Unnamed'}: Personal Heat ${c.state.personalHeat} → ${c.state.personalHeat - 1} for low-risk downtime.`));
+        if (cell.cellHeat > 0 && characters.every((c) => c.state.personalHeat - 1 < 3)) {
+          deltas.push(`Cell Heat ${cell.cellHeat} → ${cell.cellHeat - 1}: no member is at Personal Heat 3 or more.`);
+        }
+      } else if (cell.cellHeat > 0) {
+        deltas.push(`Suspicion ${cell.cellHeat} → ${cell.cellHeat - 1} for low-risk downtime.`);
+      } else {
+        deltas.push('Suspicion is already at 0, so downtime changes nothing.');
       }
     }
     deltas.push('Clear every once-per-session talent flag. Story Points carry over and are not reset.');
@@ -615,9 +643,17 @@ export function previewBoundary(boundaryId, options = {}) {
     deltas.push('Reset the per-injury Medicine limit.');
   }
   if (boundaryId === 'adventure') {
-    characters.filter((c) => c.state.personalHeat >= HEAT.max)
-      .forEach((c) => deltas.push(`${c.identity.name || 'Unnamed'} is at Personal Heat ${HEAT.max}: go underground, resetting Heat to 2, or be captured.`));
-    if (!deltas.length) deltas.push('No character is at maximum Heat; nothing to resolve.');
+    if (heatIsSplit()) {
+      characters.filter((c) => c.state.personalHeat >= HEAT.max)
+        .forEach((c) => deltas.push(`${c.identity.name || 'Unnamed'} is at Personal Heat ${HEAT.max}: go underground, resetting Heat to 2, or be captured.`));
+    } else if (cell.cellHeat >= HEAT.max) {
+      deltas.push(`Suspicion is at ${HEAT.max}: go underground, resetting it to 2, or be captured.`);
+    }
+    if (!deltas.length) deltas.push('Nothing is at maximum suspicion; nothing to resolve.');
+  }
+  if (boundaryId === 'shift') {
+    deltas.push(`A ${JOURNEY.timeUnits.find((u) => u.id === 'shift').span} leg of travel or rest passes.`);
+    deltas.push('Roll once on the travel encounter table if the party is on the road.');
   }
   return { boundary, deltas };
 }
@@ -638,7 +674,7 @@ export function fireBoundary(boundaryId, options = {}) {
       character.xp.total += xp;
       character.xp.available += xp;
       character.advancementLog.push({ ts: Date.now(), kind: 'award', detail: 'Session award', xpSpent: -xp });
-      if (options.downtime && character.state.personalHeat > 0) character.state.personalHeat -= 1;
+      if (heatIsSplit() && options.downtime && character.state.personalHeat > 0) character.state.personalHeat -= 1;
     }
     if (boundaryId === 'day') character.state.perDayFlags = { painkillers: 0 };
     // Conditions are stored as booleans and are cleared by hand or by healing, so the
@@ -650,11 +686,11 @@ export function fireBoundary(boundaryId, options = {}) {
 
   if (boundaryId === 'session' && options.downtime) {
     const cell = getCell();
-    const stillHot = listCharacters().some((c) => c.state.personalHeat >= 3);
+    // §17.3 — one shared track simply decays. The split variant (§17.5) only lets the cell
+    // cool once no member is still hot enough to keep pushing it up.
+    const stillHot = heatIsSplit() && listCharacters().some((c) => c.state.personalHeat >= 3);
     if (!stillHot && cell.cellHeat > 0) {
-      cell.cellHeat -= 1;
-      cell.safehouseStatus = safehouseFor(cell.cellHeat);
-      saveCell(cell);
+      applyCellHeat(-1, 'A session of low-risk downtime');
     }
   }
 
@@ -665,6 +701,12 @@ export function fireBoundary(boundaryId, options = {}) {
 
   // The scene's own state lives on two screens, so the boundary clears it there too rather
   // than leaving the next scene set up as the last one ended.
+  if (boundaryId === 'shift') {
+    const roll = rollDie(10);
+    const row = TRAVEL_ENCOUNTERS.table.find((r) => r.roll === roll);
+    preview.deltas.push(`Travel encounter: ${row.entry} (${roll}).`);
+  }
+
   if (boundaryId === 'scene') {
     endScene();
     setSceneWatched(false);
@@ -701,6 +743,7 @@ export function renderCombat(mount) {
   sectionRoster(mount, combat, rerender);
   sectionVehicles(mount, combat, rerender);
   sectionTasks(mount, rerender);
+  if (Settings.journeyModule()) sectionTension(mount, rerender);
   sectionLifecycle(mount, rerender);
 }
 
@@ -1001,6 +1044,10 @@ function sectionVehicles(mount, combat, rerender) {
       el('button', { type: 'button', class: 'secondary', text: '+1 system strain', 'aria-label': `One more system strain on ${v.name}`, onclick: () => { vehicleDamage(v.id, { systemStrain: 1 }); rerender(); } }),
       el('button', { type: 'button', class: 'secondary', text: 'Damage Control', 'aria-label': `Damage Control on ${v.name}`, onclick: () => { const r = repairSystemStrain(v.id); showToast(r.note); rerender(); } }),
       el('button', { type: 'button', class: 'secondary', text: 'Crash', 'aria-label': `Crash ${v.name}`, onclick: () => { const r = crashVehicle(v.id); showToast(r.note); rerender(); } }),
+      Settings.journeyModule()
+        ? el('button', { type: 'button', class: 'secondary', text: 'What was hit?', 'aria-label': `Roll component damage for ${v.name}`,
+            onclick: () => { const r = rollComponentDamage(v.id); showToast(r.ok ? r.note : r.reason); rerender(); } })
+        : null,
       el('button', {
         type: 'button', class: 'secondary danger', text: 'Remove', 'aria-label': `Remove ${v.name}`,
         onclick: async () => {
@@ -1045,6 +1092,54 @@ function sectionTasks(mount, rerender) {
   renderClocks(mount, { onChange: rerender });
 }
 
+// --- §31, tension inside the party (optional module) ---
+// Heat is pressure from outside; this is friction within. Ratings are directional, so each
+// character carries their own reading of every other one.
+function sectionTension(mount, rerender) {
+  const characters = listCharacters();
+  const card = panel('Tension in the cell', PANELS.combatTension, []);
+  if (characters.length < 2) {
+    card.append(emptyState('Tension runs between two characters, so it needs at least two on this device.'));
+    mount.append(card);
+    return;
+  }
+  card.append(el('p', { class: 'small muted', text: plain(TENSION.vsHeat) }));
+  characters.forEach((from) => {
+    characters.filter((to) => to.id !== from.id).forEach((to) => {
+      const level = ((from.state.tension || {})[to.id]) || 0;
+      const def = TENSION.levels.find((l) => l.level === level);
+      const row = el('div', { class: 'result' }, [
+        el('div', { class: 'result-head' }, [
+          el('span', { class: 'result-title', text: `${from.identity.name || 'Unnamed'} → ${to.identity.name || 'Unnamed'}` }),
+          el('span', { class: 'cite', text: `${level} of ${TENSION.max}` })
+        ]),
+        el('div', { class: 'result-body', text: `${def.name}. ${def.summary}` })
+      ]);
+      if (level > 0) {
+        row.append(el('p', { class: 'small', text: `In an opposed check between them, the higher side adds ${level} Boost.` }));
+      }
+      const move = (delta) => {
+        const next = clamp(level + delta, TENSION.min, TENSION.max);
+        from.state.tension = { ...(from.state.tension || {}), [to.id]: next };
+        saveCharacter(from);
+        // §31 — releasing tension is worth 2 strain back to each side.
+        if (delta < 0 && next < level) {
+          [from, to].forEach((who) => {
+            who.state.strain = Math.max(0, (who.state.strain || 0) - TENSION.reduceStrainRecovery);
+            saveCharacter(who);
+          });
+          showToast(`Tension released: both recover ${TENSION.reduceStrainRecovery} strain.`);
+        }
+        rerender();
+      };
+      row.append(el('button', { type: 'button', class: 'secondary', text: '+1', 'aria-label': `More tension from ${from.identity.name || 'Unnamed'} toward ${to.identity.name || 'Unnamed'}`, disabled: level >= TENSION.max, onclick: () => move(1) }));
+      row.append(el('button', { type: 'button', class: 'secondary', text: '−1', 'aria-label': `Less tension from ${from.identity.name || 'Unnamed'} toward ${to.identity.name || 'Unnamed'}`, disabled: level <= TENSION.min, onclick: () => move(-1) }));
+      card.append(row);
+    });
+  });
+  mount.append(card);
+}
+
 // --- the boundaries you fire when it is all over (§3.12) ---
 function sectionLifecycle(mount, rerender) {
   const lifecycle = panel('Wrapping up', PANELS.combatLifecycle, []);
@@ -1062,7 +1157,10 @@ function sectionLifecycle(mount, rerender) {
       onclick: () => { startScene(sceneName.value.trim()); rerender(); }
     }));
   }
-  LIFECYCLE.boundaries.forEach((boundary) => {
+  // §34's Shift only exists inside the optional journey module.
+  LIFECYCLE.boundaries
+    .filter((b) => !b.optionalModule || (b.optionalModule === 'journey' && Settings.journeyModule()))
+    .forEach((boundary) => {
     lifecycle.append(el('button', {
       type: 'button', class: 'secondary', text: boundary.name,
       onclick: async () => {

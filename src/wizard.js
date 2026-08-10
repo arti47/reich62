@@ -17,7 +17,7 @@ import { saveCharacter, setActiveCharacter } from './store.js';
 import { Settings } from './settings.js';
 import { rollDie } from './core.js';
 
-const STEPS = ['start', 'career', 'skills', 'xp', 'derived', 'motivation', 'gear', 'review'];
+const STEPS = ['start', 'career', 'skills', 'xp', 'derived', 'motivation', 'gear', 'kicker', 'review'];
 
 const XP_TABS = [
   { id: 'characteristics', label: 'Characteristics' },
@@ -36,6 +36,7 @@ const STEP_HELP = {
   xp: { lede: 'Every character gets the same 70 experience. Spend it here.', detail: 'Characteristics can only be raised now, at ten times the new rating per step. Skills cost five times the new rank, plus five if they are not career skills, and stop at rank 2 during creation. Talents cost five times their tier and follow the pyramid rule.' },
   derived: { lede: 'The numbers that fall out of your choices.', detail: 'Injury and stress limits are fixed when creation ends; only talents raise them afterwards. Damage resisted keeps pace with Brawn.' },
   motivation: { lede: 'What drives your character, and what trips them up.', detail: 'One of each: a desire, a fear, a strength and a flaw. They are the levers other people use on you socially, and playing to them earns extra experience at the end of a session.' },
+  kicker: { lede: 'One sentence: what happened that forced this character\'s hand?', detail: 'It is not a mechanic and it never rolls — it is the anchor the GM can call back to, and the seed of a personal threat if you use the journey module. A raid on their street; a friend\'s arrest; a forged order they were told to sign.' },
   gear: { lede: 'Spend the starting money on equipment.', detail: 'The book prints prices but never names the currency or the starting budget, so both are house aids you can change in Settings.' },
   review: { lede: 'A last look before the character is saved.', detail: 'Only characteristics lock at this point; skills, talents and gear all keep growing through play.' }
 };
@@ -95,6 +96,7 @@ function applyPregen(id) {
   careerDef.skills.forEach((s) => { draft.skills[s].career = true; });
   draft.identity.careerSkills = Object.keys(pregen.skills);
   draft.inventory.items = pregen.gear.map((g, i) => ({ id: `pregen-${i}`, name: g, encumbrance: 0, qty: 1, kind: 'gear' }));
+  draft.identity.kicker = pregen.kicker || '';
   if (pregen.erratum) draft.identity.erratum = pregen.erratum; // R-1, surfaced on the sheet
 }
 
@@ -308,6 +310,20 @@ export function finish() {
 export function currentDraft() { return draft; }
 export function currentStep() { return STEPS[step]; }
 
+/** §13 step 6 — the Kicker. Optional to fill in, since it carries no mechanics, but the
+ *  step is always shown so it is not quietly skipped. */
+function renderKickerStep(mount) {
+  mount.append(el('h3', { text: CREATION_RULES.kicker.prompt }));
+  mount.append(el('textarea', {
+    id: 'wizard-kicker', rows: '3', value: draft.identity.kicker || '',
+    placeholder: `For example: ${CREATION_RULES.kicker.examples[0]}`,
+    'aria-label': 'The kicker',
+    oninput: (e) => { draft.identity.kicker = e.target.value; }
+  }));
+  mount.append(el('p', { class: 'small muted', text: `Other examples: ${CREATION_RULES.kicker.examples.slice(1).join('; ')}.` }));
+  mount.append(el('p', { class: 'small muted', text: 'You can leave this blank and add it later from the sheet.' }));
+}
+
 // --- rendering ---
 export function renderWizard(mount) {
   clear(mount);
@@ -323,7 +339,7 @@ export function renderWizard(mount) {
   ({
     start: renderStartStep, career: renderCareerStep, skills: renderSkillsStep, xp: renderXpStep,
     derived: renderDerivedStep, motivation: renderMotivationStep, gear: renderGearStep,
-    review: renderReviewStep
+    kicker: renderKickerStep, review: renderReviewStep
   })[STEPS[step]](body);
   mount.append(body);
 
@@ -667,6 +683,7 @@ function renderReviewStep(node) {
   node.append(el('p', { class: 'small', text: `Talents: ${draft.talents.map((t) => `${talent(t.id).name}${t.ranks > 1 ? ` ×${t.ranks}` : ''}`).join(', ') || 'none'}` }));
   const m = draft.identity.motivation;
   node.append(el('p', { class: 'small', text: `Motivation: ${m.desire} / ${m.fear} / ${m.strength} / ${m.flaw}` }));
+  node.append(el('p', { class: 'small', text: `Kicker: ${draft.identity.kicker || 'not written yet — you can add it from the sheet.'}` }));
   const cash = startingCash();
   node.append(el('p', { class: 'small', text: `Starting cash: ${cash.total} ${Settings.currencyLabel()} — ${cash.unspent} unspent from the budget${cash.pocket ? `, plus ${cash.pocket} pocket money` : ', with no pocket money rolled yet'}.` }));
 }

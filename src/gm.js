@@ -1,7 +1,7 @@
 // gm.js — the GM dashboard: bestiary browser, one-tap encounter blocks, the NPC builder,
 // and every rollable reference table (§3.21, B§6–B§7). Gated behind the gmScreen flag.
 
-import { el, clear, titleCase, rollDie } from './core.js';
+import { el, clear, titleCase, rollDie, plain } from './core.js';
 import { showToast, modal, panel, subTabs, accordion, emptyState, confirmModal } from './ui.js';
 import { PANELS, label as termLabel } from './help.js';
 import {
@@ -10,19 +10,24 @@ import {
 } from '../data.js';
 import { ADVERSARY_TIERS, ADVERSARY_ABILITIES, NPC_QUICKGEN, ADVERSARY_TALENT } from '../data-npcs.js';
 import { BESTIARY, ENCOUNTER_BLOCKS, RANDOM_ENCOUNTERS, MINION_GROUPS } from '../data-monsters.js';
+import {
+  TRAVEL_ENCOUNTERS, JOURNEY, VEHICLE_TRAITS, VEHICLE_COMPONENT_DAMAGE, MENTAL_TRAUMA,
+  NPC_BEHAVIOR, CONVERSATION, TENSION, PERSONAL_THREAT
+} from '../data-journey.js';
 import { isVeryChallenging, minionGroupWoundThreshold, adversaryAbility } from './rules.js';
 import { addFromBestiary, createTask, addRecipeNpc, papersCheckReflex } from './combat.js';
 import { setUpEncounterBlock } from './roller.js';
 import { activeCharacter } from './store.js';
 import { getCell, saveCell } from './store.js';
-import { applyCellHeat, applyPersonalHeat } from './heat.js';
+import { Settings } from './settings.js';
+import { applyCellHeat, applyHeat, heatIsSplit } from './heat.js';
 
 const filters = { tier: 'all', heatOnly: false, challengingOnly: false, query: '' };
 
 /** Papers-Check Reflex outside a running encounter: the ability's Heat effect applies even
  *  when the guards are not on the combat tracker (B§2). */
 function applyCellHeatless(character) {
-  const applied = applyPersonalHeat(character, 1, 'Papers-Check Reflex at a checkpoint');
+  const applied = applyHeat(1, { character, reason: 'Papers-Check Reflex at a checkpoint' });
   return { applied, note: `Papers-Check Reflex: Personal Heat ${applied.before} → ${applied.after}.` };
 }
 
@@ -65,10 +70,11 @@ function gmCell(mount, rerender) {
       type: 'text', id: 'cell-name', value: cell.name,
       onchange: (e) => { const c = getCell(); c.name = e.target.value; saveCell(c); showToast('Cell name saved'); }
     }),
-    el('p', { class: 'small', text: `Cell Heat ${cell.cellHeat} / ${HEAT.max} · safehouse ${cell.safehouseStatus} · Story Points ${cell.pools.storyPointsPlayer} player / ${cell.pools.storyPointsGM} GM` }),
-    el('button', { type: 'button', class: 'secondary', text: 'Cell Heat +1', onclick: () => { const r = applyCellHeat(1); showToast(`Cell Heat ${r.before} → ${r.after}`); rerender(); } }),
-    el('button', { type: 'button', class: 'secondary', text: 'Cell Heat −1', onclick: () => { const r = applyCellHeat(-1); showToast(`Cell Heat ${r.before} → ${r.after}`); rerender(); } })
+    el('p', { class: 'small', id: 'gm-heat', text: `${heatIsSplit() ? 'Cell Heat' : 'Suspicion'} ${cell.cellHeat} / ${HEAT.max} · safehouse ${cell.safehouseStatus} · Story Points ${cell.pools.storyPointsPlayer} player / ${cell.pools.storyPointsGM} GM` }),
+    el('button', { type: 'button', class: 'secondary', text: `${heatIsSplit() ? 'Cell Heat' : 'Suspicion'} +1`, onclick: () => { const r = applyCellHeat(1, 'Raised on the GM screen'); showToast(`${heatIsSplit() ? 'Cell Heat' : 'Suspicion'} ${r.before} → ${r.after}`); rerender(); } }),
+    el('button', { type: 'button', class: 'secondary', text: `${heatIsSplit() ? 'Cell Heat' : 'Suspicion'} −1`, onclick: () => { const r = applyCellHeat(-1, 'Lowered on the GM screen'); showToast(`${heatIsSplit() ? 'Cell Heat' : 'Suspicion'} ${r.before} → ${r.after}`); rerender(); } })
   ]);
+  if (!heatIsSplit()) cellCard.append(el('p', { class: 'small muted', text: plain(HEAT.attribution) }));
   mount.append(cellCard);
 }
 
@@ -231,6 +237,52 @@ function gmTables(mount, rerender) {
       });
     }
   }));
+  // Part V (§35–§40) — optional module, so these only appear once it is adopted.
+  if (Settings.journeyModule()) {
+    const roll10 = (t) => { const n = rollDie(10); return t.find((r) => r.roll === n); };
+    const pop = (title, body) => modal({ title, body, actions: [{ label: 'Close', primary: true }] });
+    tables.append(el('button', {
+      type: 'button', class: 'secondary', id: 'gm-travel', text: 'Travel encounter',
+      onclick: () => { const r = roll10(TRAVEL_ENCOUNTERS.table); pop(`Travel encounter — ${r.roll}`, r.entry); }
+    }));
+    tables.append(el('button', {
+      type: 'button', class: 'secondary', id: 'gm-stop', text: 'Stop countdown',
+      onclick: () => { const r = roll10(JOURNEY.stopCountdown.table); pop(`Stop countdown — ${r.roll}`, r.entry); }
+    }));
+    tables.append(el('button', {
+      type: 'button', class: 'secondary', id: 'gm-trait', text: 'Vehicle trait',
+      onclick: () => { const r = roll10(VEHICLE_TRAITS.table); pop(`Vehicle trait — ${r.roll}`, `${r.name}: ${r.effect}`); }
+    }));
+    tables.append(el('button', {
+      type: 'button', class: 'secondary', id: 'gm-component', text: 'Vehicle component damage',
+      onclick: () => { const r = roll10(VEHICLE_COMPONENT_DAMAGE.table); pop(`Component damage — ${r.roll}`, r.entry); }
+    }));
+    tables.append(el('button', {
+      type: 'button', class: 'secondary', id: 'gm-trauma', text: 'Mental trauma',
+      onclick: () => {
+        const roll = rollDie(100);
+        const row = MENTAL_TRAUMA.table.find((r) => roll >= r.min && roll <= r.max);
+        pop(`Mental trauma — ${roll}`, `${row.name}: ${row.effect}`);
+      }
+    }));
+    tables.append(el('button', {
+      type: 'button', class: 'secondary', id: 'gm-behaviour', text: 'NPC behaviour',
+      onclick: () => {
+        const personality = roll10(NPC_BEHAVIOR.personality.table);
+        const mood = roll10(NPC_BEHAVIOR.emotionalState.table);
+        const motiveRoll = rollDie(4); const methodRoll = rollDie(4);
+        const motive = NPC_BEHAVIOR.motive.table.find((r) => r.roll === motiveRoll);
+        const method = NPC_BEHAVIOR.method.table.find((r) => r.roll === methodRoll);
+        const tiltRoll = rollDie(10);
+        const tilt = NPC_BEHAVIOR.tilt.bands.find((b) => tiltRoll >= b.min && tiltRoll <= b.max);
+        pop('NPC behaviour', `${personality.entry}; ${mood.entry.toLowerCase()}. Motive: ${motive.entry}. Method: ${method.entry}. Tilt: ${tilt.entry} (${tiltRoll}).`);
+      }
+    }));
+    tables.append(el('button', {
+      type: 'button', class: 'secondary', id: 'gm-conversation', text: 'Conversation subject',
+      onclick: () => { const r = roll10(CONVERSATION.subject); pop(`Conversation — ${r.roll}`, `${r.entry}. ${CONVERSATION.resolvedBy}`); }
+    }));
+  }
   mount.append(tables);
 
   // --- encounter sizing ---

@@ -9,11 +9,12 @@ import { SYMBOLS } from '../data.js';
 import { NPC_QUICKGEN } from '../data-npcs.js';
 import { RANDOM_ENCOUNTERS } from '../data-monsters.js';
 import { activeCharacter, getCell, sceneWatched, setSceneWatched, getScene, startScene } from './store.js';
-import { applyPersonalHeat } from './heat.js';
+import { applyHeat, heatIsSplit, currentHeat } from './heat.js';
 import { rollPool, diceToRoll, SYMBOL_HELP } from './roller.js';
 import { renderClocks, listClocks, applyCheckToClock } from './clocks.js';
 import { previewBoundary, fireBoundary, undoLastBoundary, sceneLabel } from './combat.js';
 import { HEAT } from '../data.js';
+import { NPC_BEHAVIOR, CONVERSATION, TRAVEL_ENCOUNTERS, JOURNEY } from '../data-journey.js';
 import { Settings } from './settings.js';
 
 // The Oracle pool is Ability against Difficulty, and per D§ neither die carries a Triumph
@@ -131,7 +132,12 @@ export function interpretOracle(tally) {
  *  doubled to cover the whole d10 (H-2). Heat 0 never turns the answer against you; Heat 5
  *  always does. */
 export function focusChaos(character, cell) {
-  const heat = Math.max(character ? (character.state.personalHeat || 0) : 0, cell ? (cell.cellHeat || 0) : 0);
+  // §18A — the tiebreaker rolls against twice the current Heat. With one shared track that
+  // is simply the party's score; under the §17.5 split variant it is the higher of the two,
+  // since either can be the thing escalating.
+  const heat = heatIsSplit()
+    ? Math.max(character ? (character.state.personalHeat || 0) : 0, cell ? (cell.cellHeat || 0) : 0)
+    : (cell ? (cell.cellHeat || 0) : 0);
   return heat * FATE_FOCUS.chaos.multiplier;
 }
 
@@ -267,14 +273,14 @@ export function renderSolo(mount) {
 
     // The Heat hook rides on the "No, and…" rung, however it was reached (R-22).
     if (state.surveilled && verdict.id === 'noAnd') {
-      if (character) {
-        const applied = applyPersonalHeat(character, 1, 'An emphatic no from the Oracle in a watched place');
-        lines.push(`${verdict.byMagnitude ? 'An emphatic no' : 'Despair'} in a surveilled context: Personal Heat ${applied.before} → ${applied.after}.`);
+      // §17 — with one shared track the party takes it whether or not a sheet is loaded;
+      // the split variant (§17.5) needs a character to put it on.
+      const applied = applyHeat(1, { character, reason: 'An emphatic no from the Oracle in a watched place' });
+      if (applied.ok) {
+        lines.push(`${verdict.byMagnitude ? 'An emphatic no' : 'Despair'} in a surveilled context: suspicion ${applied.before} → ${applied.after}.`);
         document.dispatchEvent(new CustomEvent('resource:refresh'));
       } else {
-        // The toggle promises a consequence; with no sheet loaded there is nothing to
-        // move, and saying so is better than the rule silently not firing.
-        lines.push('An emphatic no in a watched place would raise Personal Heat, but no character is loaded to take it.');
+        lines.push(`An emphatic no in a watched place would raise suspicion. ${applied.reason}`);
       }
     }
     // How to read that answer against what you expected (H-2).
@@ -442,6 +448,37 @@ export function renderSolo(mount) {
     }
   }));
 
+  // Part V generators (§35, §39, §40). Optional module, so they only appear once adopted,
+  // and they write into the same prompt log as everything else here.
+  if (Settings.journeyModule()) {
+    const roll10 = (table) => { const n = rollDie(10); return table.find((r) => r.roll === n); };
+    tables.append(el('button', {
+      type: 'button', class: 'secondary', id: 'solo-travel', text: 'Travel encounter',
+      onclick: () => { const r = roll10(TRAVEL_ENCOUNTERS.table); show('Travel encounter', `${r.entry} (${r.roll}).`); }
+    }));
+    tables.append(el('button', {
+      type: 'button', class: 'secondary', id: 'solo-behaviour', text: 'NPC behaviour',
+      onclick: () => {
+        const personality = roll10(NPC_BEHAVIOR.personality.table);
+        const mood = roll10(NPC_BEHAVIOR.emotionalState.table);
+        const motiveRoll = rollDie(4); const methodRoll = rollDie(4);
+        const motive = NPC_BEHAVIOR.motive.table.find((r) => r.roll === motiveRoll);
+        const method = NPC_BEHAVIOR.method.table.find((r) => r.roll === methodRoll);
+        const tiltRoll = rollDie(10);
+        const tilt = NPC_BEHAVIOR.tilt.bands.find((b) => tiltRoll >= b.min && tiltRoll <= b.max);
+        show('NPC behaviour', `${personality.entry}; ${mood.entry.toLowerCase()}. Motive: ${motive.entry}. Method: ${method.entry}. Tilt: ${tilt.entry} (${tiltRoll}) — ${tilt.dice.boost ? 'a Boost' : 'a Setback'} on checks with them.`);
+      }
+    }));
+    tables.append(el('button', {
+      type: 'button', class: 'secondary', id: 'solo-conversation', text: 'Conversation',
+      onclick: () => { const r = roll10(CONVERSATION.subject); show('Conversation', `${r.entry} (${r.roll}). ${CONVERSATION.resolvedBy}`); }
+    }));
+    tables.append(el('button', {
+      type: 'button', class: 'secondary', id: 'solo-stop-countdown', text: 'Stop countdown',
+      onclick: () => { const r = roll10(JOURNEY.stopCountdown.table); show('Stop countdown', `${r.entry} (${r.roll}).`); }
+    }));
+  }
+
   // What you just rolled, in front of you. The full run of them lives in the history
   // section; this is the one you are looking at.
   const ideasNow = readIdeaLog();
@@ -479,14 +516,14 @@ export function renderSolo(mount) {
   // Suspicion is the loop's own track, and the raid rule keys off it, so the screen states
   // where it stands rather than making you go and look (§23 step 6).
   const suspicion = panel('5 · Where suspicion stands', PANELS.soloSuspicion, []);
-  if (character) {
-    suspicion.append(el('p', { class: 'small', text: `${character.identity.name || 'Your character'}: Personal ${character.state.personalHeat} of ${HEAT.max}. The network: Cell ${cell.cellHeat} of ${HEAT.max}, safehouse ${cell.safehouseStatus}.` }));
-  } else {
-    suspicion.append(el('p', { class: 'small muted', text: `No character is loaded, so nothing here can take suspicion. The network sits at Cell ${cell.cellHeat} of ${HEAT.max}.` }));
-  }
+  const heatNow = currentHeat(character);
+  const raidLevel = heatIsSplit() ? heatNow.personal : heatNow.shared;
+  suspicion.append(el('p', { class: 'small', id: 'solo-suspicion', text: heatIsSplit()
+    ? `${character ? (character.identity.name || 'Your character') : 'No character loaded'}: Personal ${heatNow.personal} of ${HEAT.max}. The network: Cell ${cell.cellHeat} of ${HEAT.max}, safehouse ${cell.safehouseStatus}.`
+    : `Suspicion ${heatNow.shared} of ${HEAT.max}, shared by the whole party. Safehouse ${cell.safehouseStatus}.` }));
   // Raid timing is a suspicion consequence, and the one place the loop hands a decision
   // straight to the Oracle — so it gets a button rather than an instruction.
-  if (character && character.state.personalHeat >= SOLO_LOOP.heatRule.fromLevel) {
+  if (raidLevel >= SOLO_LOOP.heatRule.fromLevel) {
     suspicion.append(el('p', { class: 'small', text: SOLO_LOOP.heatRule.note }));
     suspicion.append(el('button', {
       type: 'button', class: 'primary', id: 'raid-ask', text: 'Ask whether the raid lands this scene',

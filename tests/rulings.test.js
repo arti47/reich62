@@ -150,6 +150,8 @@ export async function pinChecks({ check, equal }) {
   equal('R-21: never more than two maneuvers', D.MANEUVER_RULES.maxPerTurn, 2);
   equal('R-21: the second maneuver costs 2 strain', D.MANEUVER_RULES.secondManeuverStrainCost, 2);
 
+  // R-22 and R-10 are printed rules in the current manual rather than app substitutions,
+  // so the pins stay but the app no longer has to declare them as inferred.
   // R-22 — the printed Oracle pool cannot roll a Triumph or a Despair, so the two emphatic
   // rungs are read by magnitude instead.
   const oraclePools = S.ORACLE.likelihoods.every((l) => !l.proficiency && !l.challenge);

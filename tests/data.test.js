@@ -3,6 +3,8 @@
 import * as D from '../data.js';
 import * as N from '../data-npcs.js';
 import * as M from '../data-monsters.js';
+import * as J from '../data-journey.js';
+import * as P from '../data-pregens.js';
 import * as S from '../data-solo.js';
 import * as R from '../src/rules.js';
 import * as D2 from '../src/derived.js';
@@ -137,16 +139,23 @@ export async function dataChecks({ check, equal }) {
 
   // --- Heat (§17) ---
   equal('Heat tracks run 0 to 5', D.HEAT.max, 5);
+  // §17 — one shared track is the printed default; §17.5 keeps the two-track variant.
+  check('suspicion is one shared track by default', D.HEAT.shared === true);
+  check('the two-track version is kept as the printed optional variant',
+    D.HEAT.split.optional === true && D.HEAT.split.thresholds.length === 5);
   equal('Despair in a surveilled context adds 1 Personal Heat',
-    D.HEAT.generation.rules.find((r) => r.id === 'despair').personalHeat, 1);
+    D.HEAT.generation.rules.find((r) => r.id === 'despair').heat, 1);
   equal('Despair on an evasion check adds 2',
-    D.HEAT.generation.rules.find((r) => r.id === 'despairEvasion').personalHeat, 2);
+    D.HEAT.generation.rules.find((r) => r.id === 'despairEvasion').heat, 2);
   equal('Triumph can remove 1 Heat',
-    D.HEAT.generation.rules.find((r) => r.id === 'triumph').personalHeat, -1);
+    D.HEAT.generation.rules.find((r) => r.id === 'triumph').heat, -1);
   equal('5 Heat threshold rows', D.HEAT.thresholds.length, 5);
 
   // --- lifecycle bundles (§21–§24) ---
-  equal('6 lifecycle boundaries', D.LIFECYCLE.boundaries.length, 6);
+  // Six core boundaries plus §34's Shift, which only exists inside the optional module.
+  equal('6 core lifecycle boundaries', D.LIFECYCLE.boundaries.filter((b) => !b.optionalModule).length, 6);
+  equal('plus the optional Shift from the journey module',
+    D.LIFECYCLE.boundaries.filter((b) => b.optionalModule === 'journey').length, 1);
   check('every boundary lists its effects', D.LIFECYCLE.boundaries.every((b) => b.effects.length > 0));
 
   // --- digital roller over the supplied face table (D§) ---
@@ -274,15 +283,20 @@ export async function dataChecks({ check, equal }) {
     && D.SILHOUETTE_RULE.largerTarget.difficultySteps === -1
     && D.SILHOUETTE_RULE.smallerTarget.differenceAtLeast === 2
     && D.SILHOUETTE_RULE.smallerTarget.difficultySteps === 1);
-  check('every Heat threshold declares its personal and cell dice explicitly',
-    D.HEAT.thresholds.every((t) => 'personalEffect' in t || 'cell' in t)
-    && D.HEAT.thresholds[0].cellEffect === null);
-  equal('the cell escalates from a member at Personal Heat 3', D.HEAT.tracks.cellEscalationAtPersonal, 3);
+  check('every shared Heat threshold names an effect, and only level 1 carries dice',
+    D.HEAT.thresholds.every((t) => typeof t.effect === 'string' && t.effect.length > 0)
+    && D.HEAT.thresholds[0].dice.setback === 1
+    && D.HEAT.thresholds.filter((t) => t.dice).length === 1);
+  check('the split variant still declares its personal and cell dice explicitly',
+    D.HEAT.split.thresholds.every((t) => 'personalEffect' in t || 'cell' in t)
+    && D.HEAT.split.thresholds[0].cellEffect === null);
+  equal('the cell escalates from a member at Personal Heat 3', D.HEAT.split.cellEscalationAtPersonal, 3);
+  // Shared mode reads the one column; the level-1 Setback comes off the shared track.
   equal('suspicion dice come off the threshold table, not a restated level',
-    H.heatSetbackDice({ personalHeat: 1, cellHeat: 0 }), 1);
-  equal('cell suspicion adds its own die from level 2', H.heatSetbackDice({ personalHeat: 1, cellHeat: 2 }), 2);
+    H.heatSetbackDice({ cellHeat: 1 }), 1);
   equal('a private check takes no suspicion dice',
-    H.heatSetbackDice({ personalHeat: 5, cellHeat: 5, isPublicCheck: false }), 0);
+    H.heatSetbackDice({ cellHeat: 5, isPublicCheck: false }), 0);
+  equal('suspicion below level 1 adds nothing', H.heatSetbackDice({ cellHeat: 0 }), 0);
   equal('safehouse status is read off the thresholds: clear', H.safehouseFor(0), 'clear');
   equal('safehouse status is read off the thresholds: watched', H.safehouseFor(3), 'watched');
   equal('safehouse status is read off the thresholds: blown', H.safehouseFor(5), 'blown');
@@ -429,4 +443,78 @@ export async function dataChecks({ check, equal }) {
   equal('dragnet opposition starts at 2 dice', dragnet.resolution.oppositionDiceStart, 2);
   equal('dragnet opposition caps at 4 dice', dragnet.resolution.oppositionDiceMax, 4);
   check('dragnet advances both Heat tracks on a failed round', /Personal Heat and Cell Heat by 1/.test(dragnet.consequence));
+
+  // --- §8 Push ---
+  equal('a push costs one story point', D.STORY_POINTS.push.cost, 1);
+  check('a check can only be pushed once', D.STORY_POINTS.push.oncePerCheck === true);
+  check('a push rerolls the entire pool', /entire pool/.test(D.STORY_POINTS.push.rerolls));
+  equal('the push price offers three ways to pay', D.STORY_POINTS.push.priceOptions.length, 3);
+  check('only the suspicion price needs a surveilled context',
+    D.STORY_POINTS.push.priceOptions.filter((o) => o.requiresSurveilled).map((o) => o.id).join() === 'heat');
+  check('triumph and despair on the reroll are read fresh', /read fresh/.test(D.STORY_POINTS.push.freshSymbols));
+
+  // --- §13 step 6, the Kicker ---
+  check('creation has a kicker step', D.CREATION_STEPS.some((st) => st.id === 'kicker'));
+  check('the kicker is explicitly not a mechanic', D.CREATION_RULES.kicker.mechanical === false);
+  check('every pregen carries its printed kicker',
+    P.PREGENS.every((pg) => typeof pg.kicker === 'string' && pg.kicker.length > 20));
+
+  // --- §16A, one shared suspicion row ---
+  const reich = D.SHEET_FIELDS.groups.find((g) => g.id === 'reich62');
+  check('the sheet reference lists one shared suspicion track, not two',
+    reich.fields.some((f) => /shared by the party/.test(f))
+    && !reich.fields.some((f) => /Personal Heat/.test(f)));
+
+  // --- PART V (§31, §33–§40): the optional journey and tension module ---
+  equal('tension runs 0 to 2', `${J.TENSION.min}-${J.TENSION.max}`, '0-2');
+  check('tension is directional', J.TENSION.directional === true);
+  equal('tension has a level for every rating', J.TENSION.levels.length, 3);
+  check('tension adds a Boost per point in an opposed check',
+    J.TENSION.effect.dice === 'boost' && J.TENSION.effect.perPoint === 1);
+  equal('releasing tension gives each side 2 strain back', J.TENSION.reduceStrainRecovery, 2);
+
+  equal('the personal threat countdown has 3 steps', J.PERSONAL_THREAT.steps, 3);
+  equal('and a rung for each', J.PERSONAL_THREAT.ladder.length, 3);
+  check('only step 2 carries dice, and it is one Setback',
+    J.PERSONAL_THREAT.ladder.filter((r) => r.dice).length === 1
+    && J.PERSONAL_THREAT.ladder.find((r) => r.step === 2).dice.setback === 1);
+
+  equal('the journey adds a third time unit, the Shift', J.JOURNEY.timeUnits.length, 3);
+  check('the Shift sits between a scene and a session',
+    J.JOURNEY.timeUnits.map((u) => u.id).join() === 'round,scene,shift');
+  equal('4 journey lengths', J.JOURNEY.lengths.length, 4);
+  equal('the stop countdown is a d10 of 10 rows', J.JOURNEY.stopCountdown.table.length, 10);
+  check('the blocker points at the two published encounter blocks by their bestiary citation',
+    J.JOURNEY.blocker.blocksCite === 'B§6'
+    && J.JOURNEY.blocker.publishedBlocks.every((id) => !!R.encounterBlock(id)));
+
+  const d10 = (t) => t.length === 10 && t.every((r, i) => r.roll === i + 1);
+  check('travel encounters are a d10 of 10 rows', d10(J.TRAVEL_ENCOUNTERS.table));
+  check('the travel table deploys the published checkpoint block on a 10',
+    !!R.encounterBlock(J.TRAVEL_ENCOUNTERS.table[9].deploys));
+  check('vehicle traits are a d10 of 10 rows', d10(J.VEHICLE_TRAITS.table));
+  check('component damage is a d10 of 10 rows', d10(J.VEHICLE_COMPONENT_DAMAGE.table));
+  check('NPC personality and mood are d10 tables',
+    d10(J.NPC_BEHAVIOR.personality.table) && d10(J.NPC_BEHAVIOR.emotionalState.table));
+  check('motive and method are d4 tables',
+    J.NPC_BEHAVIOR.motive.table.length === 4 && J.NPC_BEHAVIOR.method.table.length === 4);
+  check('conversation subjects are a d10 of 10 rows', d10(J.CONVERSATION.subject));
+
+  const trauma = J.MENTAL_TRAUMA.table;
+  equal('mental trauma has 8 bands', trauma.length, 8);
+  check('the trauma bands cover 1 to 100 with no gap and no overlap',
+    trauma[0].min === 1 && trauma[trauma.length - 1].max === 100
+    && trauma.every((row, i) => i === 0 || row.min === trauma[i - 1].max + 1));
+  check('trauma is addressed narratively, with no dice cure', /no fixed dice-check|no dice-check cure/i.test(J.MENTAL_TRAUMA.addressing));
+
+  // Every Part V table reaches the rules library, so none of it is extracted-but-unreachable.
+  const journeyCites = RI.buildIndex().map((e) => e.cite);
+  ['§31', '§33', '§34', '§35', '§36', '§37', '§38', '§39', '§40'].forEach((cite) => {
+    check(`the rules library carries ${cite}`, journeyCites.includes(cite));
+  });
+  check('and files Part V under its own section',
+    RI.sectionFor('§35') === 'journey' && RI.sectionFor('§31') === 'journey');
+  // The catch-all that used to swallow everything past Suspicion.
+  check('bestiary citations file under Opponents, and running-the-game under its own',
+    RI.sectionFor('B§3') === 'opponents' && RI.sectionFor('§23') === 'running');
 }

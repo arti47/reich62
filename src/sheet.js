@@ -1,7 +1,7 @@
 // sheet.js — the live character sheet and in-play tracking, plus the persistent
 // resource header that rides on every in-play screen.
 
-import { el, clear, titleCase, clamp } from './core.js';
+import { el, clear, titleCase, clamp, plain } from './core.js';
 import { showToast, confirmModal, promptModal, modal, panel, subTabs, accordion, emptyState, outcomeBox, numberStepper } from './ui.js';
 import { PANELS, label as termLabel, gloss } from './help.js';
 import {
@@ -12,7 +12,8 @@ import {
   talent, buildPool, canBuyTalent, visibleTalents, xpCost, skill as skillById,
   medicineDifficulty, fallDamage, career as careerById
 } from './rules.js';
-import { ITEM_DAMAGE, ATTACHMENTS, DIFFICULTIES, GEAR, WEAPONS, ARMOUR, RARITY, BLACK_MARKET } from '../data.js';
+import { ITEM_DAMAGE, ATTACHMENTS, DIFFICULTIES, GEAR, WEAPONS, ARMOUR, RARITY, BLACK_MARKET, CREATION_RULES } from '../data.js';
+import { PERSONAL_THREAT } from '../data-journey.js';
 import { blackMarketPurchase } from './rules.js';
 import { hardPoints } from './derived.js';
 import { Settings } from './settings.js';
@@ -21,7 +22,7 @@ import {
   derivedFor, woundThreshold, strainThreshold, soak, encumbranceState, criticalModifier
 } from './derived.js';
 import { activeCharacter, saveCharacter, getCell, saveCell as saveCellDirect } from './store.js';
-import { personalEffects, cellEffects, applyPersonalHeat } from './heat.js';
+import { personalEffects, cellEffects, applyHeat, heatIsSplit, currentHeat } from './heat.js';
 
 /** The persistent resource header: wounds · strain · Story Points · Personal Heat · encumbrance. */
 export function renderResourceHeader() {
@@ -47,7 +48,9 @@ export function renderResourceHeader() {
       text: `Story ${cell.pools.storyPointsPlayer}/${cell.pools.storyPointsGM}`,
       onclick: () => openStoryPoints()
     }),
-    chip('Heat', `${character.state.personalHeat}·${cell.cellHeat}`, `${termLabel('personalHeat')} · ${termLabel('cellHeat')}. ${gloss('personalHeat')}`),
+    heatIsSplit()
+      ? chip('Heat', `${character.state.personalHeat}·${cell.cellHeat}`, `${termLabel('personalHeat')} · ${termLabel('cellHeat')}. ${gloss('personalHeat')}`)
+      : chip('Heat', `${cell.cellHeat}/${HEAT.max}`, `${termLabel('personalHeat')}. ${gloss('personalHeat')}`),
     chip('Load', `${enc.carried}/${enc.threshold}`, `${termLabel('encumbrance')} — ${gloss('encumbrance')}`)
   );
   if (character.state.incapacitated) node.append(el('span', { class: 'chip', text: 'INCAPACITATED' }));
@@ -180,10 +183,12 @@ function pane_vitals(mount, character, derived, rerender) {
     character.state.incapacitated = character.state.wounds >= derived.woundThreshold || character.state.strain >= derived.strainThreshold;
     saveCharacter(character); rerender();
   }, 'Stress'));
-  vitals.append(stepper(`${termLabel('personalHeat')} — ${gloss('personalHeat')}`, character.state.personalHeat, HEAT.max, (v) => {
+  const heatNow = currentHeat(character);
+  const heatShown = heatIsSplit() ? character.state.personalHeat : heatNow.shared;
+  vitals.append(stepper(`${termLabel('personalHeat')} — ${gloss('personalHeat')}`, heatShown, HEAT.max, (v) => {
     // Through applyPersonalHeat so the change is recorded on the trail and the cell
     // escalation rule still fires (§17.2).
-    applyPersonalHeat(character, clamp(v, HEAT.min, HEAT.max) - character.state.personalHeat, 'Set by hand on the sheet');
+    applyHeat(clamp(v, HEAT.min, HEAT.max) - heatShown, { character, reason: 'Set by hand on the sheet' });
     rerender();
   }, 'Suspicion'));
   if (character.state.incapacitated) {
@@ -218,15 +223,18 @@ function pane_vitals(mount, character, derived, rerender) {
   const cell = getCell();
   const heatCard = el('div', { class: 'card' }, [
     el('h3', { text: 'Heat' }),
-    el('p', { class: 'small', text: `Personal ${character.state.personalHeat} / 5 · Cell ${cell.cellHeat} / 5 · safehouse ${cell.safehouseStatus}` })
+    el('p', { class: 'small', text: heatIsSplit()
+      ? `Personal ${character.state.personalHeat} / ${HEAT.max} · Cell ${cell.cellHeat} / ${HEAT.max} · safehouse ${cell.safehouseStatus}`
+      : `${cell.cellHeat} of ${HEAT.max}, shared by the whole party · safehouse ${cell.safehouseStatus}` })
   ]);
-  const personal = personalEffects(character.state.personalHeat);
+  if (!heatIsSplit()) heatCard.append(el('p', { class: 'small muted', text: plain(HEAT.attribution) }));
+  const personal = personalEffects(heatIsSplit() ? character.state.personalHeat : cell.cellHeat);
   const cellFx = cellEffects(cell.cellHeat);
   if (personal.length) heatCard.append(el('ul', { class: 'small' }, personal.map((t) => el('li', { text: t }))));
   if (cellFx.length) heatCard.append(el('ul', { class: 'small muted' }, cellFx.map((t) => el('li', { text: t }))));
   if (!personal.length && !cellFx.length) heatCard.append(el('p', { class: 'small muted', text: 'No threshold effects in force.' }));
   // Why the track sits where it does (C-10).
-  const trail = character.state.heatTrail || [];
+  const trail = (heatIsSplit() ? character.state.heatTrail : cell.heatTrail) || [];
   if (trail.length) {
     const trailBody = el('div', { id: 'heat-trail' });
     trail.forEach((move) => {
@@ -239,6 +247,58 @@ function pane_vitals(mount, character, derived, rerender) {
   }
   mount.append(heatCard);
 
+  // §13 step 6 — the Kicker. One sentence, no mechanics, editable in play because it is
+  // the thing the GM calls back to.
+  const kicker = panel('Kicker', PANELS.sheetKicker, []);
+  kicker.append(el('label', { class: 'small', for: 'kicker-text', text: CREATION_RULES.kicker.prompt }));
+  kicker.append(el('textarea', {
+    id: 'kicker-text', rows: '2', value: character.identity.kicker || '',
+    placeholder: CREATION_RULES.kicker.examples[0],
+    onchange: (e) => { character.identity.kicker = e.target.value.trim(); saveCharacter(character); }
+  }));
+  mount.append(kicker);
+
+  // §33 — the optional per-character antagonist thread, three steps.
+  if (Settings.journeyModule()) {
+    const threat = character.state.personalThreat || { name: '', step: 0 };
+    const card = panel('Personal threat', PANELS.sheetThreat, []);
+    card.append(el('label', { class: 'small', for: 'threat-name', text: 'Who or what is hunting this character specifically?' }));
+    card.append(el('input', {
+      type: 'text', id: 'threat-name', value: threat.name || '',
+      placeholder: PERSONAL_THREAT.examples[0],
+      onchange: (e) => {
+        character.state.personalThreat = { ...threat, name: e.target.value.trim() };
+        saveCharacter(character); rerender();
+      }
+    }));
+    if (threat.name) {
+      PERSONAL_THREAT.ladder.forEach((rung) => {
+        const reached = threat.step >= rung.step;
+        card.append(el('p', { class: reached ? 'small' : 'small muted', text: `${reached ? '●' : '○'} ${rung.step}. ${rung.name} — ${rung.summary}` }));
+      });
+      card.append(el('button', {
+        type: 'button', class: 'secondary', id: 'threat-advance', text: 'Advance the countdown',
+        disabled: threat.step >= PERSONAL_THREAT.steps,
+        onclick: () => {
+          const step = Math.min(PERSONAL_THREAT.steps, (threat.step || 0) + 1);
+          character.state.personalThreat = { ...threat, step };
+          saveCharacter(character);
+          const rung = PERSONAL_THREAT.ladder.find((l) => l.step === step);
+          showToast(`${threat.name}: ${rung.name}.`);
+          rerender();
+        }
+      }));
+      if (threat.step > 0) {
+        card.append(el('button', {
+          type: 'button', class: 'secondary', text: 'Step back',
+          onclick: () => { character.state.personalThreat = { ...threat, step: threat.step - 1 }; saveCharacter(character); rerender(); }
+        }));
+      }
+      if (threat.step >= 2) card.append(el('p', { class: 'small', text: 'While it is closing in, checks made to avoid or evade it take one Setback die.' }));
+      if (threat.step >= PERSONAL_THREAT.steps) card.append(el('p', { class: 'small', text: plain(PERSONAL_THREAT.afterStep3) }));
+    }
+    mount.append(card);
+  }
 }
 
 /** The four groups the skill list already carries, so 26 rows read as a contents page
@@ -754,6 +814,11 @@ function pane_summary(mount, character, derived, rerender) {
 
   card.append(el('h3', { text: 'What drives them' }));
   ['desire', 'fear', 'strength', 'flaw'].forEach((facet) => card.append(line(titleCase(facet), m[facet])));
+  card.append(line('Kicker', character.identity.kicker));
+  if (Settings.journeyModule() && character.state.personalThreat.name) {
+    const step = PERSONAL_THREAT.ladder.find((l) => l.step === character.state.personalThreat.step);
+    card.append(line('Personal threat', `${character.state.personalThreat.name} — ${step ? step.name.toLowerCase() : 'not yet noticed'}`));
+  }
 
   card.append(el('h3', { text: 'Carried' }));
   const items = character.inventory.items || [];
@@ -765,7 +830,7 @@ function pane_summary(mount, character, derived, rerender) {
   card.append(el('h3', { text: 'Lasting injuries' }));
   card.append(el('p', { class: 'small', text: untreated.length ? untreated.map((c) => `${c.name} (${c.severity})`).join(', ') : 'None untreated.' }));
 
-  card.append(line(termLabel('personalHeat'), `${character.state.personalHeat} of ${HEAT.max}`));
+  card.append(line(termLabel('personalHeat'), `${heatIsSplit() ? character.state.personalHeat : getCell().cellHeat} of ${HEAT.max}`));
   if (character.notes) { card.append(el('h3', { text: 'Notes' }), el('p', { class: 'small', text: character.notes })); }
 
   card.append(el('button', {

@@ -19,6 +19,8 @@ export const PREGENS = [
       note: 'Printed Wound 11 does not follow base 8 + Brawn 2, the formula the other two pregens do follow. Corrected to 10.'
     },
     gear: ['Forged papers (good)', 'Lockpicks', 'P38 pistol'],
+    // §13 step 6 — the printed Kicker for each pregen.
+    kicker: 'Her brother was taken in a night raid three months ago; she has never found out where.',
     xpUnspent: 70,
     talents: [],
     motivation: null
@@ -35,6 +37,7 @@ export const PREGENS = [
     derived: { woundThreshold: 10, strainThreshold: 13, soak: 2 },
     erratum: null,
     gear: ['SD credentials', 'P38 pistol', 'Shortwave radio access'],
+    kicker: 'He was ordered to sign off on a deportation manifest and did; the names have not left him since.',
     xpUnspent: 70,
     talents: [],
     motivation: null
@@ -50,6 +53,7 @@ export const PREGENS = [
     derived: { woundThreshold: 10, strainThreshold: 12, soak: 2 },
     erratum: null,
     gear: ['Ration cards (forged)', 'Miniature camera', 'Contacts list'],
+    kicker: 'A deal she brokered got someone killed, and she has been working the angles ever since to make sure it was not for nothing.',
     xpUnspent: 70,
     talents: [],
     motivation: null

@@ -21,7 +21,7 @@ import { damageCombatant } from './combat.js';
 import { activeCharacter, getCell, saveCell, saveCharacter } from './store.js';
 import { soak as soakOf, woundThreshold, strainThreshold, criticalModifier } from './derived.js';
 import { encumbranceState } from './derived.js';
-import { heatFromCheck, applyPersonalHeat, heatSetbackDice } from './heat.js';
+import { heatFromCheck, applyHeat, heatSetbackDice, heatIsSplit } from './heat.js';
 import { listClocks, applyCheckToClock } from './clocks.js';
 import { Settings } from './settings.js';
 import { STORAGE_PREFIX } from './core.js';
@@ -115,6 +115,9 @@ export const state = {
   // When `advancedAutomation` is off the automatic dice are shown as confirmable rows
   // rather than applied silently; the flag turns the prompting off.
   autoDice: { conditions: true, encumbrance: true, heat: true },
+  // §8 Push — whether this check has already been rerolled, and what the first roll showed.
+  pushedThisCheck: false,
+  pushBaseline: null,
   upgradeAbility: 0,       // §8 / §2.4
   upgradeDifficulty: 0,
   downgradeAbility: 0,
@@ -238,7 +241,7 @@ export function assemblePool(character = activeCharacter()) {
       modifications.push({ stage: 'add', die: 'setback', count: enc.setbackDice });
       notes.push(`Encumbered by ${enc.over}: ${enc.setbackDice} Setback on Brawn and Agility checks`);
     }
-    // Heat thresholds (§17.3).
+    // Heat thresholds (§17.2).
     const cell = getCell();
     const heatDice = state.autoDice.heat
       ? heatSetbackDice({ personalHeat: character.state.personalHeat, cellHeat: cell.cellHeat, isPublicCheck: state.publicCheck })
@@ -408,8 +411,12 @@ export function resolve(character = activeCharacter()) {
 export function commit(character = activeCharacter()) {
   const { pool, notes, result, heat } = resolve(character);
   let heatApplied = null;
-  if (character && heat.personalHeat) {
-    heatApplied = applyPersonalHeat(character, heat.personalHeat, heat.reasons[0] || `A ${state.skillId} check`);
+  if (heat.heat) {
+    // §17 — with one shared track a sheetless check still moves the party's suspicion;
+    // the split variant (§17.5) needs a character to put it on.
+    const moved = applyHeat(heat.heat, { character, reason: heat.reasons[0] || `A ${titleCase(state.skillId)} check` });
+    heatApplied = moved.ok ? moved : null;
+    if (!moved.ok) heat.reasons.push(moved.reason);
   }
 
   const entry = {
@@ -423,7 +430,7 @@ export function commit(character = activeCharacter()) {
     net: result.net,
     outcome: result.success ? 'success' : 'failure',
     surveilled: state.surveilled,
-    heatDelta: heat.personalHeat,
+    heatDelta: heat.heat,
     notes
   };
   writeLog(entry);
@@ -498,6 +505,69 @@ export function spendStoryPoint(side, spendId) {
   cell.pools[to] += 1;
   saveCell(cell);
   return { ok: true, spendId, pools: { ...cell.pools } };
+}
+
+/** §8 Push — spend a Story Point to reroll the whole pool after a check. It is not free:
+ *  every uncancelled Threat or Despair the reroll shows *beyond what the first roll showed*
+ *  costs one of three things, the player's choice. A check can only be pushed once, and
+ *  Triumph and Despair on the reroll are read fresh. */
+export function pushCheck(character = activeCharacter()) {
+  if (state.pushedThisCheck) return { ok: false, reason: STORY_POINTS.push.oncePerCheck ? 'This check has already been pushed.' : 'Already pushed.' };
+  if (!Object.values(state.entered).some((n) => n > 0)) return { ok: false, reason: 'There is nothing to reroll yet.' };
+  const spent = spendStoryPoint('player', 'push');
+  if (!spent.ok) return spent;
+
+  const before = outcome(state.entered);
+  const { pool } = assemblePool(character);
+  const rolled = rollPool(pool);
+  if (!rolled.ok) {
+    // Hand-entry tables reroll their own dice; the app clears the pad and waits for them.
+    state.entered = newTally();
+    state.pushedThisCheck = true;
+    state.pushBaseline = { threat: before.netThreat, despair: before.despair };
+    return { ok: true, rolledByApp: false, baseline: state.pushBaseline, pools: spent.pools };
+  }
+  state.entered = rolled.tally;
+  const after = outcome(state.entered);
+  state.pushedThisCheck = true;
+  state.pushBaseline = { threat: before.netThreat, despair: before.despair };
+  const extra = pushPrice(after, state.pushBaseline);
+  return { ok: true, rolledByApp: true, before, after, extra, pools: spent.pools };
+}
+
+/** How much the reroll costs: the Threat and Despair it showed beyond the original roll. */
+export function pushPrice(after, baseline) {
+  if (!baseline) return 0;
+  const threat = Math.max(0, (after.netThreat || 0) - (baseline.threat || 0));
+  const despair = Math.max(0, (after.despair || 0) - (baseline.despair || 0));
+  return threat + despair;
+}
+
+/** Pay the push price one unit at a time, in whichever currency the player picks (§8). */
+export function payPushPrice(character, optionId, units = 1) {
+  const option = STORY_POINTS.push.priceOptions.find((o) => o.id === optionId);
+  if (!option) return { ok: false, reason: 'Unknown way to pay.' };
+  if (option.requiresSurveilled && !state.surveilled) {
+    return { ok: false, reason: 'Suspicion only applies in a surveilled context.' };
+  }
+  if (optionId === 'heat') {
+    const moved = applyHeat(units, { character, reason: 'Paid for a pushed check' });
+    if (!moved.ok) return moved;
+    return { ok: true, applied: `Suspicion ${moved.before} → ${moved.after}.` };
+  }
+  if (optionId === 'strain') {
+    if (!character) return { ok: false, reason: 'No character is loaded to take the strain.' };
+    character.state.strain = clamp((character.state.strain || 0) + units, 0, strainThreshold(character));
+    saveCharacter(character);
+    return { ok: true, applied: `Strain is now ${character.state.strain}.` };
+  }
+  // Gear damage is a step on the §14B ladder, applied to a carried item.
+  if (!character) return { ok: false, reason: 'No character is loaded to damage gear.' };
+  const item = (character.inventory.items || []).find((i) => (i.damageLevel || 'undamaged') === 'undamaged');
+  if (!item) return { ok: false, reason: 'Nothing carried is still undamaged.' };
+  item.damageLevel = 'minor';
+  saveCharacter(character);
+  return { ok: true, applied: `${item.name} is now damaged (minor).` };
 }
 
 /** Spend-table rows affordable with the symbols left over (§5C, §5C', §11, §12). R-12. */
@@ -606,7 +676,7 @@ export function renderRoller(mount) {
   }
   setup.append(toggle('roller-blackmarket', 'Black-market deal (house rule)', state.blackMarket, (v) => { state.blackMarket = v; rerender(); }));
   setup.append(toggle('roller-surveilled', 'Surveilled context', state.surveilled, (v) => { state.surveilled = v; setSceneWatched(v); rerender(); }));
-  setup.append(toggle('roller-triumph-heat', 'Spend a Triumph to reduce Personal Heat by 1', state.spendTriumphOnHeat, (v) => { state.spendTriumphOnHeat = v; rerender(); }));
+  setup.append(toggle('roller-triumph-heat', 'Spend a Triumph to reduce suspicion by 1', state.spendTriumphOnHeat, (v) => { state.spendTriumphOnHeat = v; rerender(); }));
   setup.append(toggle('roller-public', 'Public check (Heat Setbacks apply)', state.publicCheck, (v) => { state.publicCheck = v; rerender(); }));
   mount.append(setup);
 
@@ -871,20 +941,72 @@ export function renderRoller(mount) {
         }
       }
       if (committed.heatApplied) {
-        lines.push(`Suspicion on you: ${committed.heatApplied.before} → ${committed.heatApplied.after}.`);
-        committed.heatApplied.crossed.forEach((t) => lines.push(`Now at level ${t.level}: ${t.personal}`));
+        lines.push(`${heatIsSplit() ? 'Suspicion on you' : 'Suspicion'}: ${committed.heatApplied.before} → ${committed.heatApplied.after}.`);
+        (committed.heatApplied.crossed || []).forEach((t) => lines.push(`Now at level ${t.level}: ${t.effect || t.personal}`));
         if (committed.heatApplied.escalation) lines.push(`Network suspicion ${committed.heatApplied.escalation.before} → ${committed.heatApplied.escalation.after}: ${committed.heatApplied.escalation.reason}`);
       }
       state.lastOutcome = lines;
       state.entered = newTally();
+      state.pushedThisCheck = false;
+      state.pushBaseline = null;
       clearTalentDice();
       rerender();
       document.dispatchEvent(new CustomEvent('resource:refresh'));
     }
   }));
+  // §8 Push — one reroll of the whole pool, bought with a Story Point and paid for in
+  // whatever extra Threat or Despair the reroll turns up.
+  const pools = getCell().pools;
+  if (anyEntered) {
+    if (!state.pushedThisCheck) {
+      resultCard.append(el('button', {
+        type: 'button', class: 'secondary', id: 'roller-push',
+        text: `Push it — spend a story point to reroll everything`,
+        disabled: pools.storyPointsPlayer < STORY_POINTS.push.cost,
+        onclick: () => {
+          const pushed = pushCheck(character);
+          if (!pushed.ok) { showToast(pushed.reason); return; }
+          state.lastOutcome = pushed.rolledByApp
+            ? [`Rerolled the whole pool. ${pushed.extra ? `${pushed.extra} more threat than the first roll — pay for it below.` : 'No more threat than the first roll, so it costs nothing further.'}`]
+            : ['Story point spent. Roll the whole pool again and tap in what it shows; anything worse than the first roll has to be paid for.'];
+          document.dispatchEvent(new CustomEvent('resource:refresh'));
+          rerender();
+        }
+      }));
+    } else {
+      const owed = pushPrice(result, state.pushBaseline);
+      const pushBox = el('div', { class: 'result', id: 'roller-push-price' }, [
+        el('div', { class: 'result-head' }, [
+          el('span', { class: 'result-title', text: 'This check was pushed' }),
+          el('span', { class: 'cite', text: owed ? `${owed} to pay` : 'nothing to pay' })
+        ]),
+        el('p', { class: 'small', text: owed
+          ? `The reroll showed ${owed} more threat or despair than the first roll. Each one costs you one of these, your choice.`
+          : 'The reroll showed no more threat than the first roll, so it costs nothing further.' })
+      ]);
+      if (owed) {
+        STORY_POINTS.push.priceOptions.forEach((option) => {
+          pushBox.append(el('button', {
+            type: 'button', class: 'secondary', text: option.label,
+            disabled: option.requiresSurveilled && !state.surveilled,
+            onclick: () => {
+              const paid = payPushPrice(character, option.id, 1);
+              if (!paid.ok) { showToast(paid.reason); return; }
+              state.pushBaseline = { threat: (state.pushBaseline.threat || 0) + 1, despair: state.pushBaseline.despair || 0 };
+              showToast(paid.applied);
+              document.dispatchEvent(new CustomEvent('resource:refresh'));
+              rerender();
+            }
+          }));
+        });
+      }
+      resultCard.append(pushBox);
+    }
+  }
+
   resultCard.append(el('button', {
     type: 'button', class: 'secondary', text: 'Clear symbols',
-    onclick: () => { state.entered = newTally(); clearTalentDice(); rerender(); }
+    onclick: () => { state.entered = newTally(); state.pushedThisCheck = false; state.pushBaseline = null; clearTalentDice(); rerender(); }
   }));
   mount.append(resultCard);
 

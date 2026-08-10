@@ -15,6 +15,12 @@ export function el(tag, attrs = {}, children = []) {
     else if (k === 'text') node.textContent = v;
     else if (k === 'html') node.innerHTML = v;
     else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2).toLowerCase(), v);
+    // A textarea ignores a `value` attribute — its content is its child text — so the
+    // property is set as well as the attribute for every form control.
+    else if (k === 'value' && /^(INPUT|TEXTAREA|SELECT)$/.test(node.tagName)) {
+      node.setAttribute('value', String(v));
+      node.value = String(v);
+    }
     else if (v === true) node.setAttribute(k, '');
     else node.setAttribute(k, String(v));
   }

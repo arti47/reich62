@@ -8,6 +8,18 @@
 
 **Party framework:** loose — any PC can be resistance, Reich operative, civilian, defector, or informant, mixed freely; supports solo or group play.
 
+**Core vs. Optional — read this first if you're short on time:**
+
+| Module | Status | What it does |
+|---|---|---|
+| Parts I–IV (§1–§30) | **Core** | Everything needed to play — dice, combat, creation, Heat, Oracle, running a session |
+| §18A Fate Question Focus | Optional | A second read on Oracle rolls — skip for faster/lighter solo play |
+| §12A Full 71-talent catalog | Core, but skimmable | Reference depth — most tables only need a handful of talents in active use at once |
+| §17.5 Personal/Cell Heat split | Optional variant | Swap in only for 4+ PC parties or when internal-cell risk should matter mechanically |
+| Part V (§31, §33–§40) | **Optional module** | Tension, Personal Threat Countdowns, Journey/travel structure, and solo-generation tools — adopt individually, not all-or-nothing |
+
+If this is your first read: Parts I–IV are the whole game. Everything else is a dial you can turn on later.
+
 ---
 
 ## TABLE OF CONTENTS
@@ -50,7 +62,7 @@
 14A. Rarity & Purchasing System
 14B. Item Maintenance & Repair
 14C. Item Attachments & Hard Points
-15. Gear List (expanded — 18 items)
+15. Gear List (expanded — 17 items)
 15A. Meaning Tables (solo)
 15B. Element Tables (solo)
 15C. Weapons Table
@@ -62,6 +74,7 @@
 **PART III — REICH '62 SUBSYSTEMS**
 17. Suspicion/Heat System
 18. Oracle System (solo play)
+18A. Fate Question Focus (optional, H-2)
 19. Random Event Table
 20. NPC Quick-Generation
 
@@ -78,6 +91,18 @@
 28. Tone Guidance (mixing grim, pulp, and espionage)
 29. Dread/Fear Checks (optional, horror beats)
 30. GM One-Page Quick Reference
+
+**PART V — JOURNEY & TENSION SUPPLEMENT** *(optional — adapted from The Electric State RPG)*
+31. Cell Trust/Tension System
+*(Push mechanic folded into §8 Story Points)*
+33. Personal Threat Countdown
+34. Journey Framework (Stops, Blockers, Countdowns)
+35. Travel Encounter Table
+36. Vehicle Traits Table
+37. Vehicle Component Damage Table
+38. Mental Trauma Table
+39. NPC Behavior Generator (Personality/Emotional State/Motive/Method/Tilt)
+40. Conversation Generator
 
 ---
 
@@ -135,7 +160,7 @@
 ## 3A. Opposed, Competitive, and Assisted Checks
 
 - **Opposed checks:** used when success/failure is directly contested by another character (social influence, sneaking past a guard, etc.). Build your pool normally, then build the "difficulty side" using the opposing character's relevant skill/characteristic exactly as you would build an ability pool — higher value sets Difficulty dice count, lower value upgrades that many to Challenge dice. Written as "opposed Skill vs. Skill" (e.g., opposed Deception vs. Vigilance).
-- **Competitive checks:** used when multiple characters attempt the same task simultaneously and you need to rank outcomes (a footrace, competing negotiators). GM sets one Difficulty; everyone rolls against it; compare total uncanceled 🌟 — highest total wins/performs best.
+- **Competitive checks:** used when multiple characters attempt the same task simultaneously and you need to rank outcomes (a footrace, competing negotiators). GM sets one Difficulty; everyone rolls against it; compare total uncanceled 🌟 — highest total wins/performs best. **Ties** break by total 🔺 (Advantage), then by Triumph (☀️); if still tied, treat as simultaneous. *(Errata R-3)*
 - **Assisted checks:** see the Assist maneuver (§5A) — one character spends a maneuver to grant an engaged ally 🎲Boost on their next check; multiple assistants stack bonus dice, but unused dice are lost if not used immediately.
 
 ## 4. Characteristics & Skills
@@ -159,7 +184,7 @@
 ### 5A'. Initiative Slot Filling
 Initiative order and slot ownership are set once at the start of the encounter and don't change round to round. Each round, working down the ordered slot list: if the slot is a **PC slot**, the players collectively choose which not-yet-acted PC takes it; if it's an **NPC slot**, the GM chooses which not-yet-acted NPC takes it. This lets players sequence their own turns adaptively within their side's slots, while the GM does the same for NPCs — it is not a fixed per-character order.
 
-2. **Turn budget:** 1 action + 2 maneuvers, OR 2 maneuvers + suffer strain for using a 3rd. (Standard: 2 maneuvers, 1 action per turn max, with strain cost for exceeding 2 maneuvers.)
+2. **Turn budget:** 1 action + up to 2 maneuvers per turn. **§5A governs the exact maneuver economy** *(Errata R-21)*: the first maneuver is free, a second costs 2 strain, and 2 is the hard cap regardless of strain spent.
 3. **Maneuver:** free-ish setup — move a range band, aim, take cover. Usually no roll.
 4. **Action:** the significant act — attack, skilled check, etc. Only one per turn (barring talents).
 5. **Incidental:** near-free minor acts (drop item, call out) — effectively unlimited within reason.
@@ -207,6 +232,9 @@ One action per turn (barring abilities that grant more). Four types:
 | Extreme | Daunting(💠💠💠💠) |
 
 ## 5C. Combat Advantage/Threat Spend Tables
+
+**Reading these tables** *(Errata R-12):* a row like "🔺🔺 or ☀️" means a single Triumph/Despair can buy that row's effect outright — it does **not** mean Triumph is worth exactly two Advantage. Advantage/Threat costs remain literal (must accumulate the stated count); Triumph/Despair can buy **any** row in the table regardless of tier, at the spender's choice.
+
 
 **Spending 🔺/☀️ (attacker's choice, in combat):**
 | Cost | Effect |
@@ -267,7 +295,7 @@ Five bands: **Engaged** (subcategory of short — close enough to directly inter
 
 ## 5G. Recovery & Healing
 
-- **Natural rest:** heal 1 wound per full night's rest, regardless of current state. Per full week of rest, attempt a Resilience check (difficulty = the Critical Injury's severity) to also heal one Critical Injury; on ⚡ additional Critical Injury heals too.
+- **Natural rest:** heal 1 wound per full night's rest, regardless of current state. Per full week of rest, attempt a Resilience check (difficulty = the Critical Injury's severity) to also heal one Critical Injury; on ☀️ an additional Critical Injury heals too. *(Errata R-9 — corrected from ⚡, which would contradict §1's rule that Despair is never beneficial)*
 - **Medical care (Medicine check):** once per encounter per target. Difficulty by state of health — Easy(💠) if current wounds ≤ half threshold, Average(💠💠) if > half, Hard(💠💠💠) if wounds exceed threshold; Critical Injury severity rating for treating a Critical Injury (once/week/injury). Heals wounds = uncanceled 🌟, strain = uncanceled 🔺. Self-treatment: +2 difficulty. No medical equipment: +1 difficulty.
 - **Painkillers (consumables):** 1st use heals 5 wounds, 2nd heals 4, 3rd heals 3... 6th+ heals 0. Never heals Critical Injuries. Costs one maneuver to administer (self or ally, if engaged).
 - **Strain recovery:** at end of any encounter, Simple(–) Discipline or Cool check; heal 1 strain per uncanceled 🌟. A full night's rest clears all strain.
@@ -308,19 +336,21 @@ Attacking a target 2+ silhouettes larger than you: −1 difficulty. Attacking a 
 
 ## 6. Derived Attributes
 
-**Human base Wound Threshold: 8. Human base Strain Threshold: 10.** 🏷️ *(Errata R-1 — an
-inferred value: neither source printed a base, and this pair is the one the §16 pregens agree
-on.)*
+**Human base thresholds** 🏷️ *(Errata R-1 — an inferred value: neither source printed a base explicitly; 8/10 is the pair the §16 pregens' printed stats agree on):*
+| | Base | + Characteristic | = Total |
+|---|---|---|---|
+| Wound Threshold | **8** | + Brawn | e.g. Brawn 2 → 10 |
+| Strain Threshold | **10** | + Willpower | e.g. Willpower 2 → 12 |
 
-- **Wound Threshold** = species/archetype base + Brawn (fixed at character creation; only raised afterward via talents such as Toughened).
-- **Strain Threshold** = species/archetype base + Willpower (fixed at creation; raised via talents such as Grit).
+- **Wound Threshold** = species base (8, human) + Brawn. Fixed at character creation; only raised afterward via talents such as Toughened.
+- **Strain Threshold** = species base (10, human) + Willpower. Fixed at creation; raised via talents such as Grit.
 - **Soak** = Brawn + armor bonus (rises automatically with Brawn increases, unlike the two thresholds above).
 - **Defense** (melee/ranged) = 0 by default; gained from armor, cover, or talents.
 - **Incapacitated** when Wounds ≥ Wound Threshold or Strain ≥ Strain Threshold.
 
 ## 7. Experience Points (XP)
 
-- **Characteristic increase** (creation only): 10× the new rating, purchased sequentially. Max rating 5 for PCs at creation.
+- **Characteristic increase** (creation only): all six characteristics start at rating **1**; raise via 10× the new rating, purchased sequentially. Max rating 5 for PCs at creation. *(Errata R-5)*
 - **Career skill rank:** 5× the new rank.
 - **Non-career skill rank:** (5× the new rank) + 5.
 - **Talent:** 5× its tier (Tier 1 = 5XP … Tier 5 = 25XP). A character must hold at least as many talents in tier N−1 as in tier N before buying into tier N.
@@ -330,13 +360,21 @@ on.)*
 
 A shared pool that flows between GM and players as scenes resolve favorably or unfavorably.
 
-- **Starting pool:** typically 1 Story Point per player character (some tables use 2). Split into two pools — a **Light/Player pool** and a **Dark/GM pool** — sitting on the table visibly.
+- **Starting pool:** typically 1 Story Point per player character (some tables use 2), all placed in the **Light/Player pool**. **The Dark/GM pool starts at 0** — it only fills as players spend from their pool and the point flows across per the rule below. *(Errata R-4)*
 - **Spending from the Player pool:** upgrade or downgrade one die once on a check, add a Boost or Setback die, narrate a minor established detail into the fiction, or (spending 1) attempt an otherwise-Impossible check.
 - **Spending from the GM pool:** same options, applied against the players (upgrade a Difficulty die, add a Setback die, narrate a complication, etc.).
 - **Flow:** when a player spends a Story Point, it moves to the GM's pool once its effect resolves. When the GM spends one, it moves to the players' pool. Certain Critical Injury results (Discouraging Wound, §9) also shift a point between pools directly.
 - **Session reset:** unspent Story Points typically carry over between sessions rather than resetting, unless the GM rules otherwise for pacing reasons.
+- **Push (reroll):** a player may spend 1 Story Point to reroll an **entire pool** after a check (failed, or a success they want to improve). Every uncanceled 🔻 or ⚡ on the reroll beyond what the original roll generated inflicts, player's choice: 1 Heat (if surveilled context, §17.1), 1 point of gear damage (§14B Minor tier), or 1 strain. Triumph/Despair on the reroll are read fresh. A check can only be pushed once.
 
 ## 9. Critical Injury Table (d100)
+
+**Condition definitions** *(Errata R-6, R-7)*:
+- **Staggered:** cannot take actions; maneuvers and incidentals are unaffected.
+- **Disoriented:** adds 🎲Setback to all checks for the stated duration.
+
+**On rolls beyond 100** *(Errata R-14):* qualities like Vicious X (§10, +10×X to the roll) or stacking Critical Injuries (§5G) can push the roll past 100 — read the table by the resulting **index total**, not a re-rolled d100; totals above 150 always resolve as Dead regardless of exact value.
+
 
 | Roll | Severity | Result |
 |---|---|---|
@@ -416,6 +454,8 @@ Social encounters use **narrative**, not structured, gameplay — no strict turn
   2. **Opposed social skill check** — the PC's social skill vs. the target's opposing skill (usually Discipline or Cool). This is the default/recommended method.
   3. **Group influence** — set Difficulty by audience size: 2–5 targets Average(💠💠), 6–15 Hard(💠💠💠), 16–50 Daunting(💠💠💠💠), 51+ Formidable(💠💠💠💠💠).
 
+For solo play or fast GM improvisation, the **Conversation Generator (§40)** provides a quick subject and Tilt-based modifier for scenes without pre-scripted dialogue.
+
 **Spending Advantage/Triumph (🔺/☀️):**
 
 | Cost | Effect |
@@ -454,7 +494,7 @@ This subsystem underlies all checkpoint interrogations, informant handling, and 
 - The pilot uses Driving/Piloting; passengers act independently (e.g., shoot from a window) on their own normal turns.
 - **Scale note:** skip planetary-scale/strategic-range conversions entirely — treat all vehicle weapon damage as personal scale, using the standard 5 range bands.
 
-**Crashes:** losing control (failed Driving/Piloting check with ⚡, or GM call) → vehicle suffers hull trauma equal to current speed; occupants may suffer wounds/a Critical Injury roll per GM ruling (treat as fall/impact damage).
+**Crashes:** losing control (failed Driving/Piloting check with ⚡, or GM call) → vehicle suffers hull trauma equal to current speed; occupants may suffer wounds/a Critical Injury roll per GM ruling (treat as fall/impact damage). For a more granular outcome, roll on the **Vehicle Component Damage Table (§37)** instead of flat hull trauma.
 
 **Mixed personal/vehicle combat:** on-foot characters engaging vehicles (or vice versa) act on their own normal turns while vehicles act on the pilot's; smaller targets on foot benefit from the standard silhouette rule (§5J) — attacking something 2+ silhouettes larger than you is easier (−1 difficulty), so infantry can hit vehicles more easily than they can meaningfully damage them.
 
@@ -504,7 +544,7 @@ This subsystem underlies all checkpoint interrogations, informant handling, and 
 
 **Tier 2 (10 XP each):**
 
-- **Basic Military Training** (Passive, Ranked: No) — Athletics, Ranged (Heavy), and Resilience are now career skills for your character.
+- **Basic Military Training** (Passive, Ranked: No) — Athletics, Ranged, and Resilience are now career skills for your character. *(Errata R-2 — corrected from "Ranged (Heavy)", a split this manual's §4 skill list doesn't use)*
 - **Berserk** (Active (Maneuver), Ranked: No) — Once per encounter, your character may use this talent. Until the end of the encounter or until they are incapaci- tated, your character adds 🌟 🔺 🔺 to all melee combat checks they make. However, opponents add 🌟 to all combat checks targeting your character. While berserk, your character cannot make ranged combat checks. At the end of the encounter (or when they are inca-pacitated), your character suffers 6 strain.
 - **Coordinated Assault** (Active (Maneuver), Ranked: Yes) — Once per turn, your character may use this talent to have a number of allies engaged with your character equal to your ranks in Leadership add 🔺 to all combat checks they make until the end of your character’s next turn. The range of this talent increases by one band per rank of Coordinated Assault beyond the first.
 - **Counteroffer** (Active (Action), Ranked: No) — Once per session, your character may use this talent to choose one non-nemesis adversary within medium range and make an opposed Negotiation versus Disci- pline check. If successful, the target becomes staggered until the end of their next turn. At your GM’s discretion, you may spend ☀️ on this check to have the adversary become an ally until the end of the encounter. However, the duration of this may be shortened or extended depending on whether your GM feels your offer is appealing to the adversary and whether your character follows through on their offer!
@@ -573,7 +613,7 @@ Each PC selects or rolls (d100, or d10×10 read as tens digit) one of each. Disc
 
 **Flaw (d100):** Anger (resorts to force) · Compulsion (addiction/obsession) · Deception (disloyal/compulsive liar) · Greed · Laziness · Ignorance · Intolerance (prejudice toward a group) · Pride (arrogance/vanity) · Recklessness (acts without considering consequences) · Vanity (obsessed with appearance/reputation).
 
-Motivation facets can be leveraged by others in social encounters (§11) and reward bonus XP at session's end for meaningful roleplay tied to them.
+Motivation facets can be leveraged by others in social encounters (§11) and reward bonus XP at session's end for meaningful roleplay tied to them. Optionally, pair each PC's Fear with a **Personal Threat Countdown** (§33) for a dedicated recurring antagonist thread, and track inter-PC **Tension** (§31) alongside Motivation for party dynamics.
 
 ## 12C. Adversary Building (Minion / Rival / Nemesis)
 
@@ -621,7 +661,8 @@ Use these to differentiate named Rivals/Nemeses from generic stat blocks without
 2. Spend **70 XP flat** (all PCs, regardless of career — deliberately equalized; no "chosen hero" advantage under occupation) per the costs in §7.
 3. Determine **derived attributes** (§6) after XP spend.
 4. Choose a **Motivation**: Desire, Fear, Strength, Flaw (freeform or drawn from any general RPG motivation list — no setting-specific table needed; reflavor for occupation-era stakes: survival, ideology, exposure, reprisal, etc.).
-5. Gear: standard starting budget or select from §15.
+5. Gear: **500 Reichsmark (RM)** starting budget (Genesys default), or select from §15. Unspent RM is kept; after purchases, roll d100 and add the result as "pocket money" (not usable for further starting gear). *(Errata R-8)*
+6. Name your **Kicker**: one sentence describing the specific event that put this character on the path they're on now — the thing that forced their hand (a raid on their street, a friend's arrest, a forged order they were told to sign). This isn't a mechanical trigger — it's a one-line anchor the GM can call back to in play, and it pairs naturally with the Personal Threat Countdown (§33) if you're using Part V.
 
 All PCs are human; no exotic species in this realistic setting.
 
@@ -664,7 +705,7 @@ Each career: pick 4 of its 8 listed skills, gain rank 1 in each, before spending
 
 ## 14A. Rarity & Purchasing System
 
-Rarity measures how hard an item is to find, 0 (trivial) to 10 (nearly impossible); the GM always has final narrative say over availability.
+Rarity measures how hard an item is to find, 0 (trivial) to 10 (nearly impossible); the GM always has final narrative say over availability. All prices in this manual are in **Reichsmark (RM)**; starting budget is 500 RM (§13). *(Errata R-8)*
 
 | Rarity | Difficulty to find | Reich '62 examples |
 |---|---|---|
@@ -680,6 +721,8 @@ Make a Negotiation (legal goods) or Streetwise (black-market/illegal goods) chec
 **Modifiers** (adjust effective Rarity before rolling): −1 major city/trading hub; +0 mid-size city; +1 rural/state-controlled economy; +2 frontier/restricted-ownership item; +3 active security crackdown; +4 disaster/total lockdown zone. Rarity above 10 stays Formidable, but the GM may upgrade the difficulty once per point beyond 10.
 
 **Selling:** Negotiation (legal) or Streetwise (black-market) check at the item's Rarity difficulty; sell for 1/4 price on success, 1/2 with 🌟🌟, 3/4 with 🌟🌟🌟+.
+
+**🏷️ House rule — Black-Market Purchase Mechanic (not derived from any printed Genesys rule):** for Rarity 6+ items, the GM may require Ration Cards or a barter good in addition to RM — spend 1 Ration Card unit per Rarity point above 5 (e.g., Rarity 7 = 2 cards). No cards on hand → +1 difficulty instead. A failed check with 🔻🔻🔻/⚡ is a surveilled-context check (§17.1) — black-market deals can generate Heat like any other public check. *(Errata H-1)*
 
 ## 14B. Item Maintenance & Repair
 
@@ -704,7 +747,7 @@ Repair uses the Mechanics skill; requires 1–2 hours per difficulty level (half
 
 ## 15. Gear List (expanded)
 
-**Forged papers (basic/good/excellent)** — Rarity 3/5/7. Identity documents, travel permits, and ration authorizations produced by a forger or stolen/altered originals. *Basic* papers hold up to a cursory glance only (routine checkpoint, 🎲Setback removed from Deception/Cool if unchallenged); *good* papers survive a standard inspection (no die modifier either way); *excellent* papers survive cross-reference against Reich records (grants 🎲Boost on the check). A caught forgery is an automatic Personal Heat trigger regardless of the roll (§17.1).
+**Forged papers (basic/good/excellent)** — Rarity 3/5/7. Identity documents, travel permits, and ration authorizations produced by a forger or stolen/altered originals. *Basic* papers hold up to a cursory glance only (routine checkpoint, 🎲Setback removed from Deception/Cool if unchallenged); *good* papers survive a standard inspection (no die modifier either way); *excellent* papers survive cross-reference against Reich records (grants 🎲Boost on the check). A caught forgery is an automatic Heat trigger regardless of the roll (§17.1).
 
 **Ration cards (real/forged)** — Currency substitute in scarcity zones; real cards are tied to a registered identity (usable only by/for that person without suspicion) while forged cards function as portable trade goods. Encumbrance 0.
 
@@ -712,7 +755,7 @@ Repair uses the Mechanics skill; requires 1–2 hours per difficulty level (half
 
 **Kar98k / StG rifle variants** — Ranged(Heavy); Dam 9, Crit 3, Range Long, Encum 4-5, Price 700-900, Rarity 4. Standard infantry rifles; concealment is impractical — carrying one openly signals military/security affiliation or overt resistance action.
 
-**Shortwave radio (concealable)** — Encum 2, Price 500, Rarity 6. Enables long-range contact with distant cells or Allied listening posts. Any transmission is a Perception-opposed check for Reich signal-monitoring services to detect; detection is an automatic Personal Heat +1 (or +2 if message content is incriminating), independent of the Despair rule in §17.1.
+**Shortwave radio (concealable)** — Encum 2, Price 500, Rarity 6. Enables long-range contact with distant cells or Allied listening posts. Any transmission is a Perception-opposed check for Reich signal-monitoring services to detect; detection is an automatic Heat +1 (or +2 if message content is incriminating), independent of the Despair rule in §17.1.
 
 **Cyanide capsule** — Encum 0, Price negligible, Rarity 5 (restricted). Narrative-only item; represents the last resort against capture/interrogation. No mechanical effect beyond GM-adjudicated instant narrative resolution if used.
 
@@ -726,7 +769,7 @@ Repair uses the Mechanics skill; requires 1–2 hours per difficulty level (half
 
 **Field surgery kit** — Encum 3, Price 600, Rarity 6. A more complete Medicine kit than the black-market version; removes 🎲Setback normally applied for lacking proper equipment on Hard(💠💠💠)+ Medicine checks.
 
-**Listening device (bug)** — Encum 0, Price 350, Rarity 6. Concealable audio surveillance; planting one is a Skulduggery check opposed by the target's Vigilance. Detection later (by a security sweep) can trigger Personal Heat if traced back to the planter.
+**Listening device (bug)** — Encum 0, Price 350, Rarity 6. Concealable audio surveillance; planting one is a Skulduggery check opposed by the target's Vigilance. Detection later (by a security sweep) can trigger Heat if traced back to the planter.
 
 **Compass and topographic maps** — Encum 1, Price 80, Rarity 2. Grants 🎲Boost on Survival checks made to navigate unfamiliar or rural terrain.
 
@@ -742,7 +785,9 @@ Repair uses the Mechanics skill; requires 1–2 hours per difficulty level (half
 
 ## 15A. MEANING TABLES (solo scene/idea generation)
 
-Roll 1d10 (a Genesys Ability die read 1–10, or the numeral on any d10) on **Action** and again on **Descriptor/Subject** to generate a fast prompt. Combine the two words into a phrase and interpret narratively. Use whenever the Random Event Table (§19) needs a concrete idea, or any time you need instant inspiration.
+**Three related tools, different jobs — use whichever fits the moment:** Meaning Tables (here) give an instant two-word prompt for *any* undefined moment; the Random Event Table (§19) is *triggered* specifically by an emphatic Oracle answer; the Travel Encounter Table (§35) is scoped specifically to movement between Stops (§34). They're not redundant with each other — reach for the one matching your current need rather than rolling on all three.
+
+Roll a plain **d10** *(Errata R-10 — not the Ability die, which is a d8)* on **Action** and again on **Descriptor/Subject** to generate a fast prompt. Combine the two words into a phrase and interpret narratively. Use whenever the Random Event Table (§19) needs a concrete idea, or any time you need instant inspiration.
 
 **ACTION (1d10)**
 | Roll | Action |
@@ -838,7 +883,7 @@ Roll 1d10 (a Genesys Ability die read 1–10, or the numeral on any d10) on **Ac
 | Fragmentation grenade | Ranged | 8 | 4 | Short | 1 | 250 | 5 (restricted) | Blast 6, Limited Ammo 1 |
 | Improvised weapon (pipe, bottle) | Melee | +1 | 5 | Engaged | 1 | — | — | +🎲Setback on use (Inferior) |
 
-*Possession of restricted weapons is itself grounds for a Personal Heat check if found during a papers/search encounter (§17.3).*
+*Possession of restricted weapons is itself grounds for a Heat check if found during a papers/search encounter (§17.3).*
 
 ## 15D. ARMOR TABLE
 
@@ -875,7 +920,7 @@ Roll 1d10 (a Genesys Ability die read 1–10, or the numeral on any d10) on **Ac
 | Rail locomotive (freight) | 4 | −2 | 3 | 0 | 3 | 40 | 20 | — (state-owned) | — |
 | Rail locomotive (passenger) | 4 | −2 | 4 | 0 | 2 | 36 | 20 | — (state-owned) | — |
 
-*Civilian ownership of anything beyond a passenger sedan is unusual enough to draw notice at checkpoints; military vehicles in non-military hands are an automatic Personal Heat trigger if discovered.*
+*Civilian ownership of anything beyond a passenger sedan is unusual enough to draw notice at checkpoints; military vehicles in non-military hands are an automatic Heat trigger if discovered.*
 
 ---
 
@@ -883,16 +928,19 @@ Roll 1d10 (a Genesys Ability die read 1–10, or the numeral on any d10) on **Ac
 
 **Anna Voss — Resistance Runner** (human)
 Br2 Ag3 In2 Cu3 Wi2 Pr2 | Skulduggery 2, Stealth 2, Streetwise 2, Cool 1 | Wound 10, Strain 12, Soak 2
-*(Errata R-1: printed Wound 11 was an erratum — 8 + Brawn 2 = 10.)*
+*(Errata R-1: originally printed as Wound 11 — corrected to 10, i.e. base 8 + Brawn 2.)*
 Gear: forged papers (good), lockpicks, P38.
+Kicker: her brother was taken in a night raid three months ago; she's never found out where.
 
 **Klaus Reiniger — SD Agent (defecting)** (human)
 Br2 Ag2 In3 Cu2 Wi3 Pr2 | Coercion 2, Perception 2, Knowledge 2, Discipline 1 | Wound 10, Strain 13, Soak 2
 Gear: SD credentials, P38, shortwave radio access.
+Kicker: he was ordered to sign off on a deportation manifest and did — the names haven't left him since.
 
 **Elise Bauer — Black-Market Fixer** (human)
 Br2 Ag2 In2 Cu3 Wi2 Pr3 | Negotiation 2, Streetwise 2, Deception 2, Charm 1 | Wound 10, Strain 12, Soak 2
 Gear: ration cards (forged), camera, contacts list (narrative).
+Kicker: a deal she brokered got someone killed; she's been working the angles ever since to make sure it wasn't for nothing.
 
 Each has 70 XP unspent for player customization; assign Motivation per §13.4.
 
@@ -909,7 +957,7 @@ Track the following per character:
 - **Weapons:** name, skill used, damage, crit rating, range, special qualities.
 - **Gear/Equipment log:** weapons & armor, personal gear, money/currency.
 - **Critical Injuries:** severity + result, tracked until healed (§9, §5G).
-- **Reich '62 additions:** Personal Heat (0–5) track; Cell Heat (0–5, shared) track; forged papers quality on hand.
+- **Reich '62 additions:** Heat (0–5, shared) track; forged papers quality on hand.
 
 ---
 
@@ -917,30 +965,33 @@ Track the following per character:
 
 ## 17. Suspicion/Heat System
 
+**Simplified to a single shared track (0–5)** — one Heat value for the whole party/cell, rather than tracking Personal and Cell Heat separately. This trades away individual-PC nuance for less bookkeeping; see §17.5 for when to bring the split back.
+
 ### 17.1 Generation
 - Triggered only on checks made **in Reich-surveilled contexts** (public spaces, checkpoints, dealings with officials/informants).
-- Uncanceled **Despair (⚡)** on such a check → **Personal Heat +1**.
-- Uncanceled Despair on an **evasion-type check** (Deception, Skulduggery, Streetwise, or Cool used specifically to evade/mislead surveillance) → **Personal Heat +2**.
-- Uncanceled **Triumph (☀️)** → player may optionally spend it to reduce Personal Heat by 1.
+- Uncanceled **Despair (⚡)** on such a check → **Heat +1**.
+- Uncanceled Despair on an **evasion-type check** (Deception, Skulduggery, Streetwise, or Cool used specifically to evade/mislead surveillance) → **Heat +2**.
+- Uncanceled **Triumph (☀️)** → any player may optionally spend it to reduce Heat by 1.
 - Routine Threat/Advantage does **not** generate Heat — those remain reserved for immediate narrative complications only.
 
-### 17.2 Personal Heat vs. Cell Heat
-- **Personal Heat (0–5):** tracked per individual character.
-- **Cell Heat (0–5):** shared pool for the whole party/network. Rises when any member's Personal Heat reaches 3+, or from group-implicating failures (safehouse blown, an informant flips).
+### 17.2 Thresholds
 
-### 17.3 Thresholds
+| Level | Effect |
+|---|---|
+| 1 | 🎲Setback die on public checks |
+| 2 | Papers checked on sight (opposed Deception/Cool vs. Perception) |
+| 3 | Tailed (opposed Vigilance to notice) / a shared safehouse placed under watch |
+| 4 | An informant is assigned to the cell; a residence is searched; Oracle roll may determine a member is flipped or arrested |
+| 5 | Raid imminent (Oracle determines timing) — cell burned, network collapse (GM narrates) |
 
-| Level | Personal Heat effect | Cell Heat effect |
-|---|---|---|
-| 1 | 🎲Setback die on public checks | — |
-| 2 | Papers checked on sight (opposed Deception/Cool vs. Perception) | 🎲Setback die on all cell members' public checks |
-| 3 | Tailed (opposed Vigilance to notice) | Safehouse placed under watch (GM discretion) |
-| 4 | Informant assigned; residence searched | Oracle roll: a cell member is flipped or arrested |
-| 5 | Arrest warrant issued; raid imminent (oracle determines timing) | Cell burned — network collapse (GM narrates) |
+### 17.3 Decay
+- −1 Heat per session of low-risk downtime, or via specific actions (bribery, new papers, relocating/disappearing, "lying low").
 
-### 17.4 Decay
-- −1 Personal Heat per session of low-risk downtime, or via specific actions (bribery, new papers, relocating/disappearing).
-- Cell Heat decays only once the triggering Personal Heat(s) drop and no new group failures occur.
+### 17.4 Attributing a spike
+Since the track is shared, when Heat rises the GM should still narrate *which PC's action* caused it — the mechanical consequence is shared, but the fictional cause and any immediate fallout (that PC specifically being recognized, followed, or named) should land on the responsible character first, even though the number on the sheet is common to the party.
+
+### 17.5 When to bring back the Personal/Cell split
+Restore the two-track version (Personal Heat 0–5 per character, Cell Heat 0–5 shared, Cell rising when any Personal Heat hits 3+) if: the party is 4+ PCs who plausibly act semi-independently, or "one member's carelessness endangering everyone else" is a dynamic you specifically want to play out. In that case, use the original threshold table structure — Personal effects (papers checks, tails, searches) apply to the individual; Cell effects (safehouse watched, network-wide consequences) apply to everyone.
 
 ## 18. Oracle System (for solo or GM-optional play)
 
@@ -953,28 +1004,51 @@ Track the following per character:
 3. Interpret using §1's resolution rules:
    - Net success (🌟) → **Yes**
    - Net failure (💥) → **No**
-   - Uncanceled Triumph (☀️) → **Yes, and...** (favorable complication)
-   - Uncanceled Despair (⚡) → **No, and...** (adverse complication — feeds Heat if the question concerned a surveilled context)
-   - Net Advantage/Threat only, no net success/failure → **Yes, but... / No, but...** (interpret narratively)
+   - **Two or more net 🌟 with no 🔻 left over** → **Yes, and...** (favorable complication — roll a Random Event, §19)
+   - **Two or more net 💥 with no 🔺 left over** → **No, and...** (adverse complication — roll a Random Event, §19; feeds Heat if the question concerned a surveilled context)
+   - Net 🔺/🔻 only, no net success/failure → **Yes, but... / No, but...** (interpret narratively)
+
+**Errata note (R-22):** this pool is Ability vs. Difficulty dice — it cannot roll Triumph (Proficiency-only) or Despair (Challenge-only), per §1's face table. "Yes, and" / "No, and" are therefore read by **magnitude** (2+ net Success/Failure with nothing left over on the other side) rather than by Triumph/Despair symbols. If the pool is ever upgraded (e.g., by spending a Story Point per §8) and an actual Triumph or Despair does appear, it still reads the same way — as an emphatic "and" result.
+
+## 18A. Fate Question Focus (optional house aid — H-2)
+
+**🏷️ Not a printed rule** — layers on top of §18's Oracle without replacing it. The Oracle still answers yes or no; this reads that same roll's leftover Advantage/Threat as a gauge of how the answer compares to what you expected before asking.
+
+**Procedure:** after resolving the Oracle roll (§18.1) normally, look at the **net 🔺/🔻 remaining** (−4 to +4 across the printed pools) and consult:
+
+| Net | Band | Reading |
+|---|---|---|
+| −4 | That is a surprise | Lands well away from what you expected, and not in your favor. *(also triggers a Random Event, §19)* |
+| −3 | Works against you | Read as expected, then bend the reading until it costs your character. |
+| −2 | As expected, but... | What you expected, with something significant taking the edge off it. |
+| −1 | Not quite what you expected | Close to expected, off in a detail — and the detail isn't helpful. |
+| 0 | As you expected | Read the answer the way you expected. *(see Chaos Tiebreaker below)* |
+| +1 | Not quite what you expected | Close to expected, off in a detail — and the detail suits you. |
+| +2 | As expected, and... | What you expected, with something significant coming along with it. |
+| +3 | In your favor | Read as expected, then bend the reading until it works out for your character. |
+| +4 | A turn in the story | Read as expected, then bend the reading until it changes where an arc is heading — your way. *(also triggers a Random Event, §19)* |
+
+**Chaos Tiebreaker (net = 0 only):** when Advantage and Threat cancel exactly, nothing on the roll itself says which way to lean — so the campaign's own escalation dial decides. Roll 1d10 against **2× current Heat** (§17): result at or under that value bends the answer to "Works against you"; above it, the answer stands as expected. At Heat 0, skip the roll entirely — the answer simply stands as expected.
 
 ## 19. Random Event Table
 
-Trigger: any Oracle result carrying ☀️ or ⚡ (§18), or on-demand for solo scene-framing.
+**Trigger:** either emphatic Oracle answer — "Yes, and" or "No, and" (§18.1) — or on-demand for solo scene-framing.
 
-1. Roll 1🎲 for **Category**: 1–2 NPC Action / 3–4 Reich Interference / 5–6 Complication or Twist / 7–8 Ally or Opportunity / 9–10 Remote Event (world-state shift).
-2. Roll 1🎲 for **Subject**: 1–3 current PC/scene / 4–6 Cell/Heat state / 7–8 a prior unresolved thread / 9–10 a new element (interpret freely).
-3. A ☀️ oracle result skews the event favorable; an ⚡ result skews it toward escalation (often raising Heat).
+1. Roll 1d10 for **Category**: 1–2 NPC Action / 3–4 Reich Interference / 5–6 Complication or Twist / 7–8 Ally or Opportunity / 9–10 Remote Event (world-state shift).
+2. Roll 1d10 for **Subject**: 1–3 current PC/scene / 4–6 Cell/Heat state / 7–8 a prior unresolved thread / 9–10 a new element (interpret freely).
+3. **Skew:** an emphatic "Yes, and" skews the event favorable (read it as an opening); an emphatic "No, and" skews it toward escalation (read it as a threat, often raising Heat). *(Errata R-22 — skew is read off which emphatic answer fired, not off Triumph/Despair, for the same reason as §18.1 above.)*
 
 ## 20. NPC Quick-Generation
 
-1. Roll 1🎲 for **Archetype**: 1–2 Reich Official / 3–4 Informant / 5–6 Resistance Contact / 7–8 Civilian/Bystander / 9–10 Wildcard (interpret freely).
-2. Roll 1🎲 for **Disposition**: 1–3 Hostile / 4–6 Neutral–Self-interested / 7–9 Sympathetic / 10 Hidden agenda (Oracle: for or against the PC).
+1. Roll 1d10 for **Archetype**: 1–2 Reich Official / 3–4 Informant / 5–6 Resistance Contact / 7–8 Civilian/Bystander / 9–10 Wildcard (interpret freely).
+2. Roll 1d10 for **Disposition**: 1–3 Hostile / 4–6 Neutral–Self-interested / 7–9 Sympathetic / 10 Hidden agenda (Oracle: for or against the PC).
 3. Build the stat block using the standard adversary framework:
    - Reich Official → Rival (2–3 threat)
    - Informant → Minion or Rival
    - Resistance Contact → Rival, often with one unique talent
    - Nemesis reserved for named, recurring antagonists only
 4. Assign a Motivation (§13.4), reflavored: Desire — survival/ideology/power; Fear — exposure/reprisal; etc.
+5. For a fuller personality (recurring/named NPCs), layer on the **NPC Behavior Generator (§39)** — Personality Type, Emotional State, Motive, Method, and Tilt.
 
 ---
 
@@ -983,6 +1057,12 @@ Trigger: any Oracle result carrying ☀️ or ⚡ (§18), or on-demand for solo 
 ## 20A. Session Zero & Rule Zero
 
 **Session Zero (before play begins):** agree as a group on expectations before the first real session. Discuss: acceptable language/content boundaries (especially relevant given the setting's real-world atrocity backdrop — agree explicitly on how far to depict Reich violence, and give players a way to flag topics as off-limits or "warn me first" privately); table logistics (breaks, food, devices); and any real-world-sensitive themes (genocide, persecution, collaboration) the group wants softened, spotlighted, or avoided entirely. Revisit this conversation if the campaign's tone shifts.
+
+**Safety structure, explicitly:**
+- **Lines:** topics that don't appear in the game at all, no exceptions. State these plainly in Session Zero and don't require justification.
+- **Veils:** topics that can happen but aren't depicted in detail — "fade to black" and move on. Useful for content that's setting-appropriate but not something the table wants played out scene-by-scene.
+- **Safety signal:** agree on a simple in-session signal (a word, a hand gesture, an index card on the table) any player can use to pause, skip, or soften a scene in the moment, without needing to explain why. Honor it immediately, no questions asked during play.
+- **Debrief:** after any session touching heavy material, take a few minutes out-of-character to check in — how people are feeling, whether anything from the session needs a line/veil added retroactively for future sessions.
 
 **Rule Zero:** the GM may override, skip, or reinterpret any rule when it serves the story or the table's fun better than a strict reading — including everything in this manual. Use sparingly and transparently (say "I'm using Rule Zero here" rather than silently reinterpreting) so player trust in the system isn't eroded.
 
@@ -1004,11 +1084,13 @@ Other difficulty levers: environment (cover, concealment, terrain — §5E), bys
 
 **Letting the dice drive the story:** encourage players to propose their own Advantage/Triumph/Threat/Despair spends (§5C, §11) rather than dictating every outcome yourself — this gives players ownership and often produces better twists than pre-planned ones.
 
+**Multi-location campaigns:** for a travel-structured campaign (moving between safehouses, cities, or borders), see the **Journey Framework (§34)** for Stops, Blockers, and Countdowns, plus the **Travel Encounter Table (§35)** for the road between them.
+
 ## 21. Session Setup (once, per campaign or one-shot)
 
 1. Pick party framework: 1 PC (solo) or 2–5 PCs (group).
 2. Assign career (§14) + 70 XP (§13).
-3. Set Personal Heat = 0 for each PC; Cell Heat = 0 for the party.
+3. Set Heat = 0 for the party.
 4. Define the starting scene: location, immediate goal, one NPC present (Quick-Gen §20 if needed).
 
 ## 22. Group Play Loop (per scene)
@@ -1023,11 +1105,13 @@ Other difficulty levers: environment (cover, concealment, terrain — §5E), bys
 
 1. **Frame the scene** yourself: where your PC is, what they want.
 2. **Ask a question** whenever the outcome is uncertain and no PC roll directly applies → run the **Oracle** (§18).
-3. If the Oracle returns ☀️/⚡ → roll the **Random Event** table (§19) to inject content.
+3. On either emphatic Oracle answer — "Yes, and" or "No, and" (§18.1) → roll the **Random Event** table (§19) to inject content.
 4. **PC actions** → resolve with standard skill checks exactly as in group play (§22 steps 2–4).
 5. **Generate NPCs** as needed via Quick-Gen (§20).
-6. **Heat** is tracked identically (§17); at Personal Heat 4–5, use the Oracle to resolve raid/arrest timing and outcome instead of unilateral GM fiat.
+6. **Heat** is tracked identically (§17); at Heat 4–5, use the Oracle to resolve raid/arrest timing and outcome instead of unilateral GM fiat.
 7. Repeat until the scene resolves, then reframe the next scene (return to step 1).
+
+**Optional depth (Part V, adopt individually):** layer in the **Fate Question Focus (§18A)** for a richer read on Oracle rolls, the **Meaning/Element Tables (§15A/§15B)** for instant prompts, the **NPC Behavior Generator (§39)** for recurring characters, the **Conversation Generator (§40)** for dialogue scenes, and the **Journey Framework (§34)** with **Travel Encounter Table (§35)** if running a travel-structured campaign. None of these are required for the core loop above.
 
 ## 24. Ending a Session/Adventure
 
@@ -1036,7 +1120,7 @@ Other difficulty levers: environment (cover, concealment, terrain — §5E), bys
 
 ## 25. Sample Adventure Hook
 
-**"The Kurier"** — A Wehrmacht supply clerk (a defecting Party Bureaucrat) has microfilm proving falsified Eastern Front casualty reports. He wants out via a Resistance Runner's smuggling line before his SD handler notices the discrepancies (his Personal Heat starts at 2, rising). The PCs must extract him and the film within 3 in-game days before Cell Heat forces the safehouse to relocate. Generate complications via the Random Event Table (§19); generate the SD handler via Quick-Gen (§20, Reich Official/Hostile).
+**"The Kurier"** — A Wehrmacht supply clerk (a defecting Party Bureaucrat) has microfilm proving falsified Eastern Front casualty reports. He wants out via a Resistance Runner's smuggling line before his SD handler notices the discrepancies (Heat starts at 2, rising). The PCs must extract him and the film within 3 in-game days before Heat forces the safehouse to relocate. Generate complications via the Random Event Table (§19); generate the SD handler via Quick-Gen (§20, Reich Official/Hostile).
 
 ## 26. Skill Usage Examples (setting-flavored)
 
@@ -1083,7 +1167,7 @@ When the PCs confront something genuinely disturbing (a discovered atrocity, a c
 | Deeply Disturbed | Hard(💠💠💠) | Witnessing mass violence directly; confronting one's own complicity |
 | Traumatized | Daunting(💠💠💠💠) | Reserved for the campaign's darkest, rarest beats |
 
-**On failure or 🔻🔻/⚡:** GM picks a fitting effect — Disoriented until end of encounter (simple failure); suffer strain equal to the check's Difficulty dice count (moderate); or a lasting narrative scar the player and GM agree to track (severe — e.g. a recurring nightmare, a standing Setback in specific future scenes tied to the trauma). **On success or ☀️:** the character pushes through — no penalty, and an uncanceled ☀️ can instead grant 🎲Boost on the character's very next check as grim resolve takes over.
+**On failure or 🔻🔻/⚡:** GM picks a fitting effect — Disoriented until end of encounter (simple failure); suffer strain equal to the check's Difficulty dice count (moderate); or, for severe failure, roll on the **Mental Trauma Table (§38)** for a lasting narrative scar rather than freeforming one. **On success or ☀️:** the character pushes through — no penalty, and an uncanceled ☀️ can instead grant 🎲Boost on the character's very next check as grim resolve takes over.
 
 Use this sparingly — it's an optional lever for grim/horror beats (§28), not a constant tax on every dark scene.
 
@@ -1093,26 +1177,235 @@ Use this sparingly — it's an optional lever for grim/horror beats (§28), not 
 
 **Symbols:** 🌟Success 💥Failure 🔺Advantage 🔻Threat ☀️Triumph(rare, always true) ⚡Despair(rare, always true)
 
-**Heat Thresholds (§17.3):**
-| Lvl | Personal | Cell |
-|---|---|---|
-| 1 | 🎲Setback public checks | — |
-| 2 | Papers checked on sight | 🎲Setback cell members' checks |
-| 3 | Tailed | Safehouse watched |
-| 4 | Informant assigned, searched | Cell member flipped/arrested |
-| 5 | Raid imminent | Cell burned |
+**Heat Thresholds (§17.2 — single shared track):**
+| Lvl | Effect |
+|---|---|
+| 1 | 🎲Setback public checks |
+| 2 | Papers checked on sight |
+| 3 | Tailed / safehouse watched |
+| 4 | Informant assigned; member may be flipped/arrested |
+| 5 | Raid imminent — cell burned |
 
 **Combat spend quick-hits (§5C):** 🔺=minor boost/strain recovery · 🔺🔺=free maneuver/Boost die · 🔺🔺🔺=negate defense/disable · ⚡=weapon breaks/jams · 🔻🔻🔻=knocked prone/major tactical loss
 
 **Critical Injury (§9):** roll d100 → 01–40 Easy · 41–90 Average · 91–125 Hard · 126–150 Daunting · 151+ Dead
 
-**Oracle (§18):** Likely=2🎲v1💠 · 50-50=2🎲v2💠 · Unlikely=1🎲v2💠 → net success=Yes, net failure=No, ☀️=Yes-and, ⚡=No-and
+**Oracle (§18):** Likely=2🎲v1💠 · 50-50=2🎲v2💠 · Unlikely=1🎲v2💠 → net success=Yes, net failure=No, 2+net🌟 no🔻 left=Yes-and, 2+net💥 no🔺 left=No-and *(R-22: not ☀️/⚡ — this pool can't roll them)*
+
+**Journey Supplement quick-hits (§31, §33–§40):** Tension = 🎲Boost per point in opposed checks vs. that character (§31) · Push = spend 1 Story Point to reroll a pool, pay 1 Heat/gear damage/strain per extra 🔻/⚡ (§8) · Vehicle crash → roll §37 Component Damage instead of flat hull trauma · Dread failure (§29) → roll §38 Mental Trauma for lasting effects
 
 **NPC Quick-Gen (§20):** 1d10 Archetype → 1d10 Disposition → Minion/Rival/Nemesis stat block → Motivation
 
 **Adversary sizing for 4 PCs (§20B):** 4 minions (easy) · 1 rival+4 minions (moderate) · 3 rivals (moderately difficult) · 1 nemesis+2 minion groups (difficult)
 
 **XP per session:** 20 (standard) · +5 for Motivation play · scale ±5 for session length
+
+---
+
+# PART V — JOURNEY & TENSION SUPPLEMENT
+*Adapted from The Electric State RPG's structure, converted to run entirely on Genesys dice — no external dice pools or playing cards required.*
+
+---
+
+## 31. CELL TRUST/TENSION SYSTEM
+
+Fills a gap the Manual's Heat system doesn't cover: friction *within* the party, not pressure from the Reich.
+
+- Each pair of PCs (or a PC and a key recurring NPC ally) tracks a **Tension rating, 0–2**, independently in each direction if the relationship is asymmetric (A's tension toward B need not equal B's toward A).
+  - **0:** no tension.
+  - **1:** suppressed feeling — irritation, unspoken loyalty, unresolved history.
+  - **2:** uncontained — open conflict, obsessive loyalty, real fear of one another.
+- **Effect:** in an opposed check between two characters with Tension toward each other (social or combat), the higher-Tension side adds 🎲Boost per point of Tension.
+- **Raising Tension:** GM or player proposes +1 when a scene meaningfully strains or charges the relationship (a betrayal, a rescue, a hard call under pressure); requires the other player's/GM's agreement.
+- **Reducing Tension:** both parties agree to reduce their mutual Tension by 1 (roleplayed as a scene of reconciliation, confrontation, or release) — doing so lets **each** participant recover 2 strain, mirroring §5G's strain-recovery scale.
+- **Interaction with Heat:** Tension is orthogonal to Heat (§17) — a cell can have high external Heat and low internal Tension (a tight, trusting team under pressure) or the reverse (a fracturing cell that hasn't drawn Reich attention yet). Both can be dramatically useful at once.
+
+
+## 33. PERSONAL THREAT COUNTDOWN
+
+Gives each PC a personalized antagonist thread independent of party-wide Heat (§17).
+
+- At character creation (alongside Motivation, §12B/§13), each player names one **Personal Threat**: a specific person, unit, or circumstance hunting or endangering their character specifically (an old SD file with their name on it, a jilted informant, a family member used as leverage).
+- The Personal Threat has a **3-step Countdown**, advanced by GM discretion when the fiction calls for it (roughly once per session at most, tied to Despair results or major failures involving that PC):
+  1. **Step 1 — Noticed:** the Threat becomes aware of/reactivated toward this PC. Narrative foreshadowing only.
+  2. **Step 2 — Closing In:** the Threat takes concrete action — surveillance, an approach, a warning shot. Mechanically: add 🎲Setback to this PC's checks made to avoid/evade the Threat specifically.
+  3. **Step 3 — Confrontation:** a direct scene between the PC and their Threat — this should be played out fully, not summarized, and typically resolves (temporarily or permanently) that character's Countdown arc.
+- After Step 3 resolves, the player may retire the Threat or (with GM agreement) escalate it into a new 3-step arc — useful for turning a Rival into a recurring Nemesis-tier antagonist (§12C).
+
+## 34. JOURNEY FRAMEWORK (Stops, Blockers, Countdowns)
+
+An episodic campaign structure for movement through occupied territory — between safehouses, across borders, city to city.
+
+**Time units for travel pacing:** this framework uses three loose scales — a **Round** (seconds, combat, per §5), a **Scene** (minutes to hours, one self-contained beat of play — a checkpoint, a conversation, a search), and a **Shift** (roughly 5–10 hours — a leg of travel, a stretch of rest, the gap between Stops). Shifts are the unit the Travel Encounter Table (§35) and downtime recovery (§5G) run on; they're narrative bookkeeping, not a strict clock — the GM calls when a Shift has passed.
+
+**Setup (once per campaign or major arc):**
+1. Choose a **Start** and **Destination** (e.g., a compromised cell's current city → a border crossing to a neutral country).
+2. Choose journey length:
+
+| Length | Stops |
+|---|---|
+| One-shot | 1 |
+| Short | 2–4 |
+| Medium | 4–7 |
+| Long | 8–12 |
+
+3. Generate each **Stop** using this manual's existing Element Tables (§15B: Location, Faction, Complication) plus a **Blocker** (below).
+4. Between Stops, roll on the Travel Encounter Table (§35).
+
+**Blocker:** the obstacle preventing the party from simply passing through a Stop — a washed-out bridge requiring a specific document, a hostile faction controlling the only route, a Heat-triggered dragnet (§6, Manual "Manhunt/Dragnet" encounter block). Generate via a 1d10 roll on the Element Tables' Faction/Complication lists (§15B), or invent one matching the Stop's location type.
+
+**Stop Countdown:** each Stop has its own escalating pressure, similar to Heat thresholds but scene-local rather than persistent. Roll or choose a 1d10 **Countdown Event** whenever the party lingers at a Stop past its natural resolution point (GM discretion, roughly one per scene of delay):
+
+| Roll | Event |
+|---|---|
+| 1 | Local tactics/patrol pattern changes |
+| 2 | An ally or bystander is captured |
+| 3 | Something the party needs is sabotaged or seized |
+| 4 | Someone pleads for the party's help, complicating departure |
+| 5 | The party is accused of something (true or false) |
+| 6 | Victims of the Stop's central conflict appear, demanding attention |
+| 7 | The party is directly threatened |
+| 8 | The Blocker's controlling faction shows its full strength |
+| 9 | The Blocker actively attacks or moves against the party |
+| 10 | A deal is offered — favorable terms with a hidden cost |
+
+## 35. TRAVEL ENCOUNTER TABLE (d10)
+
+Roll when the party travels between Stops, or once per Shift (§34) on a long journey:
+
+| Roll | Encounter |
+|---|---|
+| 1 | Hitchhiker/refugee seeking transport |
+| 2 | Road damage or construction detour |
+| 3 | Severe weather |
+| 4 | Fuel/supply stop with complications |
+| 5 | A notable ruin or landmark (narrative color, possible side content) |
+| 6 | Wildlife/livestock hazard |
+| 7 | An abandoned, salvageable vehicle |
+| 8 | A staged roadside scene (bait for a robbery, or a genuine emergency) |
+| 9 | Unmarked wreckage or debris field (Civil-War-era or recent) |
+| 10 | A checkpoint (run as §14A's Checkpoint encounter block) |
+
+## 36. VEHICLE TRAITS TABLE (d10)
+
+Roll once per vehicle for flavor/mechanical variance, or assign deliberately:
+
+| Roll | Trait |
+|---|---|
+| 1 | **Fast:** Speed +1 |
+| 2 | **Roomy:** can carry 2 additional passengers/cargo encumbrance |
+| 3 | **Reliable:** 🎲Boost on Mechanics checks to repair it |
+| 4 | **Sluggish:** Speed −1 |
+| 5 | **Reinforced:** Hull Trauma Threshold +2 |
+| 6 | **Responsive:** Handling +1 |
+| 7 | **Well-Kept:** notably valuable/conspicuous — +1 effective Rarity if identified |
+| 8 | **Boneshaker:** Handling −1, but Price/Rarity treated one step lower |
+| 9 | **Loud:** adds 🎲Setback to Stealth checks made while it's nearby/running |
+| 10 | **Distinctive:** easily recognized/described — 🎲Boost to anyone trying to identify or track this specific vehicle later |
+
+## 37. VEHICLE COMPONENT DAMAGE TABLE (d10)
+
+When a vehicle combat check (§12) generates 🔻🔻🔻 or ⚡ against a vehicle, roll to determine what's specifically hit, instead of/alongside generic Hull Trauma:
+
+| Roll | Effect |
+|---|---|
+| 1 | Driver struck — driver takes the vehicle's remaining unabsorbed damage directly |
+| 2 | Passenger struck — as above, targeting a random passenger |
+| 3 | Severe swerve — Hard(💠💠💠) Driving/Piloting check or the vehicle crashes (§12, Crashes) |
+| 4 | Mounted weapon/equipment disabled |
+| 5 | Engine damaged — Handling treated as −2 until repaired |
+| 6 | Steering damaged — Handling treated as −1 until repaired |
+| 7 | Tire/tread damaged — Speed capped at half (round down) until repaired |
+| 8 | Fuel line hit — System Strain +3 immediately, ongoing 1/round until controlled (Mechanics check to stop) |
+| 9 | Cargo/cabin breached — any unsecured cargo or exposed passengers suffer §5I-scale falling/impact risk |
+| 10 | Fuel tank ignites — Intensity-8 fire (treat per §5E fire rules); vehicle likely lost without immediate intervention |
+
+## 38. MENTAL TRAUMA TABLE (d100)
+
+A companion to the Critical Injury table (§9) and Dread Checks (§29), for lasting psychological consequences of the occupation rather than physical injury. Roll when a Dread Check fails severely (🔻🔻🔻/⚡) or when the GM calls for a lasting consequence to a traumatic scene.
+
+| Roll | Trauma | Effect |
+|---|---|---|
+| 01–15 | **Hypervigilance** | 🎲Setback on checks to relax/rest; recover strain at half rate (round down) until addressed |
+| 16–30 | **Intrusive Memory** | Once per session, GM may impose 🎲Setback on a check when a trigger is narratively present |
+| 31–45 | **Avoidance** | +1 difficulty on checks made to revisit a location/situation resembling the traumatic event |
+| 46–60 | **Numbness** | 🎲Setback on all social checks involving genuine emotional expression, until addressed |
+| 61–75 | **Compulsion** | Character develops a coping compulsion (substance, ritual, control-seeking) — GM and player agree on a concrete behavior; resisting it in a relevant scene requires a Discipline check |
+| 76–85 | **Paranoia** | 🎲Setback removed from checks to notice threats (hypervigilant), but 🎲Setback added to Charm/Negotiation checks (visibly on edge) |
+| 86–95 | **Dissociation** | Once per session, GM may declare the character loses a maneuver or acts confused for a moment during high-stress scenes |
+| 96–100 | **Profound Break** | GM and player collaboratively define a significant, campaign-relevant change to the character's outlook or capabilities — treat with care and player buy-in |
+
+**Addressing trauma:** requires sustained downtime (multiple sessions of narrative rest, trusted support, or in-fiction therapy/community care) and is resolved narratively between player and GM — there is no fixed dice-check "cure," consistent with the Manual's wellbeing-conscious treatment of Dread (§29).
+
+## 39. NPC BEHAVIOR GENERATOR (Personality / Emotional State / Motive / Method / Tilt)
+
+Expands NPC Quick-Gen (§20) with deeper personality texture. Roll all five for a fully fleshed antagonist or contact; roll fewer for a quick sketch.
+
+**Personality Type (d10, roll twice if you want a primary + secondary trait):**
+| Roll | Type |
+|---|---|
+| 1 | Survivor — pragmatic, self-preserving |
+| 2 | Visionary — driven by an idea bigger than themselves |
+| 3 | Leader — commands or wants to command others |
+| 4 | Pragmatist — does what works, not what's "right" |
+| 5 | Reactionary — clings to how things were |
+| 6 | Observer — watches more than acts |
+| 7 | Schemer — always working an angle |
+| 8 | Zealot — true believer, in the regime or against it |
+| 9 | Recluse — avoids entanglement |
+| 10 | Paranoid — trusts no one, sees threats everywhere |
+
+**Emotional State (d10):**
+| Roll | State |
+|---|---|
+| 1 | Angry |
+| 2 | Obsessed |
+| 3 | Cautious |
+| 4 | Fearful |
+| 5 | Placatory |
+| 6 | Curious |
+| 7 | Nostalgic |
+| 8 | Excited |
+| 9 | Anxious |
+| 10 | Confused |
+
+**Motive (d4, or use suits conceptually — Reich '62 reflavor):**
+| Roll | Motive |
+|---|---|
+| 1 | Narcissism — self-interest, image, advancement |
+| 2 | Trauma — driven by past wounds |
+| 3 | Community — loyalty to a group, family, or cause |
+| 4 | Ideology — genuine belief (regime or resistance) |
+
+**Method (d4):**
+| Roll | Method |
+|---|---|
+| 1 | Power — coercion, authority, force |
+| 2 | Deceit — lies, manipulation, misdirection |
+| 3 | Appeal — charm, shared belief, solidarity |
+| 4 | Leverage — information, blackmail, dependency |
+
+**Tilt (predisposition toward the PCs):** roll 1d10 — 1–5 unfavorable/obstructive, 6–10 favorable/helpful; degree by how extreme the roll (1 or 10 = extreme, 5 or 6 = mild). Use this to color the NPC's starting Disposition (§20) rather than replace it.
+
+## 40. CONVERSATION GENERATOR
+
+For solo or GM-improvised dialogue scenes needing a quick subject and outcome without pre-scripting.
+
+**Subject (d10):**
+| Roll | Subject |
+|---|---|
+| 1 | Personal background |
+| 2 | Current emotional state |
+| 3 | Belief/ideology |
+| 4 | Technology/logistics relevant to the scene |
+| 5 | The war/occupation itself |
+| 6 | The Stop's/location's history |
+| 7 | A rumor or piece of information |
+| 8 | A request or favor |
+| 9 | A warning |
+| 10 | Something the NPC wants from the PC |
+
+**Outcome:** resolve using the Social Encounter rules (§11) directly — this table only generates *what the conversation is about*; the opposed check and Advantage/Threat spends determine how it goes. For solo play, the NPC Behavior Generator's **Tilt** (§39) can act as a quick modifier: favorable Tilt grants 🎲Boost, unfavorable grants 🎲Setback, on the PC's check.
 
 ---
 

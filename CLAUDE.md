@@ -2,10 +2,11 @@
 
 > Instantiated from `source/BUILD_TEMPLATE_v2.md` (RPG Player-Character App — Autonomous
 > Build Instructions v2). Three sources of record:
-> `source/reich62_manual.md` (1116 lines — core rules),
+> `source/reich62_manual.md` (**1412 lines — core rules, second edition**),
 > `source/reich62_bestiary.md` (303 lines — Bestiary & Adversary Compendium) and
 > `source/genesys_dice_breakdown.md` (the die face distributions the manual omits) and
-> `source/reich62_errata.md` (the table owner's binding errata, confirming all 22 rulings).
+> `source/reich62_errata.md` (the table owner's binding errata, confirming all 22 rulings —
+> **now folded into the manual itself, so it is kept as provenance rather than as a live source**).
 > **Citations use `§x` for the manual, `B§x` for the bestiary and `D§` for the face table**,
 > in this file and in every `data*.js` comment.
 >
@@ -25,7 +26,7 @@ checks, zero console errors. Remaining Phase 2/3 items and Phases 4–6 are unti
 | | |
 |---|---|
 | **Game** | REICH '62 — Genesys narrative-dice system, alt-history 1962 occupied Europe |
-| **Source** | `source/reich62_manual.md` (core rules + setting) · `source/reich62_bestiary.md` (adversary compendium) · `source/genesys_dice_breakdown.md` (die face distributions, D§) |
+| **Source** | `source/reich62_manual.md` (core rules + setting; second edition, Parts I–V) · `source/reich62_bestiary.md` (adversary compendium) · `source/genesys_dice_breakdown.md` (die face distributions, D§) |
 | **Audience** | Players; opt-in GM screen; official solo rules present → solo tab enabled |
 | **Platforms** | Phone / browser / desktop — one installable PWA |
 | **Core job** | Creation wizard + in-play tracker + native narrative-dice engine + Heat engine |
@@ -107,9 +108,10 @@ reinstated.
   and always true regardless of overall outcome.
 - **Crit/fumble:** no natural-face crit. ☀️ and ⚡ are the dramatic swings; Critical Injury
   is a separate combat trigger (§3.10).
-- **Push/re-roll economy:** none general. Re-roll exists only via the `Natural` talent
-  (1/session, 2 chosen skills) and the NPC `Ruthless` ability (1/encounter). Story Points
-  (§3.3) are the die-modification economy.
+- **Push/re-roll economy:** **§8 Push** — 1 Story Point rerolls the whole pool, once per
+  check, priced in the extra Threat the reroll turns up. Beyond that, re-roll exists via the
+  `Natural` talent (1/session, 2 chosen skills) and the NPC `Ruthless` ability (1/encounter).
+  Story Points (§3.3) remain the die-modification economy.
 - **Die faces (R-B1, resolved):** face distributions are **not printed anywhere in the
   manual**, so for Phases 0–4 no simulated roller could be faithful and the app took
   **manual symbol entry** as its primary input. The distributions were then supplied as
@@ -153,6 +155,11 @@ Exact sequence (§3A, confirmed against §11 social usage):
 - **Other movers:** Critical Injury 26–30 "Discouraging Wound" moves 1 point player→GM
   (reversed if the target is an NPC).
 - **Talent spends:** Lucky Strike, Grenadier, Heroic Will, Indomitable each cost 1 SP.
+- **Push (§8, new in the second edition):** spend 1 SP to **reroll the entire pool** after a
+  check, failed or successful. Every uncancelled 🔻 or ⚡ the reroll shows **beyond what the
+  first roll showed** costs one of three things, the player's choice: **1 Heat** (surveilled
+  contexts only), **1 step of gear damage** (§14B Minor), or **1 strain**. ☀️/⚡ on the
+  reroll are read fresh. A check can only be pushed once.
 
 **Strain** is the second spendable: 2 strain buys a 2nd maneuver (§5A), and 15 talents cost
 strain to activate. Tracked as a vital (§3.10), not a pool.
@@ -226,6 +233,11 @@ Rule-legal order (§13):
    **500 credits**, and every surface that shows it says in words that it is a house aid, not a
 printed rule.
 
+6. **Kicker** (§13, second edition) — one sentence naming the event that forced this
+   character's hand. Explicitly not a mechanic; it is the anchor the GM calls back to, and
+   the seed of a Personal Threat (§33) if the journey module is on. All three pregens print
+   one.
+
 Careers (§14): Resistance Runner · SD/Gestapo Agent · Wehrmacht Veteran · Black-Market
 Fixer · Party Bureaucrat · Displaced Survivor · Forger · Field Medic · Smuggler-Pilot ·
 Foreign Intelligence Asset · Collaborator. Each carries a suggested Motivation pair
@@ -240,10 +252,16 @@ advancement screen both enforce this.
 
 Not a statted entity with its own dice, but genuine campaign-level shared state (§17.2,
 §16A, §24):
-- **Cell Heat 0–5** (shared pool) with its own threshold effects.
+- **Heat 0–5** — as of the second edition **one shared track for the whole party** (§17),
+  stored on the Cell. The Personal + Cell split is the printed optional variant (§17.5),
+  behind `heatSplit`.
 - **Safehouse status** (clear / under watch / blown) driven by Cell Heat 3+.
-- **Roster** of member characters and their Personal Heat (feeds the "any member at
-  Personal Heat 3+ raises Cell Heat" rule).
+- **Roster** of member characters. Under the §17.5 variant their Personal Heat feeds the
+  "any member at Personal Heat 3+ raises Cell Heat" rule; with one shared track there is
+  nothing to escalate into, and §17.4 instead asks the GM to name *whose* action caused a
+  rise while the number stays the party's.
+- **Tension (§31, optional module)** — a directional 0–2 rating between each pair of
+  characters, adding a Boost per point to opposed checks between them.
 - No creation wizard beyond name + starting Heat 0 (§21.3). Write access: GM, or any member
   in local/solo mode.
 
@@ -322,10 +340,11 @@ end-of-encounter check in wilderness).
 |---|---|
 | **End Encounter** | strain-recovery check prompt · clear once-per-encounter flags (Second Wind, Berserk, Counteroffer-per-session excluded, Ruthless, Fan The Hammer, Eagle Eyes, Overcharge, Ruinous Repartee, Indomitable, Fear-X first-engagement flags) · clear Auto-fire "out of ammo for the encounter" states · expire round-duration effects |
 | **End Scene** | close the scene record (`reich62:scene` — number, name, start time; app bookkeeping, started from either the Solo or the Combat screen) · clear the watched-place flag (`state.surveilledContext`, §17.1) · clear the situation the scene was rolled in — cover, concealment, silhouette, called shot, two-weapon, audience, range band, target, Adversary rank, nominated clock, talent dice, pending upgrades (§5E, §5J, §5B) · clear the Oracle's last answer and expectation. *(S-9: the earlier bundle listed scene-duration effects, a Heat threshold re-check and per-scene dread flags — none of which this app has state for; thresholds are read live on every check.)* |
-| **End Session** | award XP: **20 base ±5 for length, +5 Motivation bonus** · **Personal Heat −1** if the session was low-risk downtime · Cell Heat decay check · clear once-per-session talents (Know Somebody, Natural, Counteroffer, How Convenient!, Mad Inventor) · Story Points **carry over** (no reset) |
+| **End Session** | award XP: **20 base ±5 for length, +5 Motivation bonus** · **Heat −1** if the session was low-risk downtime (under §17.5 the split's Personal −1 and its Cell decay check) · clear once-per-session talents (Know Somebody, Natural, Counteroffer, How Convenient!, Mad Inventor) · Story Points **carry over** (no reset) |
 | **End Day** | painkiller counter reset · vehicle system-strain recovery |
 | **End Week** | Critical-Injury rest check availability · Medicine per-injury limit reset |
-| **End Adventure** | resolve any PC at Personal Heat 5 → go underground (**Heat resets to 2**) or captured (Oracle/GM) |
+| **End Adventure** | resolve Heat 5 → go underground (**Heat resets to 2**) or captured (Oracle/GM). Under §17.5, per PC |
+| **End Shift** *(§34, optional module)* | a 5–10 hour leg of travel or rest passes; roll once on the Travel Encounter table if the party is on the road |
 
 Each boundary presents a **confirmation summary** listing every delta, and supports
 **one-step undo**.
@@ -510,8 +529,12 @@ does not and is stored as a corrected 10 with an `erratum` note.
   subject (5 bands), skewed favourable/escalating by which side fired.
 - **Meaning tables (§15A):** Action d10 × Subject d10.
 - **Element tables (§15B):** Location d10, Faction d10, Complication d10.
-- **NPC quick-gen (§20)** and the **solo play loop (§23)**, including "at Personal Heat 4–5,
-  the Oracle resolves raid timing instead of GM fiat".
+- **NPC quick-gen (§20)** and the **solo play loop (§23)**, including "at Heat 4–5, the
+  Oracle resolves raid timing instead of GM fiat". §20 step 5 layers the **NPC Behaviour
+  Generator (§39)** onto quick-gen for recurring NPCs.
+- **Fate Question Focus (§18A)** is now **printed in the manual** rather than supplied from
+  outside it, though it is still labelled an optional house aid. Its chaos tiebreaker rolls
+  a d10 against **2× current Heat** — one number now.
 
 ### 3.21 GM tables (power the GM screen reference panel)
 
@@ -607,7 +630,9 @@ later edit cannot drift away from it.
 | **Vehicles** | **17** | §15E |
 | Solo tables | 8 (Action, Subject, Location, Faction, Complication, Event ×2, NPC ×2) | §15A, §15B, §19, §20 |
 | Pregens | 3 (partial — 70 XP unspent) | §16 |
-| Heat threshold rows | 5 × 2 tracks | §17.3 |
+| Heat threshold rows | **5 (one shared track)**, plus 5 × 2 for the §17.5 variant | §17.2, §17.5 |
+| Story Point spends | + **Push** (reroll the pool, 3 ways to pay) | §8 |
+| Creation steps | **6** (career · 70 XP · derived · Motivation · gear · **Kicker**) | §13 |
 | Oracle likelihoods | 3 | §18 |
 | Encounter sizing rows | 6 | §20B |
 | Dread severity rows | 4 | §29 |
@@ -621,6 +646,16 @@ later edit cannot drift away from it.
 | Random encounter table | 1 (d10, 10 rows) | B§7 |
 | **Bestiary-only NPC abilities** | **14** (extend the 7 in §12D) | B§2–B§5 |
 | **Total published stat blocks** | **28** (+ 4 encounter templates) | B§2–B§6 |
+| **— Part V, optional module —** | | |
+| Tension levels | 3 (0–2) | §31 |
+| Personal Threat Countdown steps | 3 | §33 |
+| Journey time units / lengths / stop-countdown rows | 3 / 4 / 10 | §34 |
+| Travel encounter rows | 10 | §35 |
+| Vehicle traits | 10 | §36 |
+| Vehicle component damage rows | 10 | §37 |
+| Mental trauma bands | 8 (d100) | §38 |
+| NPC behaviour tables | 5 (d10, d10, d4, d4, d10) | §39 |
+| Conversation subjects | 10 | §40 |
 
 ---
 
@@ -646,6 +681,7 @@ day one; fantasy-phrase join codes; themed `modal()`/`showToast`/`confirmModal`/
 | `data-monsters.js` | **Bestiary compendium** — 10 minion groups, 12 rivals, 4 nemeses, 2 animals, 4 encounter blocks, random encounter table | **present** |
 | `data-pregens.js` | 3 published pregens | **present** |
 | `data-solo.js` | Oracle, Random Event, Meaning, Element tables | **present** |
+| `data-journey.js` | **Part V, the optional Journey & Tension module** — tension (§31), personal threat countdown (§33), journey framework and stop countdown (§34), travel encounters (§35), vehicle traits (§36), vehicle component damage (§37), mental trauma (§38), NPC behaviour generator (§39), conversation generator (§40) | **present** |
 | ~~`data-<expansion>.js`~~ | **Omitted — no expansion books; the bestiary is committed core content, untoggled** | n/a |
 | `firebase-config.js` | Placeholder config + `FIREBASE_ENABLED` | **present** |
 | `database.rules.json` | RTDB rules (player/GM roles; Cell write rules) | **present** |
@@ -672,7 +708,7 @@ day one; fantasy-phrase join codes; themed `modal()`/`showToast`/`confirmModal`/
 | `sync.js` | Firebase auth, campaigns, join codes, presence, theme | Phase 5 |
 | `wizard.js` | Creation wizard + pregens | career → 4 skills → 70 XP → derived → Motivation → gear |
 | `roller.js` | **Dice engine**: pool build, modification order, symbol entry, cancellation, opposed sequence (§3.2), the attack chain (weapon → range → target → damage), Story Point spends, spend-table application, damage applier, Critical Injury roller, **roll-log writes** | four context-specific spend tables, chosen explicitly |
-| `sheet.js` | Character sheet, in-play tracking, printable summary, the Story Point spend sheet, **persistent resource header** | header = wounds · strain · Story Points (tappable) · **Personal Heat** · encumbrance |
+| `sheet.js` | Character sheet, in-play tracking, printable summary, the Story Point spend sheet, **persistent resource header** | header = wounds · strain · Story Points (tappable) · **Heat** · encumbrance; the Kicker (§13) and the Personal Threat Countdown (§33) |
 | `clocks.js` | **New module:** named progress clocks (H-4) — create, tick from a check's leftover symbols, render the panel used by Combat, Roll and Solo | shares the `tasks` store with the combat tracker |
 | `combat.js` | Combat tracker: **initiative slots (§5A')**, turn/maneuver budget with strain cost, combatant cards, generic progress tracker (§3.13), lifecycle events (§3.12) | slot-filling model, vehicle scale, bestiary drop-in, minion-group WT from per-member value (R-18), Dragnet extended check |
 | `heat.js` | **New module (game-specific):** Heat generation (§17.1), Personal/Cell thresholds and their auto-applied effects, decay, surveilled-context flag | — |
@@ -695,7 +731,9 @@ and bumps `CACHE_VERSION`, in the same change.
 campaigns/{campaignId}
   meta:    { name, joinCode, createdAt, ownerUid }
   members/{uid}: { displayName, characterId, role: "player" | "gm" }
-  cell:    { name, cellHeat: 0-5, safehouseStatus: "clear"|"watched"|"blown" }   // §3.8
+  cell:    { name, cellHeat: 0-5,          // §17 — the shared party track (or the Cell track under §17.5)
+             heatTrail: [ {ts,from,to,delta,reason} ],   // last 12
+             safehouseStatus: "clear"|"watched"|"blown" }   // §3.8
   pools:   { storyPointsPlayer: int, storyPointsGM: int }                        // §3.3
   combat:  { active, round,
              slots: [ { id, owner: "pc"|"npc", order, filledBy: charId|null } ], // §5A'
@@ -723,6 +761,7 @@ campaigns/{campaignId}
 characters/{characterId}
   owner, campaignId
   identity:  { name, career, careerSkills[4], motivation:{desire,fear,strength,flaw},
+               kicker,                                                   // §13 step 6
                knowledgeSpecialisation, appearance, portraitUrl }
   attributes:{ brawn, agility, intellect, cunning, willpower, presence }         // 1-5
   derived:   { woundThreshold, strainThreshold, soak, meleeDefense, rangedDefense,
@@ -735,7 +774,9 @@ characters/{characterId}
                perWeekFlags{}, restLimits{},
                careFlags:{ selfTreatment: bool, noEquipment: bool },   // §5G difficulty
                lastFall: [string] | null,                              // §5I summary
-               heatTrail: [ {ts,from,to,delta,reason} ] }              // §17, last 12
+               heatTrail: [ {ts,from,to,delta,reason} ],               // §17.5 variant only, last 12
+               personalThreat: { name, step: 0-3 },                     // §33, optional module
+               tension: { <characterId>: 0-2 } }                        // §31, directional
   identity:  { …, motivationRevealed:{ desire,fear,strength,flaw } }    // §11 reveal ladder
   skills:    { <skillName>: { rank: 0-5, career: bool } }                        // 26 keys
   talents:   [ { id, tier, ranks, pyramidSlot } ]                                // §12A
@@ -765,6 +806,8 @@ description, every related UI checks the flag, router hides gated tabs.
 | `showNonSettingTalents` | off | Reveals the 12 R-11 talents |
 | `gmDiscretionaryDice` | off | Exposes §5C'' outnumbered/ganging-up dice controls |
 | `advancedAutomation` | off | Auto-apply environmental dice, encumbrance penalties, Heat setbacks without prompting |
+| `heatSplit` | off | **§17.5 optional variant.** Off is the printed default — one shared 0–5 suspicion track for the party. On restores the older Personal + Cell pair, which the book suggests for 4+ PCs acting apart |
+| `journeyModule` | off | **Part V (§31, §33–§40).** Adds tension, the personal threat countdown, journeys and stops, travel encounters, vehicle traits and component damage, mental trauma, and the NPC behaviour and conversation generators. The manual ships it as an optional module, adopted subsystem by subsystem |
 | `mode` | `player` | **Seat model.** Player, GM, Solo or Everything. The bottom nav shows only that seat's five tabs; every other screen stays reachable from the header menu |
 
 ## 10. Data Extraction Ledger (T-numbered) — **all boxes unticked**
@@ -858,7 +901,20 @@ is worked in this position, immediately after `data-npcs.js`.)*
 - [x] **T58** Element tables: Location, Faction, Complication (d10 each) — §15B
 - [x] **T59** Random Event category + subject tables — §19
 - [x] **T60** Solo play loop procedure — §23
-- [x] **T69** **Fate Question Focus (9 rungs, read off the roll's leftover 🔺/🔻)** — H-2 *(house aid, in neither book; paraphrased, labelled, and layered on the §18 Oracle)*
+- [x] **T69** **Fate Question Focus (9 rungs, read off the roll's leftover 🔺/🔻)** — §18A *(printed in the second edition, still labelled an optional house aid; layered on the §18 Oracle)*
+
+### `data-journey.js` — Part V, the optional module (§31, §33–§40)
+*(numbered T70+; the manual ships this as an optional module adopted subsystem by subsystem,
+so every table is gated behind `journeyModule`.)*
+- [x] **T70** Cell Trust/Tension — 3 levels, directional, Boost per point, release recovers 2 strain — §31
+- [x] **T71** Personal Threat Countdown — 3 steps, Setback at step 2 — §33
+- [x] **T72** Journey framework — 3 time units (incl. the **Shift**), 4 lengths, blockers, 10-row stop countdown — §34
+- [x] **T73** Travel Encounter table (d10) — §35
+- [x] **T74** Vehicle traits (d10) — §36
+- [x] **T75** Vehicle component damage (d10) — §37
+- [x] **T76** Mental Trauma (d100, 8 bands) — §38
+- [x] **T77** NPC Behaviour Generator (personality d10, mood d10, motive d4, method d4, tilt d10) — §39
+- [x] **T78** Conversation Generator (subject d10) — §40
 
 ## 11. Build roadmap
 
@@ -1077,6 +1133,7 @@ value carried silently from the previous turn. **S-4 and S-7 were live defects.*
 
 | Date | Change | Why | Verification | Cache |
 |---|---|---|---|---|
+| 2026-08-10 | **Second-edition manual adopted (1119 → 1412 lines).** Read cover to cover and diffed against the first edition; everything below is the delta. **(1) Suspicion is now one shared 0–5 track for the whole party (§17)**, not Personal + Cell. The printed ladder changed with it (3 now folds "tailed" and "safehouse watched" together; 4 adds the informant and the flip/arrest Oracle roll; 5 is the raid). §17.4 keeps the fiction personal — the GM still names *whose* action caused a rise — and **§17.5 keeps the old two-track version as a printed optional variant** behind the new `heatSplit` flag, so nothing was lost. `heat.js` was rebuilt to route on that flag: `applyHeat`, `currentHeat`, `heatThresholds` and `heatEffects` now serve both models, and in shared mode the value lives where the shared thing already lived — on the cell — so **a solo question with no sheet loaded finally moves the track** (the S-7 hole closes for good). Every consumer follows: resource header, sheet vitals and summary, roller, Oracle, dragnet, papers-check, GM cell panel, the session and adventure boundaries. **(2) §8 Push**, new: 1 Story Point rerolls the entire pool once per check, and every uncancelled 🔻/⚡ *beyond what the first roll showed* costs 1 Heat (surveilled only), 1 step of gear damage, or 1 strain — the player's choice, paid one unit at a time from the Outcome panel. **(3) §13 step 6, the Kicker** — one sentence, no mechanics, a new wizard step and a sheet field, with all three pregens' printed Kickers stored. **(4) Errata absorbed:** R-1, R-2, R-4, R-5, R-8, R-9, R-10, R-12, R-14, R-21, R-22, H-1 and H-2 are all printed inline in the new manual, so `source/reich62_errata.md` is kept as provenance rather than as a live source, and the Fate Focus (§18A) and black-market rule (§14A) are now book text that still declares itself a house aid. **(5) Part V, a whole optional module** in new `data-journey.js` (T70–T78, added to the §7 table and the service-worker shell): tension between characters (§31), the personal threat countdown (§33), journeys with stops, blockers and the new **Shift** time unit (§34 — a seventh lifecycle boundary that rolls a travel encounter), travel encounters (§35), vehicle traits (§36), vehicle component damage replacing flat crash trauma (§37), mental trauma feeding the §29 dread check (§38), and the NPC behaviour (§39) and conversation (§40) generators. All of it sits behind `journeyModule`, off until adopted, and all of it reaches the rules library. **Two bugs found and fixed while wiring it:** `el()` set `value` as an *attribute*, which a `<textarea>` ignores, so the Kicker field could never hold anything — it now sets the property on every form control; and `rules-index.js`'s Opponents section tested `/^/`, which matched every citation, so **every entry past Suspicion — the whole of Running the game — was filed under Opponents** and its own section was unreachable. | User supplied a new version of the game system | `npm test`: **769 checks pass, zero console errors**. New pins cover the shared track and the §17.5 variant side by side, the reworked threshold ladder, Push's cost and its three prices, the Kicker on every pregen, the single shared row in the §16A reference, and all nine Part V tables — contiguity, die sizes, the trauma bands covering 1–100 without a gap, and every §31–§40 citation reaching the library under its own section. The browser drives the module on and off (four solo generators appear and vanish, the Shift boundary with it), a push spending a point and pricing the reroll, the threat countdown to step 2, the kicker round-tripping through storage, and the header switching between `Heat 2/5` and `Heat 2·0` as the split flag moves | `reich62-v47` |
 | 2026-08-07 | **A scene now has a beginning, and a rolled prompt shows its result again (S-10, S-11).** *(S-11, a regression I introduced yesterday)* Moving the prompt log into the folded "What has happened" section (§23 reorder) left the six table buttons writing their result **into a collapsed accordion at the bottom of the screen** — measured in the browser as `#solo-output` not visible — so tapping Meaning or Location appeared to do nothing at all. The panel now shows **the prompt you just rolled, in place**, with the rest kept in the history section, which is the pattern the Oracle panel already used for its answer. *(S-10)* End Scene had no opposite number: the boundary closed a scene the app had never opened, so the control read as bookkeeping for nothing. A **scene record** — a number, an optional name, a start time, `reich62:scene` — is app bookkeeping rather than a rule, and it gives the boundary something to close: step 1 gains **Start a scene**, the screen states which scene you are in, the end control reads *"End scene 3, 'Checkpoint on the river road'"*, and the same pair appears on the combat tracker's lifecycle panel so both screens read one record. Ending also toasts, because the outcome box sits at the bottom of a long screen. Scenes travel with a backup export. | User: scenes and encounters are messed up — start scene not there, end scene not working, and the table rolls do not show a result | `npm test`: **700 checks pass, zero console errors**. New checks start a scene, assert the screen names it and the end control names it back, assert a rolled prompt is visible where the button is, and assert a new scene can be started once the last one is closed. The regression was confirmed in the browser before the fix and re-measured after | `reich62-v46` |
 | 2026-08-07 | **End Scene was a no-op; it now owns the scene's own state (S-9).** The boundary set `perSceneFlags = {}` — an object **nothing in the app ever writes** — behind a confirmation dialog, and its three printed effects were all unbacked: no effect in either book carries a scene duration, Heat thresholds are read live on every check so there is nothing to re-check, and the §29 dread check is a difficulty ladder rather than a tracked flag. Surfacing it on the Solo tab (S-6) gave the loop its missing button and shipped a dialog that changed nothing. **Root cause:** the bundle was synthesised from §21–§24 at Phase 0 and never reconciled against the state the app actually keeps. Fixed by giving the boundary the state a scene genuinely owns. **`state.surveilledContext`** — in the §8 schema since day one, normalised, and **never once read or written** — becomes the single scene-scoped fact behind both the Roll screen's "Surveilled context" toggle and the Oracle's watched-place toggle, so the two screens can no longer disagree about where you are; End Scene clears it. The boundary then fires a `scene:end` event, and each screen clears what it owns: the roller drops cover, concealment, silhouette, called shot, two-weapon, audience, range band, target, Adversary rank, the nominated clock, talent dice and the pending upgrades; the Oracle drops its last answer, its expectation and its clock. Logs, suspicion, clocks and characters are untouched, and one-step undo still applies. Also removed: `fireBoundary`'s End Encounter branch compared `conditions[id] === 'encounter'` against values that are booleans, so it could never match — a dead branch since Phase 4. | User: what is the close the scene panel? Like no use | `npm test`: **695 checks pass, zero console errors**, stable over three runs. New checks assert the watched flag is stored on the character rather than on a screen, that the Roll screen reads the same flag the Oracle set, and that ending the scene clears the flag, unchecks both toggles and drops the cover the last scene was rolled against | `reich62-v45` |
 | 2026-08-06 | **Solo gameplay-flow audit: eight seams closed (S-1…S-8).** With the panels now in loop order, the audit drove a whole solo session and asked where the loop stops being continuous. **Two were live defects.** *(S-4)* **What you expected was never cleared after a question**, so every question after the first was silently graded (H-2) against the *previous* question's expectation — the focus reading, the whole point of the field, was being taken from stale input. It now clears on ask. *(S-7)* With no character loaded the surveilled toggle promised "an emphatic no draws attention" and the rule then **silently did nothing**; it now says so in the answer. *(S-1)* §23's own step 3 still told the player to watch for a Triumph or Despair — symbols this pool cannot roll (R-22) — for an event the app already chains; the step reads off the rungs. *(S-2)* Raid timing, the one place the printed loop hands a decision straight to the Oracle, was a paragraph with **no control**: it is now a button that rolls the question, records what it expected, and answers in the Oracle panel. *(S-3)* A chained Random Event lived only inside its answer's row while every hand-rolled prompt went to the prompt log; chained events now land there too, marked with the answer that fired them. *(S-5)* Clocks could only be fed from the Roll screen, but a solo player mostly asks rather than rolls a skill — **the Oracle panel gains the same "does this answer feed a clock?" control**, on the same H-4 tick rules. *(S-6)* The scene boundary lived on the combat tracker, which a solo player never opens, so §23 step 7 had nowhere to happen: **"6 · Close the scene"** fires the same bundle with the same preview and the same one-step undo. *(S-8)* The screen never stated where suspicion stood, though the raid rule keys off it — **"5 · Where suspicion stands"** reads both tracks and the safehouse. | User: is there a seamless flow of gameplay for solo? Audit, fix everything | `npm test`: 690 checks pass, **zero console errors**. New checks drive the raid button end to end (appears at 4, answers, logs its expectation, disappears below 4), the scene boundary firing and undoing from the solo screen, an Oracle answer moving a clock from 2/4 to 3/4, the expectation clearing between questions, a chained event reaching the prompt log, the suspicion readout, and the printed loop naming no symbol this pool cannot roll | `reich62-v44` |

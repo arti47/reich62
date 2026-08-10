@@ -119,7 +119,8 @@ export function setSceneWatched(on) {
 export function blankCell(over = {}) {
   return {
     name: '',
-    cellHeat: 0,                     // §17.2
+    cellHeat: 0,                     // §17 — the shared track; the party's suspicion
+    heatTrail: [],                   // why it moved, last 12
     safehouseStatus: 'clear',        // clear | watched | blown
     roster: [],
     pools: {                         // §8, R-4
