@@ -12,9 +12,9 @@ import {
   talent, buildPool, canBuyTalent, visibleTalents, xpCost, skill as skillById,
   medicineDifficulty, fallDamage, career as careerById
 } from './rules.js';
-import { ITEM_DAMAGE, ATTACHMENTS, DIFFICULTIES, GEAR, WEAPONS, ARMOUR, RARITY, BLACK_MARKET, CREATION_RULES } from '../data.js';
-import { PERSONAL_THREAT } from '../data-journey.js';
-import { blackMarketPurchase, rollKickerSeed, kickerSeedLine } from './rules.js';
+import { ITEM_DAMAGE, ATTACHMENTS, DIFFICULTIES, GEAR, WEAPONS, ARMOUR, RARITY, BLACK_MARKET, CREATION_RULES, DREAD_CHECKS } from '../data.js';
+import { PERSONAL_THREAT, MENTAL_TRAUMA } from '../data-journey.js';
+import { blackMarketPurchase, rollKickerSeed, kickerSeedLine, dreadCheck, rollMentalTrauma } from './rules.js';
 import { hardPoints } from './derived.js';
 import { Settings } from './settings.js';
 import { rollCriticalInjury, spendStoryPoint, applyTalentToCheck, state as rollerState } from './roller.js';
@@ -598,7 +598,82 @@ function pane_talents(mount, character, derived, rerender) {
 
 }
 
+/** §29 — the dread check, and §38's Mental Trauma table hanging off a severe failure.
+ *  The check itself is an ordinary Discipline check, so the control sets it up on the Roll
+ *  screen rather than rolling a second kind of dice here. */
+const difficultyName = (id) => (DIFFICULTIES.find((d) => d.id === id) || { name: id }).name;
+
+function dreadPanel(mount, character, rerender) {
+  const card = panel('Dread', PANELS.sheetDread, []);
+  const pick = el('select', { id: 'dread-severity', 'aria-label': 'How bad is it?' });
+  DREAD_CHECKS.ladder.forEach((rung) => pick.append(el('option', {
+    value: rung.severity, text: `${rung.severity} — ${difficultyName(rung.difficulty)}: ${rung.example}`
+  })));
+  card.append(el('label', { class: 'small', for: 'dread-severity', text: 'How bad is what they have just seen?' }), pick);
+  card.append(el('button', {
+    type: 'button', class: 'secondary', id: 'dread-setup', text: 'Set the check up on the Roll screen',
+    onclick: () => {
+      const rung = dreadCheck(pick.value);
+      rollerState.skillId = DREAD_CHECKS.skill;
+      rollerState.difficultyId = rung.difficulty;
+      rollerState.opposed = false;
+      rollerState.context = 'generic';
+      showToast(`${rung.severity}: ${difficultyName(rung.difficulty)} Discipline check.`);
+      location.hash = '#/roll';
+    }
+  }));
+  card.append(el('p', { class: 'small muted', text: plain(DREAD_CHECKS.limit) }));
+  DREAD_CHECKS.failure.forEach((f) => card.append(el('p', { class: 'small muted', text: `${titleCase(f.tier)} failure: ${f.effect}` })));
+
+  // A severe failure — three Threat or a Despair — is the printed door into §38.
+  const severe = DREAD_CHECKS.failure.find((f) => f.rollsMentalTrauma);
+  if (Settings.journeyModule()) {
+    card.append(el('button', {
+      type: 'button', class: 'secondary', id: 'dread-trauma', text: `Severe failure — roll the trauma table`,
+      onclick: () => {
+        const trauma = rollMentalTrauma();
+        character.state.mentalTrauma = [
+          { ...trauma, ts: Date.now(), addressed: false },
+          ...(character.state.mentalTrauma || [])
+        ];
+        saveCharacter(character);
+        showToast(`${trauma.name} (${trauma.roll}).`);
+        rerender();
+      }
+    }));
+    card.append(el('p', { class: 'small muted', text: `Rolled on ${severe.trigger}.` }));
+  } else {
+    card.append(el('p', { class: 'small muted', text: 'Turn the journey module on in Settings to roll a lasting scar on the book\'s own table instead of agreeing one.' }));
+  }
+
+  const held = character.state.mentalTrauma || [];
+  if (held.length) {
+    card.append(el('h3', { text: 'Lasting scars' }));
+    held.forEach((t, i) => {
+      card.append(el('div', { class: `result${t.addressed ? ' muted' : ''}` }, [
+        el('div', { class: 'result-head' }, [
+          el('span', { class: 'result-title', text: t.name }),
+          el('span', { class: 'cite', text: t.addressed ? 'addressed' : `rolled ${t.roll}` })
+        ]),
+        el('div', { class: 'result-body', text: t.effect }),
+        el('button', {
+          type: 'button', class: 'secondary', text: t.addressed ? 'Still with them' : 'Addressed',
+          'aria-label': `${t.addressed ? 'Reopen' : 'Mark addressed'}: ${t.name}`,
+          onclick: () => {
+            character.state.mentalTrauma[i].addressed = !t.addressed;
+            saveCharacter(character);
+            rerender();
+          }
+        })
+      ]));
+    });
+    card.append(el('p', { class: 'small muted', text: plain(MENTAL_TRAUMA.addressing) }));
+  }
+  mount.append(card);
+}
+
 function pane_care(mount, character, derived, rerender) {
+  dreadPanel(mount, character, rerender);
   // --- rest and recovery, with the once-per-X limits enforced (§5G) ---
   const recoveryCard = panel('Healing', PANELS.sheetRecovery, []);
   const successInput = el('input', { type: 'number', id: 'recovery-successes', min: '0', value: '0', 'aria-label': 'Uncancelled Success' });
@@ -836,6 +911,12 @@ function pane_summary(mount, character, derived, rerender) {
   card.append(el('p', { class: 'small', text: items.length ? items.map((i) => i.name || i.id).join(', ') : 'Nothing.' }));
   const money = character.inventory.money;
   card.append(line('Money', `${money.amount || 0} ${Settings.currencyLabel()} · ${money.rationCards || 0} ration cards · ${money.barterGoods || 0} in barter goods`));
+
+  const scars = (character.state.mentalTrauma || []).filter((t) => !t.addressed);
+  if (scars.length) {
+    card.append(el('h3', { text: 'Lasting scars' }));
+    card.append(el('p', { class: 'small', text: scars.map((t) => t.name).join(', ') }));
+  }
 
   const untreated = (character.state.criticalInjuries || []).filter((c) => !c.healed);
   card.append(el('h3', { text: 'Lasting injuries' }));

@@ -10,6 +10,8 @@ import { BLACK_MARKET } from '../data.js';
 import { ADVERSARY_ABILITIES, ADVERSARY_TIERS } from '../data-npcs.js';
 import { BESTIARY, ENCOUNTER_BLOCKS, RANDOM_ENCOUNTERS } from '../data-monsters.js';
 import { MEANING, ELEMENTS } from '../data-solo.js';
+import { DREAD_CHECKS } from '../data.js';
+import { MENTAL_TRAUMA } from '../data-journey.js';
 import { rollDie } from './core.js';
 
 const byId = (list) => (id) => list.find((entry) => entry.id === id) || null;
@@ -307,4 +309,18 @@ export function rollKickerSeed() {
 /** The seed as one line to put in front of the player. */
 export function kickerSeedLine(seed) {
   return `${seed.action} — ${seed.subject.toLowerCase()}, at ${seed.location.toLowerCase()}.`;
+}
+
+/** §29 — the dread check's difficulty for a given severity, and what a failure costs. */
+export function dreadCheck(severityId) {
+  const rung = DREAD_CHECKS.ladder.find((d) => d.severity.toLowerCase() === String(severityId).toLowerCase());
+  if (!rung) return null;
+  return { ...rung, skill: DREAD_CHECKS.skill, limit: DREAD_CHECKS.limit, failure: DREAD_CHECKS.failure };
+}
+
+/** §38 — a lasting psychological consequence, rolled on the d100 band table. */
+export function rollMentalTrauma(roll = null) {
+  const n = roll || Math.floor(Math.random() * 100) + 1;
+  const row = MENTAL_TRAUMA.table.find((r) => n >= r.min && n <= r.max);
+  return { roll: n, id: row.id, name: row.name, effect: row.effect };
 }

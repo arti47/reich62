@@ -12,6 +12,7 @@ import { activeCharacter, getCell, sceneWatched, setSceneWatched, getScene, star
 import { applyHeat, heatIsSplit, currentHeat, heatWording } from './heat.js';
 import { rollPool, diceToRoll, SYMBOL_HELP } from './roller.js';
 import { renderClocks, listClocks, applyCheckToClock } from './clocks.js';
+import { renderJourney } from './journey.js';
 import { previewBoundary, fireBoundary, undoLastBoundary, sceneLabel } from './combat.js';
 import { HEAT } from '../data.js';
 import { NPC_BEHAVIOR, CONVERSATION, TRAVEL_ENCOUNTERS, JOURNEY } from '../data-journey.js';
@@ -512,6 +513,7 @@ export function renderSolo(mount) {
 
   // --- track what is closing in (§23 step 6) ---
   renderClocks(mount, { onChange: rerender, title: '4 · Track what is closing in' });
+  if (Settings.journeyModule()) renderJourney(mount, { onChange: rerender, title: 'The road' });
 
   // Suspicion is the loop's own track, and the raid rule keys off it, so the screen states
   // where it stands rather than making you go and look (§23 step 6).

@@ -9,6 +9,7 @@ import {
   setActiveCharacter, deleteCharacter
 } from './store.js';
 import { buildIndex, search, SECTIONS } from './rules-index.js';
+import { SAFETY_TOOLS } from '../data.js';
 import { BASE_WOUND_THRESHOLD, BASE_STRAIN_THRESHOLD, CREATION_RULES, DIE_FACES } from '../data.js';
 
 export function renderHome(mount) {
@@ -205,24 +206,29 @@ export function renderRules(mount, params = {}) {
   draw(initialQuery);
 }
 
-/** Safety tools, paraphrased from §20A. One screen, linked from Settings. */
+/** Safety tools, paraphrased from §20A. One screen, linked from Settings.
+ *  The four named structures come from the data file rather than being written here, so the
+ *  screen cannot drift from what the section says. */
 export function renderSafety(mount) {
   clear(mount);
-  mount.append(el('div', { class: 'card' }, [
+  const card = el('div', { class: 'card' }, [
     el('h2', { text: 'Session zero and safety tools' }),
     el('p', { class: 'small muted', text: 'A summary of the rulebook\'s own guidance, not setting or adventure content.' }),
-    el('h3', { text: 'Before the first session' }),
-    el('ul', { class: 'small' }, [
-      el('li', { text: 'Agree as a group on content boundaries. This setting has a real-world atrocity backdrop, so decide explicitly how far depictions of violence go.' }),
-      el('li', { text: 'Give everyone a private way to flag a topic as off-limits or as "warn me first".' }),
-      el('li', { text: 'Name the real-world-sensitive themes — genocide, persecution, collaboration — the group wants softened, spotlighted, or left out entirely.' }),
-      el('li', { text: 'Settle table logistics: breaks, food, devices.' }),
-      el('li', { text: 'Revisit the conversation whenever the campaign\'s tone shifts.' })
-    ]),
-    el('h3', { text: 'Rule zero' }),
-    el('p', { class: 'small', text: 'The GM may override, skip or reinterpret any rule — including everything this app automates — when it serves the table better. Use it sparingly and say so out loud rather than reinterpreting silently, so trust in the system holds.' }),
-    el('p', { class: 'small muted', text: 'Revisit this conversation whenever the campaign\'s tone shifts.' })
-  ]));
+    el('h3', { text: SAFETY_TOOLS.sessionZero.title }),
+    el('ul', { class: 'small' }, SAFETY_TOOLS.sessionZero.points.map((t) => el('li', { text: t })))
+  ]);
+  card.append(el('h3', { text: 'The four structures' }));
+  SAFETY_TOOLS.structures.forEach((tool) => {
+    card.append(el('div', { class: 'result' }, [
+      el('div', { class: 'result-head' }, [el('span', { class: 'result-title', text: tool.name })]),
+      el('div', { class: 'result-body', text: tool.summary }),
+      el('p', { class: 'small muted', text: tool.note })
+    ]));
+  });
+  card.append(el('h3', { text: SAFETY_TOOLS.ruleZero.title }));
+  card.append(el('p', { class: 'small', text: SAFETY_TOOLS.ruleZero.summary }));
+  card.append(el('p', { class: 'small muted', text: SAFETY_TOOLS.ruleZero.note }));
+  mount.append(card);
 }
 
 export function renderSettings(mount) {

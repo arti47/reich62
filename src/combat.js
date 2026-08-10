@@ -22,7 +22,8 @@ import {
 } from './store.js';
 import { applyCellHeat, applyHeat, safehouseFor, heatIsSplit, currentHeat, heatWording } from './heat.js';
 import { renderClocks } from './clocks.js';
-import { VEHICLE_COMPONENT_DAMAGE, JOURNEY, TRAVEL_ENCOUNTERS, TENSION } from '../data-journey.js';
+import { renderJourney } from './journey.js';
+import { VEHICLE_COMPONENT_DAMAGE, VEHICLE_TRAITS, JOURNEY, TRAVEL_ENCOUNTERS, TENSION } from '../data-journey.js';
 import { Settings } from './settings.js';
 
 /** The conditions a GM realistically holds an NPC in. Heat and encumbrance are the
@@ -401,10 +402,53 @@ export function addVehicle(vehicleId, { pilotCombatantId = null } = {}) {
     defense: source.defense, armour: source.armour,
     hullTrauma: 0, hullThreshold: source.hull,
     systemStrain: 0, systemStrainThreshold: source.systemStrain,
-    pilotCombatantId, disabled: false
+    pilotCombatantId, disabled: false,
+    traits: []   // §36, optional module
   };
   saveCombat(combat);
   return { ok: true, vehicle: combat.vehicles[id] };
+}
+
+/** §36 — give a vehicle a trait, rolled or chosen, and apply what it actually changes.
+ *  The printed traits move speed, handling, the hull threshold and effective rarity; the
+ *  rest are narrative and are recorded so the card can state them. */
+export function addVehicleTrait(vehicleId, traitId = null) {
+  const combat = getCombat();
+  const v = combat.vehicles[vehicleId];
+  if (!v) return { ok: false, reason: 'Unknown vehicle.' };
+  v.traits = v.traits || [];
+  const roll = traitId ? null : rollDie(10);
+  const trait = traitId
+    ? VEHICLE_TRAITS.table.find((t) => t.id === traitId)
+    : VEHICLE_TRAITS.table.find((t) => t.roll === roll);
+  if (!trait) return { ok: false, reason: 'Unknown trait.' };
+  if (v.traits.some((t) => t.id === trait.id)) return { ok: false, reason: `${v.name} already has ${trait.name}.` };
+
+  const applied = trait.apply || {};
+  if (applied.speed) v.maxSpeed = clamp(v.maxSpeed + applied.speed, 0, 10);
+  if (applied.handling) v.handling += applied.handling;
+  if (applied.hullThreshold) v.hullThreshold += applied.hullThreshold;
+  if (applied.rarity) v.rarityShift = (v.rarityShift || 0) + applied.rarity;
+  v.traits.push({ id: trait.id, name: trait.name, effect: trait.effect, roll: trait.roll });
+  saveCombat(combat);
+  return { ok: true, trait, vehicle: v, note: `${v.name}: ${trait.name} — ${trait.effect}` };
+}
+
+export function removeVehicleTrait(vehicleId, traitId) {
+  const combat = getCombat();
+  const v = combat.vehicles[vehicleId];
+  if (!v) return { ok: false, reason: 'Unknown vehicle.' };
+  const held = (v.traits || []).find((t) => t.id === traitId);
+  if (!held) return { ok: false, reason: 'That trait is not on this vehicle.' };
+  const source = VEHICLE_TRAITS.table.find((t) => t.id === traitId);
+  const applied = (source && source.apply) || {};
+  if (applied.speed) v.maxSpeed = clamp(v.maxSpeed - applied.speed, 0, 10);
+  if (applied.handling) v.handling -= applied.handling;
+  if (applied.hullThreshold) v.hullThreshold -= applied.hullThreshold;
+  if (applied.rarity) v.rarityShift = (v.rarityShift || 0) - applied.rarity;
+  v.traits = v.traits.filter((t) => t.id !== traitId);
+  saveCombat(combat);
+  return { ok: true, vehicle: v };
 }
 
 export function changeSpeed(vehicleId, delta) {
@@ -743,7 +787,10 @@ export function renderCombat(mount) {
   sectionRoster(mount, combat, rerender);
   sectionVehicles(mount, combat, rerender);
   sectionTasks(mount, rerender);
-  if (Settings.journeyModule()) sectionTension(mount, rerender);
+  if (Settings.journeyModule()) {
+    renderJourney(mount, { onChange: rerender });
+    sectionTension(mount, rerender);
+  }
   sectionLifecycle(mount, rerender);
 }
 
@@ -1048,6 +1095,7 @@ function sectionVehicles(mount, combat, rerender) {
         ? el('button', { type: 'button', class: 'secondary', text: 'What was hit?', 'aria-label': `Roll component damage for ${v.name}`,
             onclick: () => { const r = rollComponentDamage(v.id); showToast(r.ok ? r.note : r.reason); rerender(); } })
         : null,
+      Settings.journeyModule() ? vehicleTraitRow(v, rerender) : null,
       el('button', {
         type: 'button', class: 'secondary danger', text: 'Remove', 'aria-label': `Remove ${v.name}`,
         onclick: async () => {
@@ -1090,6 +1138,35 @@ function vehicleDriverRow(v, combat, rerender) {
 function sectionTasks(mount, rerender) {
   const tasks = listTasks();
   renderClocks(mount, { onChange: rerender });
+}
+
+/** §36 — the traits a vehicle carries, and the controls to give it one. */
+function vehicleTraitRow(v, rerender) {
+  const wrap = el('div', {});
+  (v.traits || []).forEach((t) => {
+    wrap.append(el('p', { class: 'small' }, [
+      el('strong', { text: `${t.name}: ` }), t.effect, ' ',
+      el('button', {
+        type: 'button', class: 'secondary', text: 'Remove', 'aria-label': `Remove ${t.name} from ${v.name}`,
+        onclick: () => { const r = removeVehicleTrait(v.id, t.id); if (!r.ok) showToast(r.reason); rerender(); }
+      })
+    ]));
+  });
+  const pick = el('select', { 'aria-label': `Give ${v.name} a trait` });
+  pick.append(el('option', { value: '', text: 'Choose a trait…' }));
+  VEHICLE_TRAITS.table.forEach((t) => pick.append(el('option', { value: t.id, text: `${t.name} — ${t.effect}` })));
+  pick.addEventListener('change', (e) => {
+    if (!e.target.value) return;
+    const r = addVehicleTrait(v.id, e.target.value);
+    showToast(r.ok ? r.note : r.reason);
+    rerender();
+  });
+  wrap.append(pick);
+  wrap.append(el('button', {
+    type: 'button', class: 'secondary', text: 'Roll a trait', 'aria-label': `Roll a trait for ${v.name}`,
+    onclick: () => { const r = addVehicleTrait(v.id); showToast(r.ok ? r.note : r.reason); rerender(); }
+  }));
+  return wrap;
 }
 
 // --- §31, tension inside the party (optional module) ---

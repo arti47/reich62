@@ -41,7 +41,9 @@ export function blankCharacter(over = {}) {
       // §33 — the optional per-character antagonist thread, 0 (unnamed) to 3.
       personalThreat: { name: '', step: 0 },
       // §31 — tension toward other characters, by character id, 0–2 and directional.
-      tension: {}
+      tension: {},
+      // §38 — lasting psychological consequences, the companion to the Critical Injury list.
+      mentalTrauma: []
     },
     xp: { total: 70, available: 70 },
     advancementLog: [],
@@ -63,6 +65,7 @@ export function normalise(character) {
   // Part V additions back-fill on characters saved before the journey module existed.
   out.state.personalThreat = { ...base.state.personalThreat, ...((character.state || {}).personalThreat || {}) };
   out.state.tension = { ...((character.state || {}).tension || {}) };
+  out.state.mentalTrauma = [...((character.state || {}).mentalTrauma || [])];
   out.inventory = { ...base.inventory, ...(character.inventory || {}) };
   out.inventory.money = { ...base.inventory.money, ...((character.inventory || {}).money || {}) };
   out.xp = { ...base.xp, ...(character.xp || {}) };

@@ -893,6 +893,90 @@ async function main() {
     check('and it is kept on the character',
       /forged order/.test(await page.inputValue('#kicker-text')), await page.inputValue('#kicker-text'));
 
+    // §34 — the journey tracker: a route with stops, blockers and the road between them.
+    await go('#/combat');
+    await page.waitForSelector('#journey-start-btn');
+    await page.fill('#journey-start', 'Lyon');
+    await page.fill('#journey-destination', 'The Swiss border');
+    await page.selectOption('#journey-length', 'short');
+    await page.locator('#journey-start-btn').click();
+    await page.waitForTimeout(200);
+    check('plotting a route generates stops from the book\'s own element tables',
+      /Stop 1 of 2/.test(await page.locator('#journey-where').innerText())
+      && /Blocker:/.test(await page.locator('#journey-here').innerText()),
+      await page.locator('#journey-where').innerText());
+    await page.locator('#journey-linger').click();
+    await page.waitForTimeout(180);
+    check('lingering at a stop rolls its own pressure',
+      /Pressure:/.test(await page.locator('#journey-here').innerText()),
+      (await page.locator('#journey-here').innerText()).replace(/\n/g, ' | '));
+    await page.locator('#journey-pass').click();
+    await page.waitForTimeout(200);
+    check('passing a stop moves the party on and rolls the road',
+      /Stop 2 of 2/.test(await page.locator('#journey-where').innerText())
+      && (await page.evaluate(() => {
+        try { return (JSON.parse(localStorage.getItem('reich62:journey') || '{}').travelLog || []).length === 1; }
+        catch { return false; }
+      })),
+      await page.locator('#journey-where').innerText());
+    await page.locator('#journey-pass').click();
+    await page.waitForTimeout(200);
+    check('and the last stop arrives', /Arrived/.test(await page.locator('#journey-where').innerText()),
+      await page.locator('#journey-where').innerText());
+    await page.locator('#journey-end').click();
+    await page.waitForSelector('.modal-backdrop');
+    await page.getByRole('button', { name: 'End it' }).click();
+    await page.waitForTimeout(180);
+    check('ending the journey clears the route', (await page.locator('#journey-start-btn').count()) === 1);
+
+    // §36 — a trait is assignable to a vehicle and actually changes it.
+    await page.evaluate(() => document.querySelectorAll('#screen details').forEach((d) => { d.open = true; }));
+    await page.waitForTimeout(120);
+    await page.waitForSelector('#vehicle-pick');
+    await page.selectOption('#vehicle-pick', { index: 1 });
+    await page.getByRole('button', { name: 'Add vehicle' }).click();
+    await page.waitForTimeout(200);
+    const vehicleCard = () => page.locator('.result', { hasText: 'handling' }).first();
+    const beforeTrait = await vehicleCard().innerText();
+    await vehicleCard().getByRole('combobox', { name: /Give .* a trait/ }).selectOption('fast');
+    await page.waitForTimeout(200);
+    const afterTrait = await vehicleCard().innerText();
+    check('a trait is recorded on the vehicle', /Fast/.test(afterTrait), afterTrait.replace(/\n/g, ' | '));
+    check('and Speed +1 actually raises its top speed',
+      (beforeTrait.match(/Speed \d+\/(\d+)/) || [])[1] !== (afterTrait.match(/Speed \d+\/(\d+)/) || [])[1],
+      `${beforeTrait.match(/Speed \d+\/\d+/)} → ${afterTrait.match(/Speed \d+\/\d+/)}`);
+    await vehicleCard().getByRole('button', { name: /^Remove Fast/ }).click();
+    await page.waitForTimeout(200);
+    check('removing it puts the top speed back',
+      (await vehicleCard().innerText()).match(/Speed \d+\/(\d+)/)[1] === (beforeTrait.match(/Speed \d+\/(\d+)/) || [])[1]);
+
+    // §29 → §38 — a dread check, and the scar a severe failure leaves.
+    await go('#/sheet');
+    await subtab('Recovery');
+    await page.waitForSelector('#dread-severity');
+    check('the dread check offers all four severities',
+      (await page.locator('#dread-severity option').count()) === 4);
+    await page.selectOption('#dread-severity', 'Deeply Disturbed');
+    await page.locator('#dread-setup').click();
+    await page.waitForTimeout(200);
+    check('setting it up lands on the Roll screen as a Hard Discipline check',
+      new URL(page.url()).hash === '#/roll'
+      && (await page.inputValue('#roller-skill')) === 'discipline'
+      && (await page.inputValue('#roller-difficulty')) === 'hard');
+    await go('#/sheet');
+    await subtab('Recovery');
+    await page.locator('#dread-trauma').click();
+    await page.waitForTimeout(200);
+    const traumaText = await page.locator('#screen').innerText();
+    check('a severe failure rolls a lasting scar and keeps it',
+      /Lasting scars/.test(traumaText), traumaText.replace(/\n/g, ' | ').slice(0, 160));
+    check('and the scar can be marked addressed',
+      (await page.getByRole('button', { name: /^Mark addressed/ }).count()) >= 1);
+    await page.getByRole('button', { name: /^Mark addressed/ }).first().click();
+    await page.waitForTimeout(150);
+    check('an addressed scar reads back as addressed',
+      /addressed/.test(await page.locator('#screen').innerText()));
+
     // §34 — the Shift boundary only exists inside the module.
     await go('#/combat');
     await page.waitForTimeout(120);
@@ -1834,6 +1918,18 @@ async function main() {
       await go('#/settings');
       await page.locator('#flag-heatSplit').uncheck();
       await page.waitForTimeout(80);
+    }
+
+    // §20A, second edition — the four named safety structures reach the screen.
+    await go('#/safety');
+    await page.waitForTimeout(200);
+    {
+      const safety = await page.locator('#screen').innerText();
+      check('the safety screen names all four structures',
+        /Lines/.test(safety) && /Veils/.test(safety) && /safety signal/i.test(safety) && /debrief/i.test(safety),
+        safety.replace(/\n/g, ' | ').slice(0, 200));
+      check('and still carries session zero and rule zero',
+        /Before the first session/i.test(safety) && /Rule zero/i.test(safety));
     }
 
     check('zero console errors', consoleErrors.length === 0, consoleErrors.join(' | '));

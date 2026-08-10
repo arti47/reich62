@@ -1372,10 +1372,44 @@ export const DREAD_CHECKS = {
   failure: [
     { tier: 'simple', effect: 'Disoriented until the end of the encounter.', condition: 'disoriented' },
     { tier: 'moderate', effect: 'Suffer strain equal to the number of Difficulty dice in the check.' },
-    { tier: 'severe', effect: 'A lasting narrative scar the player and GM agree to track — a recurring nightmare, or a standing Setback in specific future scenes.' }
+    // §29, second edition: a severe failure rolls on the Mental Trauma table (§38) rather
+    // than being freeformed, when the optional Part V module is in use.
+    { tier: 'severe', effect: 'A lasting scar: roll on the Mental Trauma table if the journey module is in use, or agree one with the GM if not.', rollsMentalTrauma: true, trigger: 'three uncancelled Threat, or a Despair' }
   ],
   success: 'No penalty; an uncancelled Triumph instead grants one Boost on the character\'s very next check.',
   usage: 'An optional lever for grim beats, not a tax on every dark scene.'
+};
+
+// T79 — Session Zero, safety structure and Rule Zero — §20A.
+// The second edition names the four safety structures explicitly, where the first only
+// described the conversation. Paraphrased, never copied.
+export const SAFETY_TOOLS = {
+  cite: '§20A',
+  sessionZero: {
+    title: 'Before the first session',
+    points: [
+      'Agree as a group what the game will and will not depict. This setting has a real-world atrocity behind it, so decide explicitly how far depictions of the regime\'s violence go.',
+      'Name the real-world-sensitive themes — genocide, persecution, collaboration — the group wants softened, spotlighted, or left out entirely.',
+      'Settle table logistics: breaks, food, devices.',
+      'Revisit the conversation whenever the campaign\'s tone shifts.'
+    ]
+  },
+  // The four named structures, printed as a list in the second edition.
+  structures: [
+    { id: 'lines', name: 'Lines', summary: 'Topics that do not appear in the game at all, no exceptions.',
+      note: 'State them plainly in session zero. Nobody has to justify one.' },
+    { id: 'veils', name: 'Veils', summary: 'Topics that can happen but are not depicted in detail — fade to black and move on.',
+      note: 'For content that fits the setting without the table wanting it played out scene by scene.' },
+    { id: 'signal', name: 'A safety signal', summary: 'An agreed word, gesture or card any player can use to pause, skip or soften a scene in the moment.',
+      note: 'No explanation is owed, and it is honoured immediately — questions wait until after play.' },
+    { id: 'debrief', name: 'A debrief', summary: 'A few minutes out of character after any session that touched heavy material.',
+      note: 'Check how people are; add a line or a veil for future sessions if anything needs one in hindsight.' }
+  ],
+  ruleZero: {
+    title: 'Rule zero',
+    summary: 'The GM may override, skip or reinterpret any rule — including everything this app automates — when it serves the story or the table better than a strict reading.',
+    note: 'Use it sparingly and out loud: say "I am using rule zero here" rather than reinterpreting silently, so trust in the system holds.'
+  }
 };
 
 // T50 — Rules-library quick reference — §30, and skill usage examples — §26

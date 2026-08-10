@@ -191,6 +191,7 @@ export function buildIndex() {
   J.JOURNEY.timeUnits.forEach((u) => out.push(entry(`Time unit: ${u.name}`, `${u.span}. ${u.note}`, '§34')));
   J.JOURNEY.lengths.forEach((l) => out.push(entry(`Journey length: ${l.name}`, `${l.stops} stops.`, '§34')));
   out.push(entry('Blockers', `${J.JOURNEY.blocker.summary} ${J.JOURNEY.blocker.generate}`, '§34'));
+  out.push(entry('Setting up a journey', J.JOURNEY.setup.join(' '), '§34'));
   J.JOURNEY.stopCountdown.table.forEach((r) => out.push(entry(`Stop countdown ${r.roll}`, r.entry, '§34')));
   J.TRAVEL_ENCOUNTERS.table.forEach((r) => out.push(entry(`Travel encounter ${r.roll}`, r.entry, '§35')));
   J.VEHICLE_TRAITS.table.forEach((r) => out.push(entry(`Vehicle trait: ${r.name}`, r.effect, '§36')));
@@ -207,6 +208,10 @@ export function buildIndex() {
   D.LIFECYCLE.boundaries.forEach((b) => out.push(entry(`Lifecycle: ${b.name}`, b.effects.join(' '), '§21–§24')));
   out.push(entry('XP awards', `${D.XP_AWARDS.standardPerSession} XP per session, plus ${D.XP_AWARDS.motivationBonus} for Motivation play. ${D.XP_AWARDS.note}`, '§27'));
   D.DREAD_CHECKS.ladder.forEach((d) => out.push(entry(`Dread check: ${d.severity}`, `${d.difficulty} Discipline check. ${d.example}`, '§29')));
+  D.DREAD_CHECKS.failure.forEach((f) => out.push(entry(`Dread check failure: ${f.tier}`, f.effect, '§29')));
+  D.SAFETY_TOOLS.structures.forEach((t) => out.push(entry(t.name, `${t.summary} ${t.note}`, '§20A')));
+  out.push(entry('Session zero', D.SAFETY_TOOLS.sessionZero.points.join(' '), '§20A'));
+  out.push(entry(D.SAFETY_TOOLS.ruleZero.title, `${D.SAFETY_TOOLS.ruleZero.summary} ${D.SAFETY_TOOLS.ruleZero.note}`, '§20A'));
   D.SKILL_EXAMPLES.forEach((s) => out.push(entry(`Using ${titleCase(s.skill)}`, s.example, '§26')));
   D.QUICK_REFERENCE.sections.forEach((s) => out.push(entry(`Quick reference: ${s.title}`, s.body, '§30')));
   D.CONDITIONS.forEach((c) => out.push(entry(c.name, c.effect, c.cite || '§3.9', c.inferred ? { note: 'The books use the word without defining it; this is the reading the app uses.' } : {})));

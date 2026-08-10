@@ -453,6 +453,30 @@ export async function dataChecks({ check, equal }) {
   equal('a lone Cell Heat reference is relabelled too',
     H.heatWording('Cell Heat is 4 or more'), 'suspicion is 4 or more');
 
+  // --- §20A safety tools, second edition: four named structures ---
+  equal('the safety structures are the four the book names', D.SAFETY_TOOLS.structures.length, 4);
+  equal('and they are lines, veils, a signal and a debrief',
+    D.SAFETY_TOOLS.structures.map((t) => t.id).join(','), 'lines,veils,signal,debrief');
+  check('each carries a summary and a note in its own words',
+    D.SAFETY_TOOLS.structures.every((t) => t.summary.length > 20 && t.note.length > 20));
+  check('session zero and rule zero are both stated', D.SAFETY_TOOLS.sessionZero.points.length >= 4 && !!D.SAFETY_TOOLS.ruleZero.summary);
+
+  // --- §29 → §38: a severe dread failure rolls on the trauma table ---
+  check('the severe dread failure rolls the trauma table rather than freeforming it',
+    D.DREAD_CHECKS.failure.find((f) => f.tier === 'severe').rollsMentalTrauma === true);
+  equal('the dread ladder resolves a severity to its difficulty', R.dreadCheck('Shaken').difficulty, 'average');
+  equal('a dread check is a Discipline check', R.dreadCheck('Startled').skill, 'discipline');
+  equal('a trauma roll lands in the band it belongs to', R.rollMentalTrauma(50).id, 'numbness');
+  equal('the bottom of the table', R.rollMentalTrauma(1).id, 'hypervigilance');
+  equal('and the top', R.rollMentalTrauma(100).id, 'profoundBreak');
+
+  // --- §36 vehicle traits actually change a vehicle ---
+  check('every mechanical trait names what it changes',
+    J.VEHICLE_TRAITS.table.filter((t) => t.apply).every((t) =>
+      Object.keys(t.apply).every((k) => ['speed', 'handling', 'hullThreshold', 'rarity'].includes(k))));
+  check('the traits that only read as flavour carry dice or nothing, never a silent effect',
+    J.VEHICLE_TRAITS.table.every((t) => !!t.apply || !!t.dice || /Roomy|Distinctive/.test(t.name)));
+
   // --- §8 Push ---
   equal('a push costs one story point', D.STORY_POINTS.push.cost, 1);
   check('a check can only be pushed once', D.STORY_POINTS.push.oncePerCheck === true);
