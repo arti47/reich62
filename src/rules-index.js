@@ -14,7 +14,7 @@ export const SECTIONS = [
   { id: 'dice',       label: 'Dice and checks',      test: (c) => /^§(1|2|3A?)\b/.test(c) },
   { id: 'combat',     label: 'Combat',               test: (c) => /^§5/.test(c) },
   { id: 'character',  label: 'Characters',           test: (c) => /^§(4|6|7|12A|12B|13|16A)\b/.test(c) },
-  { id: 'economy',    label: 'Story points and experience', test: (c) => /^§(8|27)\b/.test(c) },
+  { id: 'economy',    label: 'Story points and experience', test: (c) => /^§(8|8A|27)\b/.test(c) },
   { id: 'injury',     label: 'Injury and recovery',  test: (c) => /^§9\b/.test(c) },
   { id: 'gear',       label: 'Gear and money',       test: (c) => /^§(10|14|15)/.test(c) },
   { id: 'social',     label: 'Social encounters',    test: (c) => /^§11\b/.test(c) },
@@ -175,7 +175,13 @@ export function buildIndex() {
     `Size ${v.silhouette}, top speed ${v.speed}, handling ${v.handling >= 0 ? '+' : ''}${v.handling}. It takes ${v.hull} hull trauma and ${v.systemStrain} system strain before it stops, behind ${v.armour} armour`,
     '§15E')));
 
+  // §8A — the generalised clock, printed.
+  out.push(entry('Clocks', `A named track of ${D.CLOCKS.sizes.join(', ')} segments with a direction. ${D.CLOCKS.ticks.map((t) => t.label).join(' ')} ${D.CLOCKS.full} ${D.CLOCKS.onTheFly}`, '§8A'));
+  D.CLOCKS.namedTracks.forEach((t) => out.push(entry(`${t.name} as a clock`, `${t.size ? `Size ${t.size}. ` : ''}${t.note}`, '§8A')));
+
   D.HEAT.thresholds.forEach((t) => out.push(entry(`Suspicion ${t.level}`, t.effect, '§17.2')));
+  D.HEAT.safehouseStates.forEach((st) => out.push(entry(`Safehouse: ${st.name}`, `Suspicion ${st.from}${st.to !== st.from ? `–${st.to}` : ''}. ${st.effect}`, '§17.2')));
+  out.push(entry('Tracking safehouses', D.HEAT.safehouseNote, '§17.2'));
   D.HEAT.generation.rules.forEach((r) => out.push(entry('Suspicion generation', `${r.trigger} → suspicion ${r.heat > 0 ? '+' : ''}${r.heat}.`, '§17.1')));
   out.push(entry('Suspicion decay', D.HEAT.decay.note, '§17.3'));
   out.push(entry('Whose fault the suspicion is', D.HEAT.attribution, '§17.4'));
@@ -188,8 +194,10 @@ export function buildIndex() {
 
   out.push(entry('Tension in the cell', `${J.TENSION.levels.map((l) => `${l.level} ${l.name.toLowerCase()} — ${l.summary}`).join(' ')} The higher-tension side adds one Boost per point in an opposed check between them. ${J.TENSION.reduce}`, '§31'));
   J.PERSONAL_THREAT.ladder.forEach((r) => out.push(entry(`Personal threat, step ${r.step}: ${r.name}`, r.summary, '§33')));
+  out.push(entry('Stepping a personal threat back', `${J.PERSONAL_THREAT.deEscalation.summary} ${J.PERSONAL_THREAT.deEscalation.requires}`, '§33'));
   J.JOURNEY.timeUnits.forEach((u) => out.push(entry(`Time unit: ${u.name}`, `${u.span}. ${u.note}`, '§34')));
   J.JOURNEY.lengths.forEach((l) => out.push(entry(`Journey length: ${l.name}`, `${l.stops} stops.`, '§34')));
+  out.push(entry('How many stops to use', 'When in doubt take the low end of the chosen range — it is easier to extend a journey that is going well than to trim one that is dragging.', '§34'));
   out.push(entry('Blockers', `${J.JOURNEY.blocker.summary} ${J.JOURNEY.blocker.generate}`, '§34'));
   out.push(entry('Setting up a journey', J.JOURNEY.setup.join(' '), '§34'));
   J.JOURNEY.stopCountdown.table.forEach((r) => out.push(entry(`Stop countdown ${r.roll}`, r.entry, '§34')));

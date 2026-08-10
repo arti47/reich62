@@ -1,8 +1,10 @@
-// clocks.js — named progress clocks (H-4, house aid).
-// The books publish one extended track, the Dragnet (B§6), and two 0–5 suspicion tracks
-// (§17). This is that shape generalised: a named clock with a size and a direction, ticked
-// by the symbols a check already produced rather than by any new roll. Storage is the same
-// `tasks` list the combat tracker has always used, so nothing is duplicated.
+// clocks.js — clocks (§8A).
+// The manual prints a generalised countdown/progress track: a named clock with a size of
+// 4, 6 or 8 and a direction, ticked by the symbols a check already produced rather than by
+// any new roll. The named tracks — Heat, the Personal Threat Countdown, the Dragnet — stay
+// under their own names and their own pacing; this is the one to reach for when the table
+// invents a countdown on the fly. Storage is the same `tasks` list the combat tracker has
+// always used, so nothing is duplicated.
 
 import { el, clear, uid, clamp } from './core.js';
 import { showToast, confirmModal, panel, emptyState } from './ui.js';
@@ -56,21 +58,33 @@ export function closeClock(clockId) {
   saveTasks(listTasks().filter((t) => t.id !== clockId));
 }
 
-/** What a resolved check does to the clock it was pointed at (H-4). The symbols are the
- *  ones left after cancelling, so this spends nothing the roller has not already worked out. */
-export function ticksFromCheck(net, direction) {
+/** What a resolved check does to the clock it was pointed at (§8A). The symbols are the
+ *  ones left after cancelling, so this spends nothing the roller has not already worked out.
+ *  `remaining` is how many segments the clock still needs, because a Triumph on your own
+ *  clock fills it by everything it has left rather than by one. */
+export function ticksFromCheck(net, direction, remaining = 1) {
   const rules = CLOCKS.ticks.filter((r) => r.direction === direction || r.direction === 'either');
   let amount = 0;
   const reasons = [];
   rules.forEach((rule) => {
     const count = net[rule.symbol] || 0;
     if (!count) return;
+    if (rule.symbol === 'triumph') {
+      // §8A — a Triumph fills the acting character's own clock by its full remaining need,
+      // or clears one segment from a clock closing on them. The player picks; on a clock
+      // pointed at from a check the app takes the reading that favours the roller.
+      const signed = direction === 'against' ? -count : Math.max(0, remaining);
+      if (!signed) return;
+      amount += signed;
+      reasons.push(direction === 'against'
+        ? `${count} triumph → ${signed}`
+        : `a triumph fills the remaining ${signed}`);
+      return;
+    }
     const step = rule.amount ? rule.amount * count : Math.floor(count / rule.per);
     if (!step) return;
-    // A Triumph clears a segment from something closing on you rather than filling it.
-    const signed = rule.symbol === 'triumph' && direction === 'against' ? -step : step;
-    amount += signed;
-    reasons.push(`${count} ${rule.symbol} → ${signed > 0 ? '+' : ''}${signed}`);
+    amount += step;
+    reasons.push(`${count} ${rule.symbol} → +${step}`);
   });
   return { amount, reasons };
 }
@@ -79,7 +93,7 @@ export function ticksFromCheck(net, direction) {
 export function applyCheckToClock(clockId, net, reason = 'a check') {
   const clock = listTasks().find((t) => t.id === clockId);
   if (!clock) return null;
-  const { amount, reasons } = ticksFromCheck(net, clock.direction || 'against');
+  const { amount, reasons } = ticksFromCheck(net, clock.direction || 'against', clock.target - clock.progress);
   if (!amount) return { clock, amount: 0, reasons, filled: false };
   const moved = tickClock(clockId, amount, `${reason}: ${reasons.join(', ')}`);
   return { clock: moved.clock, amount, reasons, filled: moved.filled };
@@ -105,8 +119,8 @@ export function renderClocks(mount, { compact = false, onChange = () => {}, titl
     clockSizes().forEach((n) => size.append(el('option', { value: String(n), text: `${n} segments`, selected: n === CLOCKS.defaultSize })));
     const direction = el('select', { id: 'clock-direction', 'aria-label': 'Which way it runs' });
     clockDirections().forEach((d) => direction.append(el('option', { value: d.id, text: d.name })));
-    // The Dragnet is the one clock the books publish, so it is offered as a kind rather
-    // than left to be rebuilt by hand (B§6).
+    // §8A names the Dragnet as one of the printed clocks, so it is offered as a kind
+    // rather than left to be rebuilt by hand (B§6).
     const kind = el('select', { id: 'clock-kind', 'aria-label': 'What kind of clock' }, [
       el('option', { value: 'clock', text: 'Anything you name' }),
       el('option', { value: 'dragnet', text: 'Manhunt / Dragnet (from the book)' })
@@ -152,7 +166,8 @@ export function renderClocks(mount, { compact = false, onChange = () => {}, titl
     if (clock.progress >= clock.target) row.append(el('p', { class: 'small', text: CLOCKS.full }));
 
     // B§6 — the published track keeps its printed behaviour: escalating opposition, and a
-    // failed round costing both suspicion tracks. It is shown here, not ticked by H-4.
+    // failed round costing suspicion. §8A lists it as a size-4 scaling clock, so it lives
+    // here with the rest but is never ticked by the generic table.
     if (clock.kind === 'dragnet') {
       row.append(el('p', { class: 'small muted', text: `Stealth or Streetwise against ${clock.oppositionDice || 2} opposition dice, rising by one per in-game hour to a maximum of four. Every failed round advances both suspicion tracks. Elapsed: ${clock.elapsedHours || 0}h.` }));
       row.append(el('button', {

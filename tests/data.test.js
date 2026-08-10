@@ -453,6 +453,66 @@ export async function dataChecks({ check, equal }) {
   equal('a lone Cell Heat reference is relabelled too',
     H.heatWording('Cell Heat is 4 or more'), 'suspicion is 4 or more');
 
+  // --- §8A Clocks, now a printed subsystem ---
+  // Imported here rather than at the top: clocks.js and combat.js reference each other, so
+  // a top-level import can resolve to a half-initialised namespace.
+  const Clk = await import('../src/clocks.js');
+  equal('clocks cite their printed section', D.CLOCKS.cite, '§8A');
+  check('the app no longer presents clocks as a house aid', !D.CLOCKS.houseAid && !D.CLOCKS.ruling);
+  equal('the printed sizes are 4, 6 and 8', D.CLOCKS.sizes.join(','), '4,6,8');
+  equal('threat fills one', Clk.ticksFromCheck({ threat: 2 }, 'against', 4).amount, 2);
+  equal('despair fills two', Clk.ticksFromCheck({ despair: 1 }, 'against', 4).amount, 2);
+  equal('success fills one on a progress clock', Clk.ticksFromCheck({ success: 3 }, 'for', 8).amount, 3);
+  equal('every two advantage fills one more', Clk.ticksFromCheck({ advantage: 5 }, 'for', 8).amount, 2);
+  // §8A — a Triumph on your own clock fills everything it still needs.
+  equal('a triumph fills a progress clock by its whole remaining need',
+    Clk.ticksFromCheck({ triumph: 1 }, 'for', 5).amount, 5);
+  equal('and clears one segment from a clock closing on you',
+    Clk.ticksFromCheck({ triumph: 1 }, 'against', 4).amount, -1);
+  check('symbols pointed the wrong way still do nothing',
+    Clk.ticksFromCheck({ success: 4 }, 'against', 4).amount === 0
+    && Clk.ticksFromCheck({ threat: 4 }, 'for', 4).amount === 0);
+  check('the named tracks stay under their own names',
+    D.CLOCKS.namedTracks.map((t) => t.id).join(',') === 'heat,personalThreat,dragnet,stopCountdown');
+  equal('suspicion is a size-5 clock', D.CLOCKS.namedTracks.find((t) => t.id === 'heat').size, 5);
+  equal('the personal threat countdown is a size-3 clock', D.CLOCKS.namedTracks.find((t) => t.id === 'personalThreat').size, 3);
+  equal('the dragnet is a size-4 clock', D.CLOCKS.namedTracks.find((t) => t.id === 'dragnet').size, 4);
+  check('the stop countdown is not a fill-based clock at all',
+    D.CLOCKS.namedTracks.find((t) => t.id === 'stopCountdown').size === null);
+
+  // --- §17.2 safehouse states, now printed ---
+  equal('three safehouse states', D.HEAT.safehouseStates.length, 3);
+  check('they band the whole track with no gap',
+    D.HEAT.safehouseStates[0].from === 0
+    && D.HEAT.safehouseStates[D.HEAT.safehouseStates.length - 1].to === D.HEAT.max
+    && D.HEAT.safehouseStates.every((st, i) => i === 0 || st.from === D.HEAT.safehouseStates[i - 1].to + 1));
+  equal('clear up to 2', H.safehouseFor(2), 'clear');
+  equal('watched at 3 and 4', `${H.safehouseFor(3)},${H.safehouseFor(4)}`, 'watched,watched');
+  equal('blown at 5', H.safehouseFor(5), 'blown');
+
+  // --- §33 de-escalation, now printed ---
+  equal('a personal threat steps back by one', J.PERSONAL_THREAT.deEscalation.steps, 1);
+  check('and only for a real success against it, with the GM agreeing',
+    /significant in-fiction success/.test(J.PERSONAL_THREAT.deEscalation.summary)
+    && /GM agreement/.test(J.PERSONAL_THREAT.deEscalation.requires));
+
+  // --- §34 printed defaults ---
+  check('the journey defaults to the low end of its length range', J.JOURNEY.defaultToLowEnd === true);
+  check('and the blocker list is picked by a coin flip', /coin flip/.test(J.JOURNEY.blocker.listPick));
+
+  // --- §12A setting-flex marker: the manual's own 11 ---
+  equal('11 talents carry the setting-flex marker', D.TALENTS.filter((t) => t.settingApplicable === false).length, 11);
+  equal('and they are the ones the book marks',
+    D.TALENTS.filter((t) => t.settingApplicable === false).map((t) => t.id).sort().join(','),
+    ['barrelRoll', 'daringAviator', 'defensiveSysops', 'defensiveSysopsImproved', 'fullThrottle',
+     'inventor', 'madInventor', 'oneWithNature', 'overcharge', 'overchargeImproved', 'rapidArchery'].sort().join(','));
+  equal('hidden by default', R.visibleTalents(false).length, 60);
+  equal('revealed when the toggle is on', R.visibleTalents(true).length, 71);
+
+  // --- §38 carries no "addressed" flag: the rule resolves it narratively ---
+  check('a rolled scar records only what it is, not a resolved state',
+    Object.keys(R.rollMentalTrauma(50)).sort().join(',') === 'effect,id,name,roll');
+
   // --- §20A safety tools, second edition: four named structures ---
   equal('the safety structures are the four the book names', D.SAFETY_TOOLS.structures.length, 4);
   equal('and they are lines, veils, a signal and a debrief',

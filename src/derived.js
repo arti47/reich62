@@ -42,7 +42,9 @@ export function blankCharacter(over = {}) {
       personalThreat: { name: '', step: 0 },
       // §31 — tension toward other characters, by character id, 0–2 and directional.
       tension: {},
-      // §38 — lasting psychological consequences, the companion to the Critical Injury list.
+      // §38 — lasting psychological consequences, the companion to the Critical Injury
+      // list. They carry no "addressed" state: the rule resolves them narratively, so a
+      // scar is on the sheet until it is taken off.
       mentalTrauma: []
     },
     xp: { total: 70, available: 70 },

@@ -40,6 +40,12 @@ export const PERSONAL_THREAT = {
     { step: 2, name: 'Closing in', summary: 'It acts — surveillance, an approach, a warning shot.', dice: { setback: 1, scope: 'checks made to avoid or evade this threat specifically' } },
     { step: 3, name: 'Confrontation', summary: 'A direct scene between the character and their threat, played out rather than summarised. It usually resolves the arc, for now or for good.' }
   ],
+  // §33 — the countdown is not one-way.
+  deEscalation: {
+    steps: 1,
+    summary: 'A character may drop the countdown by one step through a significant in-fiction success against the threat — turning an informant, destroying incriminating evidence, striking a deal, or otherwise genuinely addressing it.',
+    requires: 'GM agreement that the action meaningfully counts, rather than merely avoiding the issue for now.'
+  },
   afterStep3: 'Retire the threat, or with the GM\'s agreement escalate it into a fresh three-step arc — which is how a Rival becomes a recurring Nemesis.'
 };
 
@@ -53,6 +59,9 @@ export const JOURNEY = {
     { id: 'scene', name: 'Scene', span: 'minutes to hours', note: 'One self-contained beat — a checkpoint, a conversation, a search.' },
     { id: 'shift', name: 'Shift', span: 'roughly 5 to 10 hours', note: 'A leg of travel, a stretch of rest, the gap between Stops. Narrative bookkeeping, not a clock — the GM calls when one has passed.' }
   ],
+  // §34 — when in doubt, take the low end of the chosen range: easier to extend a journey
+  // that is going well than to trim one that is dragging.
+  defaultToLowEnd: true,
   lengths: [
     { id: 'oneShot', name: 'One-shot', stops: '1' },
     { id: 'short',   name: 'Short',    stops: '2–4' },
@@ -67,7 +76,8 @@ export const JOURNEY = {
   ],
   blocker: {
     summary: 'The obstacle stopping the party simply passing through — a washed-out bridge needing a specific document, a hostile faction holding the only route, a dragnet triggered by suspicion.',
-    generate: 'Roll d10 on the Element tables\' faction or complication list, or invent one to match the location.',
+    generate: 'Roll d10 on the Element tables\' faction or complication list — flip a coin, or read odd or even on any die, to pick which of the two — or invent one to match the location.',
+    listPick: 'coin flip between the faction and complication lists',
     // The manual points at the two published encounter blocks here; both are in the
     // bestiary rather than the manual, so the app cites them as B§6.
     publishedBlocks: ['checkpoint', 'manhuntDragnet'], blocksCite: 'B§6'
@@ -165,7 +175,7 @@ export const MENTAL_TRAUMA = {
     { min: 86, max: 95,  id: 'dissociation', name: 'Dissociation', effect: 'Once a session the GM may declare the character loses a maneuver or acts confused during a high-stress scene.' },
     { min: 96, max: 100, id: 'profoundBreak', name: 'A profound break', effect: 'The player and GM define a significant, campaign-relevant change to the character\'s outlook or capabilities together.' }
   ],
-  addressing: 'It takes sustained downtime — sessions of narrative rest, trusted support, care — and is resolved between player and GM. There is no dice-check cure.'
+  addressing: 'It takes sustained downtime — sessions of narrative rest, trusted support, care — and is resolved between player and GM. There is no dice-check cure, and no flag to tick: it stops applying when the table agrees it has been dealt with.'
 };
 
 // T77 — NPC behaviour generator — §39. Layers onto the §20 quick-gen for named NPCs.

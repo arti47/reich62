@@ -247,7 +247,7 @@ export function renderSolo(mount) {
     }));
   }
 
-  // H-4 — the same control the Roll screen carries: does this answer feed a clock?
+  // §8A — the same control the Roll screen carries: does this answer feed a clock?
   const runningClocks = listClocks();
   if (runningClocks.length) {
     const clockSelect = el('select', { id: 'oracle-clock', 'aria-label': 'Clock this answer feeds', onchange: (e) => { state.clockId = e.target.value || null; } });
@@ -300,7 +300,7 @@ export function renderSolo(mount) {
       writeIdeaLog({ table: 'Random Event', text: `${text} (chained from "${verdict.answer}")` });
     }
 
-    // H-4 — an Oracle answer is a resolved roll like any other, so it can feed a clock on
+    // §8A — an Oracle answer is a resolved roll like any other, so it can feed a clock on
     // the same tick rules. Without this a solo player, who mostly asks rather than rolls
     // skills, could never move a clock except by hand.
     if (state.clockId) {

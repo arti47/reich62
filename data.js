@@ -711,8 +711,10 @@ export const VEHICLE_RULES = {
 };
 
 // T33 — Talents — §12A. All 71, tiers 1–5 (24 / 15 / 16 / 11 / 5).
-// `settingApplicable: false` marks the 12 talents that reference content this setting
-// does not have; they stay in the catalog for completeness and are hidden by default (R-11).
+// `settingApplicable: false` carries §12A's own **setting-flex marker**: 11 talents whose
+// printed text references content the grounded 1960s tech level does not have (cybernetics,
+// starfighters, bows, hacking rules). The book marks them rather than removing them, and
+// says to treat them as off by default — a table can turn one on and reflavour it.
 // `hook` names the automation the roller provides for the talent ("tap to use").
 export const TALENT_RULES = {
   cite: '§12A, §7',
@@ -727,7 +729,7 @@ export const TALENTS = [
     summary: 'Instead of rolling a knowledge check, spend currency equal to fifty times the check\'s difficulty and succeed automatically with one uncancelled Success. The GM may rule some information cannot be bought.' },
   { id: 'cleverRetort', name: 'Clever Retort', tier: 1, ranked: false, activation: 'incidentalOutOfTurn', hook: 'addSymbols', limit: 'perEncounter',
     summary: 'Once per encounter, add two automatic Threat to another character\'s social skill check.' },
-  { id: 'defensiveSysops', name: 'Defensive Sysops', tier: 1, ranked: false, activation: 'passive', hook: 'addDiceToOpponent', settingApplicable: false, // R-11
+  { id: 'defensiveSysops', settingApplicable: false, /* §12A setting-flex */ name: 'Defensive Sysops', tier: 1, ranked: false, activation: 'passive', hook: 'addDiceToOpponent', 
     summary: 'Adds two Setback to checks made to intrude on a computer system your character defends or built, and your character notices any intrusion they have access to observe.' },
   { id: 'desperateRecovery', name: 'Desperate Recovery', tier: 1, ranked: false, activation: 'passive', hook: 'recoveryBonus',
     summary: 'When healing strain at the end of an encounter with strain above half the threshold, heal two more.' },
@@ -752,7 +754,7 @@ export const TALENTS = [
     summary: 'Once per session, reduce the rarity of a legally available item by one per rank when trying to buy it.' },
   { id: 'letsRide', name: 'Let\'s Ride', tier: 1, ranked: false, activation: 'incidental', hook: 'stateChange', limit: 'perRound',
     summary: 'Once per round on your turn, mount, dismount or move position within a vehicle as an incidental. A short-range fall from a vehicle or animal does no damage.' },
-  { id: 'oneWithNature', name: 'One With Nature', tier: 1, ranked: false, activation: 'incidental', hook: 'recoverySubstitute',
+  { id: 'oneWithNature', settingApplicable: false, name: 'One With Nature', tier: 1, ranked: false, activation: 'incidental', hook: 'recoverySubstitute',
     summary: 'In the wilderness, use a Simple Survival check instead of Discipline or Cool to recover strain at the end of an encounter.' },
   { id: 'parry', name: 'Parry', tier: 1, ranked: true, activation: 'incidentalOutOfTurn', hook: 'damageReduction', cost: { strain: 3 },
     summary: 'When hit by a melee attack, after damage is worked out but before soak, suffer 3 strain to cut the damage by two plus ranks in Parry. Once per hit, and a Melee weapon must be in hand.' },
@@ -789,11 +791,11 @@ export const TALENTS = [
     summary: 'Once per turn, a number of engaged allies equal to your Leadership ranks add one Advantage to their combat checks until the end of your next turn. Range extends one band per rank past the first.' },
   { id: 'counteroffer', name: 'Counteroffer', tier: 2, ranked: false, activation: 'action', hook: 'opposedCheck', limit: 'perSession',
     summary: 'Once per session, make an opposed Negotiation against Discipline versus a non-nemesis adversary within medium range. On success they are staggered until the end of their next turn; a Triumph may turn them into an ally for the encounter, at GM discretion.' },
-  { id: 'daringAviator', name: 'Daring Aviator', tier: 2, ranked: true, activation: 'incidental', hook: 'addSymbols', settingApplicable: false, // R-11
+  { id: 'daringAviator', settingApplicable: false, name: 'Daring Aviator', tier: 2, ranked: true, activation: 'incidental', hook: 'addSymbols', 
     summary: 'Before a Driving or Piloting check, add any number of Threat up to your ranks to add an equal number of Success.' },
   { id: 'defensiveStance', name: 'Defensive Stance', tier: 2, ranked: true, activation: 'maneuver', hook: 'upgradeOpponentDifficulty', cost: { strainPerRank: 1 }, limit: 'perRound',
     summary: 'Once per round, suffer strain up to your ranks; until the end of your next turn, upgrade the difficulty of melee checks against you that many times.' },
-  { id: 'defensiveSysopsImproved', name: 'Defensive Sysops (Improved)', tier: 2, ranked: false, activation: 'incidental', hook: 'addSymbols', requires: 'defensiveSysops', settingApplicable: false, // R-11
+  { id: 'defensiveSysopsImproved', settingApplicable: false, name: 'Defensive Sysops (Improved)', tier: 2, ranked: false, activation: 'incidental', hook: 'addSymbols', requires: 'defensiveSysops', 
     summary: 'Instead of adding Defensive Sysops\' two Setback, add one Failure and one Threat to the intruder\'s result.' },
   { id: 'dualWielder', name: 'Dual Wielder', tier: 2, ranked: false, activation: 'maneuver', hook: 'difficultyReduction',
     roller: { difficultySteps: -1, note: 'Lowers the difficulty of the combined two-weapon check by one.' },
@@ -804,7 +806,7 @@ export const TALENTS = [
     summary: 'Allies within short range add one Boost to Perception and Vigilance checks; engaged allies add two.' },
   { id: 'inspiringRhetoric', name: 'Inspiring Rhetoric', tier: 2, ranked: false, activation: 'action', hook: 'groupHeal',
     summary: 'Make an Average Leadership check: each Success heals one strain on one ally within short range, and each Advantage heals one more strain on an already affected ally.' },
-  { id: 'inventor', name: 'Inventor', tier: 2, ranked: true, activation: 'incidental', hook: 'addDice',
+  { id: 'inventor', settingApplicable: false, name: 'Inventor', tier: 2, ranked: true, activation: 'incidental', hook: 'addDice',
     summary: 'Add one Boost per rank to checks to build or modify items, and attempt to rebuild devices you have only heard described.' },
   { id: 'luckyStrike', name: 'Lucky Strike', tier: 2, ranked: false, activation: 'incidental', hook: 'damageBonus', cost: { storyPoint: 1 }, selects: 'characteristic',
     summary: 'After a successful combat check, spend a Story Point to add damage equal to your rating in a characteristic chosen when the talent was bought.' },
@@ -814,11 +816,11 @@ export const TALENTS = [
     summary: 'Once per round, suffer strain up to your ranks; until the end of your next turn, upgrade the difficulty of ranged checks against you that many times.' },
 
   // ---- Tier 3 (16) ----
-  { id: 'animalCompanion', name: 'Animal Companion', tier: 3, ranked: true, activation: 'passive', hook: 'companion', settingApplicable: false, // R-11
+  { id: 'animalCompanion', name: 'Animal Companion', tier: 3, ranked: true, activation: 'passive', hook: 'companion', 
     summary: 'Bond with one animal of silhouette 0, raised by one per further rank. Once per round in structured play, spend a maneuver to have it take one action and one maneuver while within sight and hearing.' },
-  { id: 'barrelRoll', name: 'Barrel Roll', tier: 3, ranked: false, activation: 'incidentalOutOfTurn', hook: 'damageReduction', settingApplicable: false, // R-11
+  { id: 'barrelRoll', settingApplicable: false, name: 'Barrel Roll', tier: 3, ranked: false, activation: 'incidentalOutOfTurn', hook: 'damageReduction', 
     summary: 'While piloting an aircraft of silhouette 3 or less, spend 3 system strain when the vehicle is hit by a ranged attack to reduce the damage by your Piloting ranks, before armour.' },
-  { id: 'distinctiveStyle', name: 'Distinctive Style', tier: 3, ranked: false, activation: 'incidental', hook: 'addSymbols', settingApplicable: false, // R-11
+  { id: 'distinctiveStyle', name: 'Distinctive Style', tier: 3, ranked: false, activation: 'incidental', hook: 'addSymbols', 
     summary: 'Before a Computers check to hack or break into a network, add two Success and two Threat to the result.' },
   { id: 'dodge', name: 'Dodge', tier: 3, ranked: true, activation: 'incidentalOutOfTurn', hook: 'upgradeOpponentDifficulty', cost: { strainPerRank: 1 },
     summary: 'When targeted by any combat check, suffer strain up to your ranks to upgrade that check\'s difficulty that many times.' },
@@ -828,7 +830,7 @@ export const TALENTS = [
     summary: 'Make an Average Leadership check; on success, allies equal to your Presence may each suffer 1 strain to take a maneuver out of turn.' },
   { id: 'forgotToCount', name: 'Forgot To Count?', tier: 3, ranked: false, activation: 'incidentalOutOfTurn', hook: 'spendOpponentThreat',
     summary: 'Spend two Threat from an opponent\'s ranged combat check to make their weapon run out of ammunition, if it can.' },
-  { id: 'fullThrottle', name: 'Full Throttle', tier: 3, ranked: false, activation: 'action', hook: 'vehicleBoost', settingApplicable: false, // R-11
+  { id: 'fullThrottle', settingApplicable: false, name: 'Full Throttle', tier: 3, ranked: false, activation: 'action', hook: 'vehicleBoost', 
     summary: 'Make a Hard Piloting or Driving check; on success the vehicle\'s top speed rises by one, to a maximum of 5, for rounds equal to your Cunning.' },
   { id: 'grenadier', name: 'Grenadier', tier: 3, ranked: true, activation: 'incidental', hook: 'triggerQuality', cost: { storyPoint: 1 },
     summary: 'Spend a Story Point to trigger a weapon\'s Blast quality without spending Advantage, even on a miss. Grenades count as having medium range.' },
@@ -843,7 +845,7 @@ export const TALENTS = [
     summary: 'Painkillers heal one extra wound per rank. The sixth and later doses in a day still do nothing.' },
   { id: 'parryImproved', name: 'Parry (Improved)', tier: 3, ranked: false, activation: 'incidentalOutOfTurn', hook: 'counterAttack', requires: 'parry',
     summary: 'After using Parry, spend one Despair or three Threat from the attacker\'s check to hit them automatically with a Brawl or Melee weapon for its base damage plus applicable bonuses. Not usable if the attack incapacitated you.' },
-  { id: 'rapidArchery', name: 'Rapid Archery', tier: 3, ranked: false, activation: 'maneuver', hook: 'addQuality', cost: { strain: 2 }, settingApplicable: false, // R-11
+  { id: 'rapidArchery', settingApplicable: false, name: 'Rapid Archery', tier: 3, ranked: false, activation: 'maneuver', hook: 'addQuality', cost: { strain: 2 }, 
     summary: 'Suffer 2 strain to give a bow the Linked quality equal to your Ranged ranks for your next ranged check this turn.' },
   { id: 'scathingTiradeImproved', name: 'Scathing Tirade (Improved)', tier: 3, ranked: false, activation: 'passive', hook: 'addDiceToOpponent', requires: 'scathingTirade',
     summary: 'Enemies affected by your Scathing Tirade add one Setback to all skill checks for rounds equal to your Coercion ranks.' },
@@ -855,7 +857,7 @@ export const TALENTS = [
     summary: 'After rolling a Critical Injury inflicted with a ranged weapon, suffer 2 strain to swap it for any injury of the same severity.' },
   { id: 'defensive', name: 'Defensive', tier: 4, ranked: true, activation: 'passive', hook: 'derivedBonus', derived: { meleeDefense: 1, rangedDefense: 1 },
     summary: 'Each rank raises melee defence and ranged defence by one.' },
-  { id: 'defensiveDriving', name: 'Defensive Driving', tier: 4, ranked: true, activation: 'passive', hook: 'vehicleDefense', settingApplicable: false, // R-11
+  { id: 'defensiveDriving', name: 'Defensive Driving', tier: 4, ranked: true, activation: 'passive', hook: 'vehicleDefense', 
     summary: 'Raises the defence of any vehicle you pilot by one per rank.' },
   { id: 'enduring', name: 'Enduring', tier: 4, ranked: true, activation: 'passive', hook: 'derivedBonus', derived: { soak: 1 },
     summary: 'Each rank raises soak by one.' },
@@ -865,10 +867,10 @@ export const TALENTS = [
     summary: 'Once per session, make a Hard Mechanics check; on success one device in the encounter fails, subject to GM approval.' },
   { id: 'inspiringRhetoricSupreme', name: 'Inspiring Rhetoric (Supreme)', tier: 4, ranked: false, activation: 'incidental', hook: 'activationChange', requires: 'inspiringRhetoric', cost: { strain: 1 },
     summary: 'Suffer 1 strain to use Inspiring Rhetoric as a maneuver rather than an action.' },
-  { id: 'madInventor', name: 'Mad Inventor', tier: 4, ranked: false, activation: 'action', hook: 'crafting', limit: 'perSession', settingApplicable: false, // R-11
+  { id: 'madInventor', settingApplicable: false, name: 'Mad Inventor', tier: 4, ranked: false, activation: 'action', hook: 'crafting', limit: 'perSession', 
     summary: 'Once per session, make a Mechanics check at a difficulty set by the item\'s rarity to improvise a functional equivalent of an item from salvage. A Despair may make the result dangerous to use.',
     rarityLadder: [ { rarity: '0–2', difficulty: 'easy' }, { rarity: '3–4', difficulty: 'average' }, { rarity: '5–6', difficulty: 'hard' }, { rarity: '7', difficulty: 'daunting' }, { rarity: '8', difficulty: 'formidable' }, { rarity: '9+', difficulty: 'impossible' } ] },
-  { id: 'overcharge', name: 'Overcharge', tier: 4, ranked: false, activation: 'action', hook: 'implantBoost', limit: 'perEncounter', settingApplicable: false, // R-11
+  { id: 'overcharge', settingApplicable: false, name: 'Overcharge', tier: 4, ranked: false, activation: 'action', hook: 'implantBoost', limit: 'perEncounter', 
     summary: 'Once per encounter, make a Hard Mechanics check to push a cybernetic implant so its bonus doubles until the encounter ends. A Despair or three Threat burns it out until repaired.' },
   { id: 'scathingTiradeSupreme', name: 'Scathing Tirade (Supreme)', tier: 4, ranked: false, activation: 'incidental', hook: 'activationChange', requires: 'scathingTirade', cost: { strain: 1 },
     summary: 'Suffer 1 strain to use Scathing Tirade as a maneuver rather than an action.' },
@@ -881,7 +883,7 @@ export const TALENTS = [
   { id: 'master', name: 'Master', tier: 5, ranked: false, activation: 'incidental', hook: 'difficultyReduction', cost: { strain: 2 }, limit: 'perRound', selects: 'skill',
     roller: { difficultySteps: -2, note: 'Lowers the difficulty of the next check with the chosen skill by two.' },
     summary: 'Once per round, suffer 2 strain to lower the difficulty of your next check with a chosen skill by two, to a minimum of Easy.' },
-  { id: 'overchargeImproved', name: 'Overcharge (Improved)', tier: 5, ranked: false, activation: 'passive', hook: 'extraAction', requires: 'overcharge', settingApplicable: false, // R-11
+  { id: 'overchargeImproved', settingApplicable: false, name: 'Overcharge (Improved)', tier: 5, ranked: false, activation: 'passive', hook: 'extraAction', requires: 'overcharge', 
     summary: 'Spend two Advantage or a Triumph from the Overcharge check to take one extra action immediately. Once per check.' },
   { id: 'ruinousRepartee', name: 'Ruinous Repartee', tier: 5, ranked: false, activation: 'action', hook: 'opposedCheck', limit: 'perEncounter',
     summary: 'Once per encounter, opposed Charm or Coercion against Discipline versus one character within medium range or earshot. On success they suffer strain equal to twice your Presence plus one per Success, and you heal the same amount of strain.' }
@@ -1197,7 +1199,15 @@ export const HEAT = {
   max: 5,
   min: 0,
   shared: true,           // §17 — one value for the party, not one per character
-  safehouseDefault: 'clear', // §3.8 — the status before any threshold sets one
+  safehouseDefault: 'clear',
+  // §17.2 — the three states, printed. Tracked per safehouse when the cell uses more than
+  // one; a raid or a relocation can reset one to clear without touching the Heat track.
+  safehouseStates: [
+    { id: 'clear',   name: 'Clear',   from: 0, to: 2, effect: 'No special effect.' },
+    { id: 'watched', name: 'Watched', from: 3, to: 4, effect: 'Assume any activity there may be observed.' },
+    { id: 'blown',   name: 'Blown',   from: 5, to: 5, effect: 'The location is compromised and must be abandoned.' }
+  ],
+  safehouseNote: 'Track it per safehouse if the cell uses more than one. A raid or a relocation can reset one to clear without resetting the whole track.',
   generation: {
     cite: '§17.1',
     scope: 'Only checks made in Reich-surveilled contexts — public spaces, checkpoints, dealings with officials or informants.',
@@ -1242,42 +1252,42 @@ export const HEAT = {
   adventureEnd: 'A party at Heat 5 either goes underground, relocating and resetting Heat to 2, or is captured, with the Oracle or GM deciding whether they escape, turn, or leave play.' // §24
 };
 
-// H-4 — **House aid, in neither book.** The manual publishes no progress-clock subsystem
-// (§3.13); the bestiary publishes exactly one extended track, the Manhunt/Dragnet (B§6),
-// and the Heat tracks (§17) are themselves 0–5 clocks by another name. This generalises
-// that shape: a named track with a size, a direction, and tick rates read off the symbols
-// the check already produced, so no new dice and no new economy are introduced.
-// The Heat rates below are the printed ones (§17.1); everything else is the house aid.
+// T80 — Clocks — §8A.
+// Printed in the manual as a generalised countdown/progress track, so the tick rates below
+// are the book's own. The named tracks stay under their own names: Heat is a size-5 clock
+// filled by §17.1's rules, the Personal Threat Countdown a size-3 clock advanced by GM
+// discretion, the Dragnet a size-4 scaling clock, and the Stop Countdown is a d10 event
+// table rather than a fill-based clock at all.
 export const CLOCKS = {
-  houseAid: true,
-  ruling: 'H-4',
-  note: 'Not a printed rule. The books track one thing this way — the dragnet — and this is that shape applied to anything else you want to see coming.',
+  cite: '§8A',
   sizes: [4, 6, 8],
   defaultSize: 6,
   directions: [
-    { id: 'against', name: 'Closing on you', summary: 'It fills as things get worse. Name what happens when it is full.' },
-    { id: 'for',     name: 'Working for you', summary: 'It fills as you make progress. Name what you get when it is full.' }
+    { id: 'against', name: 'Closing on you', summary: 'It fills toward a consequence. Name what happens when it is full.' },
+    { id: 'for',     name: 'Working for you', summary: 'A progress clock: it fills as you advance the goal. Name what you get when it is full.' }
   ],
-  // What a resolved check does to the clock it was pointed at. Advantage and Threat are
-  // already the manual's currency for "something else happened" (§5C), so the ticks are
-  // read off them rather than off a second roll.
+  // §8A's own table. No new dice and no second economy: the symbols a check already
+  // produced do the work.
   ticks: [
     { id: 'threat',   symbol: 'threat',   per: 1, direction: 'against',
-      label: 'Each uncancelled Threat fills one segment of a clock closing on you.' },
+      label: 'Each uncancelled Threat fills one segment.' },
     { id: 'despair',  symbol: 'despair',  per: 1, amount: 2, direction: 'against',
       label: 'An uncancelled Despair fills two.' },
     { id: 'success',  symbol: 'success',  per: 1, direction: 'for',
-      label: 'Each uncancelled Success fills one segment of a clock you are working on.' },
-    { id: 'advantage', symbol: 'advantage', per: 2, direction: 'for',
-      label: 'Every two uncancelled Advantage fills one more.' },
-    { id: 'triumph',  symbol: 'triumph',  per: 1, amount: 1, direction: 'either',
-      label: 'An uncancelled Triumph fills one on your own clock, or clears one from a clock closing on you.' }
+      label: 'Each uncancelled Success fills one segment of a progress clock, where success advances the goal.' },
+    { id: 'advantage', symbol: 'advantage', per: 2, direction: 'for', optional: true,
+      label: 'Every two uncancelled Advantage fills one more, at GM discretion.' },
+    { id: 'triumph',  symbol: 'triumph',  per: 1, direction: 'either', fillsRemaining: true,
+      label: 'An uncancelled Triumph fills your own clock by everything it still needs, or clears one segment from a clock closing on you — the player chooses.' }
   ],
-  full: 'A clock that fills has arrived: the thing it was counting down to happens now. Clear it, or roll it into the next one.',
-  // The two the books do publish, kept distinct from anything invented here.
-  published: [
-    { id: 'dragnet', name: 'Manhunt / Dragnet', cite: 'B§6', note: 'The one extended track the books print; it keeps its own escalating opposition and dual Heat cost.' },
-    { id: 'heat', name: 'Suspicion', cite: '§17', note: 'Personal and Cell Heat are 0–5 tracks with printed rates and printed threshold effects; the clock panel shows them but never invents ticks for them.' }
+  full: 'A clock that fills triggers its stated consequence immediately, with no extra roll.',
+  onTheFly: 'Use this whenever you invent countdown-style content at the table — a bomb timer, a rescue window, an interrogation resistance track — rather than designing a bespoke mechanic each time.',
+  // The named tracks §8A lists as instances of the same pattern.
+  namedTracks: [
+    { id: 'heat', name: 'Suspicion', size: 5, cite: '§17', note: 'Filled by §17.1\'s own rules, not by the tick table.' },
+    { id: 'personalThreat', name: 'Personal Threat Countdown', size: 3, cite: '§33', note: 'Advanced by GM discretion, not by the tick table.' },
+    { id: 'dragnet', name: 'Manhunt / Dragnet', size: 4, cite: 'B§6', note: 'A scaling clock: its opposition grows with every in-game hour.' },
+    { id: 'stopCountdown', name: 'Stop Countdown', size: null, cite: '§34', note: 'A d10 event table rather than a fill-based clock — it generates content instead of tracking progress toward one consequence.' }
   ]
 };
 

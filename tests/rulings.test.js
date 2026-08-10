@@ -90,11 +90,9 @@ export async function pinChecks({ check, equal }) {
   check('R-10: the random event category table covers 1–10',
     S.RANDOM_EVENT.category[0].min === 1 && S.RANDOM_EVENT.category[S.RANDOM_EVENT.category.length - 1].max === 10);
 
-  // R-11 — 12 of 71 talents are non-setting and hidden by default.
-  equal('R-11: 71 talents total', D.TALENTS.length, 71);
-  equal('R-11: 12 talents are non-setting', D.TALENTS.filter((t) => !t.settingApplicable).length, 12);
-  equal('R-11: hidden by default', R.visibleTalents(false).length, 59);
-  equal('R-11: revealed when the toggle is on', R.visibleTalents(true).length, 71);
+  // §12A setting-flex marker — the manual now marks 11 of the 71 itself. Pinned in the
+  // data checks; what stays here is the total.
+  equal('§12A: 71 talents total', D.TALENTS.length, 71);
 
   // R-12 — one Triumph satisfies any spend-table row.
   const combatRows = D.SPEND_TABLES.combat.positive;
@@ -222,36 +220,19 @@ export async function pinChecks({ check, equal }) {
   equal('H-2: the dial is the higher track, doubled',
     Solo.focusChaos({ state: { personalHeat: 2 } }, { cellHeat: 4 }), 8);
 
-  // H-4 — clocks: the dragnet's shape generalised, ticked off symbols already rolled.
+  // §8A — clocks are printed now, so the pins live with the data checks rather than here.
+  // What stays is the storage behaviour: a clock fills to its size and no further.
   const D2 = await import('../data.js');
   const CL = await import('../src/clocks.js');
-  check('H-4: clocks are flagged a house aid', D2.CLOCKS.houseAid === true);
-  equal('H-4: three sizes', D2.CLOCKS.sizes.join(','), '4,6,8');
-  check('H-4: the published tracks are named apart from the invented shape',
-    D2.CLOCKS.published.map((p) => p.id).join(',') === 'dragnet,heat');
   const net = (o) => ({ success: 0, advantage: 0, triumph: 0, failure: 0, threat: 0, despair: 0, ...o });
-  equal('H-4: each Threat fills one segment of a clock closing on you',
-    CL.ticksFromCheck(net({ threat: 3 }), 'against').amount, 3);
-  equal('H-4: a Despair fills two', CL.ticksFromCheck(net({ despair: 1 }), 'against').amount, 2);
-  equal('H-4: Success fills a clock you are working on',
-    CL.ticksFromCheck(net({ success: 2 }), 'for').amount, 2);
-  equal('H-4: every two Advantage fills one more',
-    CL.ticksFromCheck(net({ success: 1, advantage: 3 }), 'for').amount, 2);
-  equal('H-4: a Triumph clears a segment from what is closing on you',
-    CL.ticksFromCheck(net({ triumph: 1 }), 'against').amount, -1);
-  equal('H-4: and fills one of your own',
-    CL.ticksFromCheck(net({ triumph: 1 }), 'for').amount, 1);
-  equal('H-4: symbols pointed the wrong way do nothing',
-    CL.ticksFromCheck(net({ success: 3 }), 'against').amount, 0);
-  // A clock fills to its size and no further, and says when it arrives.
   const made = CL.createClock({ name: 'Test dragnet', size: 4, direction: 'against' });
-  equal('H-4: a new clock starts empty', made.progress, 0);
+  equal('§8A: a new clock starts empty', made.progress, 0);
   const part = CL.tickClock(made.id, 3, 'test');
-  check('H-4: ticking moves it without filling', part.clock.progress === 3 && part.filled === false);
+  check('§8A: ticking moves it without filling', part.clock.progress === 3 && part.filled === false);
   const done = CL.tickClock(made.id, 5, 'test');
-  check('H-4: it stops at its size and reports arrival',
+  check('§8A: it stops at its size and reports arrival',
     done.clock.progress === 4 && done.filled === true);
-  check('H-4: every move records why', done.clock.trail.length >= 2);
+  check('§8A: every move records why', done.clock.trail.length >= 2);
   const applied = CL.applyCheckToClock(made.id, net({ triumph: 1 }), 'a check');
   equal('H-4: a check can pull it back', applied.clock.progress, 3);
   CL.closeClock(made.id);

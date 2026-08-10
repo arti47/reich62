@@ -301,9 +301,15 @@ function pane_vitals(mount, character, derived, rerender) {
       }));
       if (threat.step > 0) {
         card.append(el('button', {
-          type: 'button', class: 'secondary', text: 'Step back',
-          onclick: () => { character.state.personalThreat = { ...threat, step: threat.step - 1 }; saveCharacter(character); rerender(); }
+          type: 'button', class: 'secondary', id: 'threat-deescalate', text: 'Dealt with — step it back',
+          onclick: () => {
+            character.state.personalThreat = { ...threat, step: threat.step - PERSONAL_THREAT.deEscalation.steps };
+            saveCharacter(character);
+            showToast(`${threat.name}: back a step.`);
+            rerender();
+          }
         }));
+        card.append(el('p', { class: 'small muted', text: `${plain(PERSONAL_THREAT.deEscalation.summary)} ${plain(PERSONAL_THREAT.deEscalation.requires)}` }));
       }
       if (threat.step >= 2) card.append(el('p', { class: 'small', text: 'While it is closing in, checks made to avoid or evade it take one Setback die.' }));
       if (threat.step >= PERSONAL_THREAT.steps) card.append(el('p', { class: 'small', text: plain(PERSONAL_THREAT.afterStep3) }));
@@ -633,7 +639,7 @@ function dreadPanel(mount, character, rerender) {
       onclick: () => {
         const trauma = rollMentalTrauma();
         character.state.mentalTrauma = [
-          { ...trauma, ts: Date.now(), addressed: false },
+          { ...trauma, ts: Date.now() },
           ...(character.state.mentalTrauma || [])
         ];
         saveCharacter(character);
@@ -646,21 +652,25 @@ function dreadPanel(mount, character, rerender) {
     card.append(el('p', { class: 'small muted', text: 'Turn the journey module on in Settings to roll a lasting scar on the book\'s own table instead of agreeing one.' }));
   }
 
+  // §38 — a scar is carried until the table agrees it has been dealt with, and there is no
+  // check and no flag for that, so the app keeps the record and offers to remove it rather
+  // than inventing an "addressed" state the rule does not have.
   const held = character.state.mentalTrauma || [];
   if (held.length) {
     card.append(el('h3', { text: 'Lasting scars' }));
     held.forEach((t, i) => {
-      card.append(el('div', { class: `result${t.addressed ? ' muted' : ''}` }, [
+      card.append(el('div', { class: 'result' }, [
         el('div', { class: 'result-head' }, [
           el('span', { class: 'result-title', text: t.name }),
-          el('span', { class: 'cite', text: t.addressed ? 'addressed' : `rolled ${t.roll}` })
+          el('span', { class: 'cite', text: `rolled ${t.roll}` })
         ]),
         el('div', { class: 'result-body', text: t.effect }),
         el('button', {
-          type: 'button', class: 'secondary', text: t.addressed ? 'Still with them' : 'Addressed',
-          'aria-label': `${t.addressed ? 'Reopen' : 'Mark addressed'}: ${t.name}`,
-          onclick: () => {
-            character.state.mentalTrauma[i].addressed = !t.addressed;
+          type: 'button', class: 'secondary danger', text: 'Remove',
+          'aria-label': `Remove ${t.name} from the sheet`,
+          onclick: async () => {
+            if (!(await confirmModal(`Remove "${t.name}"? Do this once the table agrees it has been dealt with.`, { title: 'Remove the scar', confirmLabel: 'Remove it' }))) return;
+            character.state.mentalTrauma = character.state.mentalTrauma.filter((_, n) => n !== i);
             saveCharacter(character);
             rerender();
           }
@@ -912,7 +922,7 @@ function pane_summary(mount, character, derived, rerender) {
   const money = character.inventory.money;
   card.append(line('Money', `${money.amount || 0} ${Settings.currencyLabel()} · ${money.rationCards || 0} ration cards · ${money.barterGoods || 0} in barter goods`));
 
-  const scars = (character.state.mentalTrauma || []).filter((t) => !t.addressed);
+  const scars = character.state.mentalTrauma || [];
   if (scars.length) {
     card.append(el('h3', { text: 'Lasting scars' }));
     card.append(el('p', { class: 'small', text: scars.map((t) => t.name).join(', ') }));

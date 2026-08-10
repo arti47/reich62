@@ -970,12 +970,23 @@ async function main() {
     const traumaText = await page.locator('#screen').innerText();
     check('a severe failure rolls a lasting scar and keeps it',
       /Lasting scars/.test(traumaText), traumaText.replace(/\n/g, ' | ').slice(0, 160));
-    check('and the scar can be marked addressed',
-      (await page.getByRole('button', { name: /^Mark addressed/ }).count()) >= 1);
-    await page.getByRole('button', { name: /^Mark addressed/ }).first().click();
-    await page.waitForTimeout(150);
-    check('an addressed scar reads back as addressed',
-      /addressed/.test(await page.locator('#screen').innerText()));
+    // §38 resolves a scar narratively — there is no check and no "addressed" state — so the
+    // sheet keeps the record and offers to take it off, behind a confirm.
+    check('a scar can be taken off once the table agrees it is dealt with',
+      (await page.getByRole('button', { name: /^Remove .* from the sheet/ }).count()) >= 1);
+    await page.getByRole('button', { name: /^Remove .* from the sheet/ }).first().click();
+    await page.waitForSelector('.modal-backdrop');
+    check('and removing it asks first', /agrees it has been dealt with/i.test(await page.locator('.modal').innerText()));
+    await page.getByRole('button', { name: 'Remove it' }).click();
+    await page.waitForTimeout(180);
+    check('the scar is gone', (await page.getByRole('button', { name: /^Remove .* from the sheet/ }).count()) === 0);
+    check('and no "addressed" state was ever invented for it',
+      await page.evaluate(() => {
+        try {
+          return JSON.parse(localStorage.getItem('reich62:characters') || '[]')
+            .every((c) => (c.state.mentalTrauma || []).every((t) => !('addressed' in t)));
+        } catch { return false; }
+      }));
 
     // §34 — the Shift boundary only exists inside the module.
     await go('#/combat');
@@ -1169,8 +1180,8 @@ async function main() {
     await page.waitForTimeout(120);
     await clockRow().getByRole('button', { name: /^Fill one segment/ }).click();
     await page.waitForTimeout(140);
-    check('a full clock says it has arrived',
-      /has arrived/i.test(await clockRow().innerText()), await clockRow().innerText());
+    check('a full clock says its consequence triggers now',
+      /triggers its stated consequence/i.test(await clockRow().innerText()), await clockRow().innerText());
     check('every move records why', /Last: /.test(await clockRow().innerText()));
     await clockRow().getByRole('button', { name: /^Close Gestapo/ }).click();
     await page.waitForSelector('.modal-backdrop');
